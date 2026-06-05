@@ -33,14 +33,14 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 3: Markdown Rendering Core
 
-- [ ] MVP-301: Define Renderer Protocol and Render Types.
-- [ ] MVP-302: Integrate cmark-gfm.
-- [ ] MVP-303: Add Footnote Support Decision.
-- [ ] MVP-304: Implement HTML Document Assembly.
-- [ ] MVP-305: Generate Stable Heading IDs.
-- [ ] MVP-306: Build Outline Extraction.
-- [ ] MVP-307: Add Render Diagnostics.
-- [ ] MVP-308: Add Renderer Fixture Tests.
+- [x] MVP-301: Define Renderer Protocol and Render Types.
+- [x] MVP-302: Integrate cmark-gfm.
+- [x] MVP-303: Add Footnote Support Decision.
+- [x] MVP-304: Implement HTML Document Assembly.
+- [x] MVP-305: Generate Stable Heading IDs.
+- [x] MVP-306: Build Outline Extraction.
+- [x] MVP-307: Add Render Diagnostics.
+- [x] MVP-308: Add Renderer Fixture Tests.
 
 ## Phase 4: Preview WebView
 

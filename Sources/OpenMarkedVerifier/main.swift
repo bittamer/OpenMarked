@@ -67,4 +67,35 @@ let restored = store.restore(forDocumentID: markdownDocument.id)
 verify(restored?.layout == savedLayout, "window layout should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
 
-print("OpenMarked Phase 2 verifier passed.")
+let renderer = CMarkGFMRenderer()
+let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
+verify(renderResult.rendererName == "cmark-gfm", "renderer name should identify cmark-gfm")
+verify(renderResult.bodyHTML.contains("<h1 id=\"openmarked-fixture-readme\">"), "headings should receive stable ids")
+verify(renderResult.bodyHTML.contains("<table>"), "GFM tables should render")
+verify(renderResult.outline.first?.title == "OpenMarked Fixture README", "outline should include h1")
+verify(renderResult.fullHTML.contains("<!doctype html>"), "full HTML document should be assembled")
+
+let gfmURL = URL(fileURLWithPath: "Fixtures/Markdown/gfm.md").standardizedFileURL
+let gfmDocument = try MarkdownDocumentLoader.load(url: gfmURL, createBookmark: false)
+let gfmResult = try renderer.render(RenderRequest(document: gfmDocument))
+verify(gfmResult.bodyHTML.contains("<del>scope creep</del>"), "strikethrough extension should render")
+verify(gfmResult.bodyHTML.contains("type=\"checkbox\""), "task list extension should render checkboxes")
+
+let localImageURL = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+let localImageDocument = try MarkdownDocumentLoader.load(url: localImageURL, createBookmark: false)
+let localImageResult = try renderer.render(RenderRequest(document: localImageDocument))
+verify(localImageResult.diagnostics.isEmpty, "existing local image fixture should not warn")
+
+let missingURL = URL(fileURLWithPath: "Fixtures/Markdown/missing-image-temp.md").standardizedFileURL
+try "# Missing\n\n![Nope](missing.png)\n".write(to: missingURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: missingURL) }
+let missingDocument = try MarkdownDocumentLoader.load(url: missingURL, createBookmark: false)
+let missingResult = try renderer.render(RenderRequest(document: missingDocument))
+verify(missingResult.diagnostics.contains { $0.kind == .missingLocalImage }, "missing local image should produce diagnostic")
+
+let footnoteURL = URL(fileURLWithPath: "Fixtures/Markdown/footnotes.md").standardizedFileURL
+let footnoteDocument = try MarkdownDocumentLoader.load(url: footnoteURL, createBookmark: false)
+let footnoteResult = try renderer.render(RenderRequest(document: footnoteDocument))
+verify(footnoteResult.bodyHTML.contains("footnote"), "footnotes should render when cmark-gfm footnotes are enabled")
+
+print("OpenMarked Phase 3 verifier passed.")

@@ -27,7 +27,15 @@ let package = Package(
             dependencies: ["OpenMarkedCore"]
         ),
         .target(
-            name: "OpenMarkedCore"
+            name: "OpenMarkedCore",
+            dependencies: ["CMarkdownGFM"]
+        ),
+        .target(
+            name: "CMarkdownGFM",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .linkedLibrary("cmark-gfm")
+            ]
         ),
         .executableTarget(
             name: "OpenMarkedVerifier",

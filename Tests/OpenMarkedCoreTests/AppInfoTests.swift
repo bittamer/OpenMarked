@@ -80,6 +80,56 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(restored?.layout, layout)
         XCTAssertEqual(restored?.frame?.width, 900)
     }
+
+    func testCMarkGFMRendererRendersFixtureReadme() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertEqual(result.rendererName, "cmark-gfm")
+        XCTAssertTrue(result.bodyHTML.contains(#"<h1 id="openmarked-fixture-readme">"#))
+        XCTAssertTrue(result.bodyHTML.contains("<table>"))
+        XCTAssertEqual(result.outline.first?.title, "OpenMarked Fixture README")
+        XCTAssertTrue(result.fullHTML.contains("<!doctype html>"))
+    }
+
+    func testGFMExtensionsRender() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/gfm.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.bodyHTML.contains("<del>scope creep</del>"))
+        XCTAssertTrue(result.bodyHTML.contains(#"type="checkbox""#))
+        XCTAssertTrue(result.bodyHTML.contains("<table>"))
+    }
+
+    func testHeadingSlugsAreDeduplicated() {
+        let processed = HeadingPostProcessor.process("<h2>Repeat</h2>\n<h2>Repeat</h2>")
+
+        XCTAssertTrue(processed.html.contains(#"id="repeat""#))
+        XCTAssertTrue(processed.html.contains(#"id="repeat-1""#))
+        XCTAssertEqual(processed.outline.map(\.id), ["repeat", "repeat-1"])
+    }
+
+    func testMissingLocalImageDiagnostic() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("openmarked-missing-image-\(UUID().uuidString).md")
+        try "# Missing\n\n![Missing](missing.png)\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingLocalImage })
+    }
+
+    func testFootnotesRenderWhenEnabled() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/footnotes.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.bodyHTML.contains("footnote"))
+    }
 }
 #elseif canImport(Testing)
 import Testing
@@ -144,6 +194,30 @@ struct AppInfoTests {
         #expect(document.frontMatter?.title == "Fixture With Front Matter")
         #expect(document.displayTitle == "Fixture With Front Matter")
         #expect(!document.bodyText.contains("description: Metadata"))
+    }
+
+    @Test("cmark-gfm renderer renders README fixture")
+    func cmarkGFMRendererRendersFixtureReadme() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.rendererName == "cmark-gfm")
+        #expect(result.bodyHTML.contains(#"<h1 id="openmarked-fixture-readme">"#))
+        #expect(result.bodyHTML.contains("<table>"))
+        #expect(result.outline.first?.title == "OpenMarked Fixture README")
+        #expect(result.fullHTML.contains("<!doctype html>"))
+    }
+
+    @Test("GFM extensions render")
+    func gfmExtensionsRender() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/gfm.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.bodyHTML.contains("<del>scope creep</del>"))
+        #expect(result.bodyHTML.contains(#"type="checkbox""#))
+        #expect(result.bodyHTML.contains("<table>"))
     }
 }
 #else

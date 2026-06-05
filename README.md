@@ -16,6 +16,7 @@ This repository currently contains:
 - File open panel, drag/drop file opening, Dock file opening, and recent-document registration.
 - Native menu commands and a toolbar mapped to Phase 1 shell actions.
 - Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
+- Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
 - Core test target.
 - Markdown fixture corpus.
 - CI workflow for Swift build and tests.

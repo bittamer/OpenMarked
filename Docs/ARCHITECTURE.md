@@ -40,11 +40,14 @@ For Phase 0, these are documented rather than all created as empty modules. Modu
 
 The MVP will render Markdown to HTML and display it in `WKWebView`.
 
-Recommended renderer for Phase 3:
+Phase 3 renderer:
 
-- `cmark-gfm` for CommonMark and GitHub Flavored Markdown compatibility.
+- `CMarkGFMRenderer` implements the `MarkdownRenderer` protocol.
+- `CMarkdownGFM` is a tiny local C shim that links against the system `libcmark-gfm` library exposed by the macOS SDK.
+- GFM extensions are enabled through cmark-gfm's core extension registry.
+- Heading IDs, outline extraction, full HTML assembly, and diagnostics are handled in Swift after cmark-gfm produces the HTML fragment.
 
-The renderer must be wrapped behind a Swift protocol so future engines can be evaluated without rewriting the app shell.
+The renderer is wrapped behind a Swift protocol so future engines can be evaluated without rewriting the app shell.
 
 ## Sandboxing Direction
 
@@ -73,4 +76,3 @@ Later phases can add:
 - Notarization.
 - DMG creation.
 - Homebrew Cask.
-

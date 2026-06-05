@@ -317,6 +317,88 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(html.contains(#"data-openmarked-rich="mermaid""#))
     }
 
+    func testMathDelimiterRulesAvoidCommonFalsePositives() {
+        let mathSamples = [
+            "Inline math uses $E = mc^2$.",
+            """
+            $$
+            \\sum_{n=1}^{10} n = 55
+            $$
+            """
+        ]
+
+        let nonMathSamples = [
+            #"Escaped dollars should stay literal: \$12.00."#,
+            "Currency should stay literal: $12.00 and $13.50.",
+            "Unmatched delimiters should stay literal: $x + 1.",
+            "Code spans should stay literal: `$not_math$`.",
+            "[Link text with $x$](https://example.com)",
+            """
+            ```swift
+            let value = "$not_math$"
+            ```
+            """
+        ]
+
+        XCTAssertTrue(mathSamples.allSatisfy { MathDelimiterRules.containsMath(in: $0) })
+        XCTAssertTrue(nonMathSamples.allSatisfy { !MathDelimiterRules.containsMath(in: $0) })
+    }
+
+    func testMathPostProcessorBuildsPlaceholdersAndSkipsProtectedHTML() {
+        let html = #"""
+        <p>Inline $E = mc^2$ and price $12.00.</p>
+        <p>Code <code>$not_math$</code> link <a href="/">$x$</a>.</p>
+        <p>$$
+        \sum_{n=1}^{10} n = 55
+        $$</p>
+        <p>Broken $\frac{1}{$.</p>
+        """#
+
+        let result = MathPostProcessor.process(html)
+        let disabledResult = MathPostProcessor.process("<p>$x$</p>", isEnabled: false)
+
+        XCTAssertEqual(result.expressionCount, 3)
+        XCTAssertTrue(result.html.contains(#"class="om-math-inline""#))
+        XCTAssertTrue(result.html.contains(#"class="om-math-display""#))
+        XCTAssertTrue(result.html.contains(#"data-openmarked-rich="math""#))
+        XCTAssertTrue(result.html.contains(#"data-openmarked-math-source="E = mc^2""#))
+        XCTAssertTrue(result.html.contains("price $12.00"))
+        XCTAssertTrue(result.html.contains("<code>$not_math$</code>"))
+        XCTAssertTrue(result.html.contains(#"<a href="/">$x$</a>"#))
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .mathRenderFailure && $0.source == "om-math-3" })
+        XCTAssertEqual(disabledResult.expressionCount, 0)
+        XCTAssertEqual(disabledResult.html, "<p>$x$</p>")
+    }
+
+    func testRendererTransformsMathFixtureAndPreservesNonMathDollars() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/math.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.richMarkdownState.requiresMathRuntime)
+        XCTAssertTrue(result.bodyHTML.contains(#"id="om-math-1""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"id="om-math-2""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"class="om-math-inline""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"class="om-math-display""#))
+        XCTAssertTrue(result.bodyHTML.contains("$12.00"))
+        XCTAssertTrue(result.bodyHTML.contains("$not_math$"))
+        XCTAssertTrue(result.bodyHTML.contains("$x + 1"))
+        XCTAssertFalse(result.diagnostics.contains { $0.kind == .mathRenderFailure })
+    }
+
+    func testKaTeXStandaloneHTMLExportEmbedsTrustedRuntime() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/math.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let html = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+
+        XCTAssertTrue(html.contains("data-openmarked-rich-content-runtime"))
+        XCTAssertTrue(html.contains("openMarkedRichContent"))
+        XCTAssertTrue(html.contains("katex-version"))
+        XCTAssertTrue(html.contains("KaTeX parse error"))
+        XCTAssertTrue(html.contains(#"data-openmarked-rich="math""#))
+    }
+
     func testRenderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {
         let expectedKinds: Set<RenderDiagnosticKind> = [
             .missingLocalImage,
@@ -1028,6 +1110,92 @@ struct AppInfoTests {
         #expect(html.contains("openMarkedRichContent"))
         #expect(html.contains(#"globalThis["mermaid"]"#))
         #expect(html.contains(#"data-openmarked-rich="mermaid""#))
+    }
+
+    @Test("Math delimiter rules avoid common false positives")
+    func mathDelimiterRulesAvoidCommonFalsePositives() {
+        let mathSamples = [
+            "Inline math uses $E = mc^2$.",
+            """
+            $$
+            \\sum_{n=1}^{10} n = 55
+            $$
+            """
+        ]
+
+        let nonMathSamples = [
+            #"Escaped dollars should stay literal: \$12.00."#,
+            "Currency should stay literal: $12.00 and $13.50.",
+            "Unmatched delimiters should stay literal: $x + 1.",
+            "Code spans should stay literal: `$not_math$`.",
+            "[Link text with $x$](https://example.com)",
+            """
+            ```swift
+            let value = "$not_math$"
+            ```
+            """
+        ]
+
+        #expect(mathSamples.allSatisfy { MathDelimiterRules.containsMath(in: $0) })
+        #expect(nonMathSamples.allSatisfy { !MathDelimiterRules.containsMath(in: $0) })
+    }
+
+    @Test("Math postprocessor builds placeholders and skips protected HTML")
+    func mathPostProcessorBuildsPlaceholdersAndSkipsProtectedHTML() {
+        let html = #"""
+        <p>Inline $E = mc^2$ and price $12.00.</p>
+        <p>Code <code>$not_math$</code> link <a href="/">$x$</a>.</p>
+        <p>$$
+        \sum_{n=1}^{10} n = 55
+        $$</p>
+        <p>Broken $\frac{1}{$.</p>
+        """#
+
+        let result = MathPostProcessor.process(html)
+        let disabledResult = MathPostProcessor.process("<p>$x$</p>", isEnabled: false)
+
+        #expect(result.expressionCount == 3)
+        #expect(result.html.contains(#"class="om-math-inline""#))
+        #expect(result.html.contains(#"class="om-math-display""#))
+        #expect(result.html.contains(#"data-openmarked-rich="math""#))
+        #expect(result.html.contains(#"data-openmarked-math-source="E = mc^2""#))
+        #expect(result.html.contains("price $12.00"))
+        #expect(result.html.contains("<code>$not_math$</code>"))
+        #expect(result.html.contains(#"<a href="/">$x$</a>"#))
+        #expect(result.diagnostics.contains { $0.kind == .mathRenderFailure && $0.source == "om-math-3" })
+        #expect(disabledResult.expressionCount == 0)
+        #expect(disabledResult.html == "<p>$x$</p>")
+    }
+
+    @Test("Renderer transforms math fixture and preserves non-math dollars")
+    func rendererTransformsMathFixtureAndPreservesNonMathDollars() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/math.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.richMarkdownState.requiresMathRuntime)
+        #expect(result.bodyHTML.contains(#"id="om-math-1""#))
+        #expect(result.bodyHTML.contains(#"id="om-math-2""#))
+        #expect(result.bodyHTML.contains(#"class="om-math-inline""#))
+        #expect(result.bodyHTML.contains(#"class="om-math-display""#))
+        #expect(result.bodyHTML.contains("$12.00"))
+        #expect(result.bodyHTML.contains("$not_math$"))
+        #expect(result.bodyHTML.contains("$x + 1"))
+        #expect(!result.diagnostics.contains { $0.kind == .mathRenderFailure })
+    }
+
+    @Test("KaTeX standalone HTML export embeds trusted runtime")
+    func katexStandaloneHTMLExportEmbedsTrustedRuntime() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/math.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let html = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+
+        #expect(html.contains("data-openmarked-rich-content-runtime"))
+        #expect(html.contains("openMarkedRichContent"))
+        #expect(html.contains("katex-version"))
+        #expect(html.contains("KaTeX parse error"))
+        #expect(html.contains(#"data-openmarked-rich="math""#))
     }
 
     @Test("Render diagnostic kinds include rich Markdown foundation kinds")

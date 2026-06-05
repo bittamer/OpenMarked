@@ -37,12 +37,17 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 Open every file in `Fixtures/Markdown`:
 
 - `README.md`
+- `broken-links.md`
+- `callouts.md`
 - `edge-cases.md`
 - `footnotes.md`
 - `front-matter.md`
 - `gfm.md`
+- `github-readme-compat.md`
+- `links.md`
 - `local-images.md`
 - `long-document.md`
+- `math.md`
 - `mermaid.md`
 - `prose.md`
 - `raw-html.md`
@@ -51,6 +56,10 @@ Open every file in `Fixtures/Markdown`:
 Expected result: no crash, no blank preview, headings render, code blocks keep spacing, tables fit the content width, task lists show checkboxes, footnotes are usable, and front matter is hidden from the rendered body.
 
 For `mermaid.md`, flowchart, sequence, class, state, and ER diagrams should render as SVG diagrams. The intentionally broken Mermaid block should show an inline error and a Mermaid diagnostic without blanking the rest of the preview.
+
+For `math.md`, inline math and display math should render with KaTeX. Escaped dollar amounts, code-span dollars, and the intentionally unmatched delimiter should remain readable as literal text without creating noisy diagnostics.
+
+For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link diagnostics should coexist without overlapping content or leaving blank placeholders.
 
 ## File Watching And Local Images
 
@@ -92,7 +101,7 @@ For `mermaid.md`, flowchart, sequence, class, state, and ER diagrams should rend
 ## Themes, Appearance, And Accessibility
 
 1. Switch through Default, GitHub, and Minimal themes.
-   Expected result: typography, tables, code blocks, and links remain readable.
+   Expected result: typography, tables, code blocks, links, callouts, diagrams, and math remain readable.
 2. Repeat a fixture check in light appearance and dark appearance.
    Expected result: chrome and preview are readable in both appearances.
 3. Enable reduced motion in System Settings.
@@ -128,9 +137,9 @@ For `mermaid.md`, flowchart, sequence, class, state, and ER diagrams should rend
 3. Copy rendered HTML.
    Expected result: pasteboard includes rendered HTML and plain text.
 4. Export PDF.
-   Expected result: a PDF is created and print CSS keeps the document readable.
+   Expected result: a PDF is created, print CSS keeps the document readable, and rich content has rendered before capture.
 5. Print.
-   Expected result: the native print panel opens and preview output is readable.
+   Expected result: the native print panel opens and preview output is readable, including diagrams and equations.
 
 ## Release Gate
 

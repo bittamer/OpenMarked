@@ -38,12 +38,12 @@
     },
     {
       "appearance" : "light",
-      "bytes" : 195757,
+      "bytes" : 181129,
       "file" : "github-rich-markdown-light.png",
       "fixturePath" : "Fixtures\/Markdown\/rich-markdown.md",
       "height" : 720,
       "id" : "github-rich-markdown-light",
-      "sha256" : "b9c5ed88d54a612afa06732b2b162d4e86c3aa33bab7e2cd1eabfcbbb9b461bc",
+      "sha256" : "5225e05786f68b3f0d77dd573aa1a1d37b0d926d0535113e68af0d82c23b8981",
       "themeID" : "github",
       "width" : 960
     },

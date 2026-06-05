@@ -54,7 +54,54 @@
 
 .om-math-display {
   display: block;
+  margin: 1em 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.15em 0;
+  text-align: center;
+}
+
+.om-math-inline {
+  display: inline;
+}
+
+.om-math-source {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: pre;
+  width: 1px;
+}
+
+.om-math-output {
+  color: inherit;
+}
+
+.om-math-inline .om-math-output {
+  display: inline;
+}
+
+.om-math-display .om-math-output {
+  display: block;
+  min-width: max-content;
+}
+
+.om-math-output .katex {
+  color: inherit;
+}
+
+.om-math-display .katex-display {
+  margin: 0;
+}
+
+.om-math-error {
+  display: inline-block;
+  line-height: 1.35;
 }
 
 .om-rich-content-error {
@@ -73,5 +120,15 @@
 
   .om-mermaid-output svg {
     max-width: 100%;
+  }
+
+  .om-math-display {
+    break-inside: avoid;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .om-math-display .om-math-output {
+    min-width: 0;
   }
 }

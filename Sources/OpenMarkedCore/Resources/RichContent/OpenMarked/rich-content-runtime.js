@@ -144,6 +144,95 @@
     }
   }
 
+  function renderKaTeXError(output, message) {
+    clearElement(output);
+    var error = document.createElement("span");
+    error.className = "om-rich-content-error om-math-error";
+    error.textContent = message;
+    output.appendChild(error);
+  }
+
+  async function renderKaTeX(result, runID) {
+    var expressions = Array.prototype.slice.call(document.querySelectorAll('[data-openmarked-rich="math"]'));
+    var katex = globalLibrary("katex");
+    result.katex.available = !!katex;
+
+    if (!expressions.length) {
+      return;
+    }
+
+    if (!katex || typeof katex.render !== "function") {
+      result.katex.errors.push("Bundled KaTeX runtime is unavailable.");
+      result.errors.push("Bundled KaTeX runtime is unavailable.");
+      expressions.forEach(function(expression) {
+        var output = expression.querySelector(".om-math-output");
+        if (output) {
+          expression.setAttribute("data-openmarked-render-state", "failed");
+          renderKaTeXError(output, "KaTeX runtime is unavailable.");
+        }
+      });
+      return;
+    }
+
+    expressions.forEach(function(expression, index) {
+      var sourceElement = expression.querySelector(".om-math-source");
+      var outputElement = expression.querySelector(".om-math-output");
+      var source = sourceElement ? sourceElement.textContent : "";
+      var expressionID = expression.id || "om-math-" + (index + 1);
+      var displayMode = expression.getAttribute("data-openmarked-math-display") === "true";
+
+      if (!outputElement) {
+        return;
+      }
+
+      clearElement(outputElement);
+      expression.setAttribute("data-openmarked-render-state", "rendering");
+      expression.setAttribute("data-openmarked-render-run", String(runID));
+
+      if (!source.trim()) {
+        expression.setAttribute("data-openmarked-render-state", "failed");
+        result.katex.errors.push(expressionID + ": Math source is empty.");
+        result.errors.push("KaTeX " + expressionID + ": Math source is empty.");
+        renderKaTeXError(outputElement, "Math source is empty.");
+        return;
+      }
+
+      var options = {
+        displayMode: displayMode,
+        output: "htmlAndMathml",
+        throwOnError: true,
+        trust: false,
+        strict: "warn"
+      };
+
+      try {
+        katex.render(source, outputElement, options);
+        stripUnsafeGeneratedContent(outputElement);
+        expression.setAttribute("data-openmarked-render-state", "rendered");
+        result.katex.rendered += 1;
+      } catch (error) {
+        var message = conciseError(error);
+        expression.setAttribute("data-openmarked-render-state", "failed");
+        result.katex.errors.push(expressionID + ": " + message);
+        result.errors.push("KaTeX " + expressionID + ": " + message);
+
+        try {
+          katex.render(source, outputElement, {
+            displayMode: displayMode,
+            output: "htmlAndMathml",
+            throwOnError: false,
+            trust: false,
+            strict: "warn",
+            errorColor: "currentColor"
+          });
+          stripUnsafeGeneratedContent(outputElement);
+        } catch (fallbackError) {
+          renderKaTeXError(outputElement, message);
+        }
+      }
+    });
+  }
+
   namespace.run = function(options) {
     currentRunID += 1;
     var result = runtimeResult(options || {});
@@ -155,6 +244,9 @@
       result.katex.available = !!globalLibrary("katex");
       if (result.mermaid.requested) {
         work.push(renderMermaid(result, currentRunID));
+      }
+      if (result.katex.requested) {
+        work.push(renderKaTeX(result, currentRunID));
       }
     } catch (error) {
       result.errors.push(String(error && error.message ? error.message : error));

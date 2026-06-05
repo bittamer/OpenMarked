@@ -1,9 +1,11 @@
-# OpenMarked 0.2.0 Visual QA
+# OpenMarked Visual QA
 
 Date: 2026-06-05
 Version: 0.2.0
 Build: 2
 Artifact: `dist/OpenMarked-0.2.0/OpenMarked.app`
+
+This record covers the tagged 0.2.0 app baseline and the current 0.3.0 development snapshot fixtures.
 
 ## Automated Snapshot Coverage
 
@@ -19,6 +21,7 @@ Tracked baselines:
 - `default-readme-light.png`: default theme, headings, outline-oriented document structure, code, table.
 - `github-gfm-light.png`: GitHub theme, GFM tables/task-list/code coverage.
 - `minimal-prose-light.png`: Minimal theme prose rhythm.
+- `github-rich-markdown-light.png`: GitHub theme coverage for callouts, Mermaid diagrams, KaTeX inline/display math, and link-heavy rich Markdown.
 - `default-local-images-light.png`: local image rendering.
 - `github-long-document-dark.png`: dark appearance coverage for a longer document.
 
@@ -33,6 +36,10 @@ Scripts/verify_export_artifacts.sh
 ```
 
 The export verifier renders the same visual fixture matrix and writes PDF artifacts through WebKit. Each PDF must exist and exceed the minimum size threshold.
+
+## 0.3.0 Rich Markdown Pass
+
+For Phase 5, `swift run OpenMarkedSnapshotter --output .build/openmarked-visual-snapshots --pdf-output .build/openmarked-visual-pdfs` captured the rich Markdown fixture and exported PDFs. `github-rich-markdown-light.png` was inspected visually and showed GitHub callouts, a Mermaid SVG diagram, inline KaTeX math, display KaTeX math, and links without blank placeholders or layout overlap.
 
 ## Computer Use Pass
 

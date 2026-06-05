@@ -23,6 +23,7 @@ This repository currently contains:
 - Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
 - GitHub alert/callout rendering for note, tip, important, warning, and caution blockquotes in the 0.3.0 development line.
 - Local link, heading-fragment, cross-document heading, malformed URL, and unsupported-scheme diagnostics in the 0.3.0 development line.
+- Offline Mermaid diagram and KaTeX math rendering in the 0.3.0 development line, using bundled local assets rather than CDN dependencies.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
 - Built-in preview themes, print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
@@ -92,13 +93,13 @@ These artifacts are not notarized by default. Gatekeeper behavior is documented 
 
 Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
 
-OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, GitHub alert/callout blockquotes, and Mermaid diagrams through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
+OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, GitHub alert/callout blockquotes, Mermaid diagrams, and KaTeX math through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
-In the `0.3.0` development line, OpenMarked bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources. Mermaid renders offline in preview, PDF/print, snapshots, and standalone HTML export; KaTeX math transforms are the next implementation phase.
+In the `0.3.0` development line, OpenMarked bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources. Mermaid and KaTeX render offline in preview, PDF/print, snapshots, and standalone HTML export. Supported math delimiters are inline `$...$` and display `$$...$$`; escaped dollars, common currency text, code spans/fences, and link text are kept literal.
 
 Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 
-Export supports standalone HTML, copying the rendered HTML fragment, PDF export, and native Print. HTML export can embed local images and theme CSS according to Settings.
+Export supports standalone HTML, copying the rendered HTML fragment, PDF export, and native Print. HTML export can embed local images and theme CSS according to Settings, and rich standalone HTML embeds the trusted local Mermaid/KaTeX runtime needed to render diagrams and math offline.
 
 ## Settings And Privacy
 

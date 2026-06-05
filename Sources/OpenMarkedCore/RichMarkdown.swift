@@ -202,32 +202,7 @@ public struct RichMarkdownDocumentFeatures: Codable, Equatable, Sendable {
     }
 
     private static func containsMathDelimiter(in markdown: String) -> Bool {
-        if markdown.contains("$$") {
-            return true
-        }
-
-        return markdown
-            .split(whereSeparator: \.isNewline)
-            .contains { line in
-                var foundOpeningDollar = false
-                var previousCharacter: Character?
-
-                for character in line {
-                    defer { previousCharacter = character }
-
-                    guard character == "$", previousCharacter != "\\" else {
-                        continue
-                    }
-
-                    if foundOpeningDollar {
-                        return true
-                    }
-
-                    foundOpeningDollar = true
-                }
-
-                return false
-            }
+        MathDelimiterRules.containsMath(in: markdown)
     }
 
     private static func markdownLinkDestinations(in markdown: String) -> [String] {

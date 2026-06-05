@@ -1,6 +1,6 @@
 # Rich Content Dependencies
 
-OpenMarked 0.3.0 will render Mermaid diagrams and KaTeX math using bundled local assets. The preview, export, print, and snapshot flows must not load these assets from a CDN.
+OpenMarked 0.3.0 renders Mermaid diagrams and KaTeX math using bundled local assets. The preview, export, print, and snapshot flows must not load these assets from a CDN.
 
 ## Pinned Packages
 
@@ -20,6 +20,7 @@ These pins were checked against the npm registry on 2026-06-05.
 - Use package-prefixed metadata filenames because SwiftPM processed resources cannot contain duplicate leaf names.
 - Updates must be deliberate commits, not floating version ranges.
 - Release ASCII checks intentionally exclude the upstream minified Mermaid/KaTeX payloads so those assets remain byte-for-byte vendored from npm.
+- KaTeX CSS font references are rewritten through `RichContentAssetStore` so packaged builds load fonts from bundled local files.
 
 ## Vendored Resource Layout
 
@@ -64,6 +65,7 @@ katex 0.17.0 MIT
 ## Security Notes
 
 - Mermaid runs from the bundled asset with `startOnLoad: false`, strict security mode, deterministic IDs, and no CDN dependency.
-- KaTeX must render with `trust: false`.
+- KaTeX runs from the bundled asset with `trust: false`, `htmlAndMathml` output, and no CDN dependency.
+- OpenMarked preflights empty or obviously malformed math sources in Swift, then keeps runtime parse failures visible with inline fallbacks instead of blanking the preview.
 - User-authored `<script>` tags and inline event handlers must remain blocked by the existing preview sanitizer.
 - Remote link validation remains disabled by default and must be manual or opt-in if implemented.

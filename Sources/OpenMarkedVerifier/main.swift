@@ -334,6 +334,65 @@ let mermaidExportHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: m
 verify(mermaidExportHTML.contains("data-openmarked-rich-content-runtime"), "Mermaid HTML export should embed the trusted runtime")
 verify(mermaidExportHTML.contains(#"globalThis["mermaid"]"#), "Mermaid HTML export should embed the bundled Mermaid runtime")
 
+let mathDetectionSamples = [
+    "Inline math uses $E = mc^2$.",
+    """
+    $$
+    \\sum_{n=1}^{10} n = 55
+    $$
+    """
+]
+let nonMathDetectionSamples = [
+    #"Escaped dollars should stay literal: \$12.00."#,
+    "Currency should stay literal: $12.00 and $13.50.",
+    "Unmatched delimiters should stay literal: $x + 1.",
+    "Code spans should stay literal: `$not_math$`.",
+    "[Link text with $x$](https://example.com)",
+    """
+    ```swift
+    let value = "$not_math$"
+    ```
+    """
+]
+verify(mathDetectionSamples.allSatisfy { MathDelimiterRules.containsMath(in: $0) }, "math delimiter rules should find inline and display math")
+verify(nonMathDetectionSamples.allSatisfy { !MathDelimiterRules.containsMath(in: $0) }, "math delimiter rules should avoid common false positives")
+
+let mathProcessorHTML = #"""
+<p>Inline $E = mc^2$ and price $12.00.</p>
+<p>Code <code>$not_math$</code> link <a href="/">$x$</a>.</p>
+<p>$$
+\sum_{n=1}^{10} n = 55
+$$</p>
+<p>Broken $\frac{1}{$.</p>
+"""#
+let mathProcessorResult = MathPostProcessor.process(mathProcessorHTML)
+let disabledMathProcessorResult = MathPostProcessor.process("<p>$x$</p>", isEnabled: false)
+verify(mathProcessorResult.expressionCount == 3, "math processor should build placeholders for inline, display, and invalid TeX expressions")
+verify(mathProcessorResult.html.contains(#"class="om-math-inline""#), "math processor should build inline placeholders")
+verify(mathProcessorResult.html.contains(#"class="om-math-display""#), "math processor should build display placeholders")
+verify(mathProcessorResult.html.contains("price $12.00"), "math processor should preserve common currency text")
+verify(mathProcessorResult.html.contains("<code>$not_math$</code>"), "math processor should skip code spans")
+verify(mathProcessorResult.html.contains(#"<a href="/">$x$</a>"#), "math processor should skip links")
+verify(mathProcessorResult.diagnostics.contains { $0.kind == .mathRenderFailure && $0.source == "om-math-3" }, "math processor should preflight obvious invalid TeX")
+verify(disabledMathProcessorResult.html == "<p>$x$</p>", "math processor should be disableable")
+
+let mathURL = URL(fileURLWithPath: "Fixtures/Markdown/math.md").standardizedFileURL
+let mathDocument = try MarkdownDocumentLoader.load(url: mathURL, createBookmark: false)
+let mathResult = try renderer.render(RenderRequest(document: mathDocument))
+verify(mathResult.richMarkdownState.requiresMathRuntime, "math fixture should require the KaTeX runtime")
+verify(mathResult.bodyHTML.contains(#"id="om-math-1""#), "math fixture should include the first placeholder")
+verify(mathResult.bodyHTML.contains(#"id="om-math-2""#), "math fixture should include the display placeholder")
+verify(mathResult.bodyHTML.contains(#"class="om-math-inline""#), "math fixture should include inline math markup")
+verify(mathResult.bodyHTML.contains(#"class="om-math-display""#), "math fixture should include display math markup")
+verify(mathResult.bodyHTML.contains("$12.00"), "math fixture should preserve escaped dollar text")
+verify(mathResult.bodyHTML.contains("$not_math$"), "math fixture should preserve code-span dollars")
+verify(mathResult.bodyHTML.contains("$x + 1"), "math fixture should preserve unmatched delimiters")
+verify(!mathResult.diagnostics.contains { $0.kind == .mathRenderFailure }, "math fixture should avoid false math diagnostics")
+let mathExportHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: mathResult, document: mathDocument)
+verify(mathExportHTML.contains("data-openmarked-rich-content-runtime"), "math HTML export should embed the trusted runtime")
+verify(mathExportHTML.contains("katex-version"), "math HTML export should include KaTeX CSS")
+verify(mathExportHTML.contains("KaTeX parse error"), "math HTML export should embed the bundled KaTeX runtime")
+
 let linkExtractorHTML = ##"<p><a href="guide.md">Guide</a><code>&lt;a href=&quot;ignored.md&quot;&gt;</code><a href="#existing-heading">Heading</a><a href="">Empty</a></p>"##
 let extractedLinks = LinkReferenceExtractor.linkReferences(from: linkExtractorHTML)
 verify(extractedLinks.map(\.source) == ["guide.md", "#existing-heading"], "link extractor should read rendered anchors and ignore empty links")

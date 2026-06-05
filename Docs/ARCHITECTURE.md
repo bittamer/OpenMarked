@@ -126,7 +126,7 @@ Link validation behavior:
 
 ## Rich Content Resource Direction
 
-Phase 3 and Phase 4 of 0.3.0 establish the bundled resource pipeline and Mermaid rendering path. KaTeX uses the same resource foundation but its math transforms are still scheduled for Phase 5.
+Phases 3 through 5 of 0.3.0 establish the bundled rich-content resource pipeline, Mermaid rendering path, and KaTeX math rendering path.
 
 Rich content behavior:
 
@@ -136,7 +136,8 @@ Rich content behavior:
 - `PreviewWebView`, PDF/print export, and `OpenMarkedSnapshotter` call `RichContentWebViewRuntime.installAndWait` after sanitized HTML loads.
 - `MermaidPostProcessor` replaces Mermaid code fences with stable figure placeholders before syntax highlighting, preserving source text for diagnostics and offline export.
 - The OpenMarked runtime renders Mermaid placeholders to SVG with the bundled Mermaid library and reports inline/runtime failures through the shared rich-content status result.
-- Math delimiters are still plain Markdown output until Phase 5 adds KaTeX placeholder and render transforms.
+- `MathPostProcessor` scans rendered HTML text nodes for inline `$...$` and display `$$...$$` math, skipping protected tags, links, and existing rich-content containers.
+- The OpenMarked runtime renders math placeholders with bundled KaTeX, `trust: false`, and `htmlAndMathml` output. Invalid TeX receives a low-noise inline fallback and runtime status error.
 
 ## Export Direction
 
@@ -144,9 +145,9 @@ Phase 8 keeps export document assembly in `OpenMarkedCore` and platform workflow
 
 Export behavior:
 
-- Standalone HTML export uses `HTMLExportDocumentBuilder`, sanitizes the same scripts/event handlers as preview, preserves the current theme CSS, embeds local images as data URLs by default, and injects trusted bundled rich-content runtime scripts when Mermaid or future math output requires them.
+- Standalone HTML export uses `HTMLExportDocumentBuilder`, sanitizes the same scripts/event handlers as preview, preserves the current theme CSS, embeds local images as data URLs by default, and injects trusted bundled rich-content runtime scripts when Mermaid or math output requires them.
 - Copy Rendered HTML copies the rendered body fragment to both HTML and plain-text pasteboard flavors.
-- PDF export and Print use an offscreen `WKWebView` loaded with the current standalone HTML and AppKit print operations, so print CSS applies through the native print pipeline.
+- PDF export and Print use an offscreen `WKWebView` loaded with the current standalone HTML and AppKit print operations, so print CSS applies through the native print pipeline and rich content is rendered before capture/print.
 - Save-panel cancellation is treated as a no-op. Write/PDF failures use `ExportError` and show a short native alert plus status-bar feedback.
 - Automated smoke coverage validates standalone HTML structure, image embedding, and export writing. PDF remains covered by build/smoke launch and manual visual inspection because robust PDF visual assertions are out of scope for the MVP.
 

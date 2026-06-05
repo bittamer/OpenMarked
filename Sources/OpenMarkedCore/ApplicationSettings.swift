@@ -10,6 +10,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var embedsCSSInHTMLExport: Bool
     public var embedsLocalImagesInHTMLExport: Bool
     public var restoresLastOpenedDocuments: Bool
+    public var richMarkdownOptions: RichMarkdownOptions
 
     public init(
         defaultThemeID: String = PreviewThemeStore.defaultThemeID,
@@ -20,7 +21,8 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         allowsRawHTML: Bool = true,
         embedsCSSInHTMLExport: Bool = true,
         embedsLocalImagesInHTMLExport: Bool = true,
-        restoresLastOpenedDocuments: Bool = false
+        restoresLastOpenedDocuments: Bool = false,
+        richMarkdownOptions: RichMarkdownOptions = .default
     ) {
         self.defaultThemeID = defaultThemeID
         self.defaultFontScale = defaultFontScale
@@ -31,6 +33,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         self.embedsCSSInHTMLExport = embedsCSSInHTMLExport
         self.embedsLocalImagesInHTMLExport = embedsLocalImagesInHTMLExport
         self.restoresLastOpenedDocuments = restoresLastOpenedDocuments
+        self.richMarkdownOptions = richMarkdownOptions
     }
 
     public static let `default` = ApplicationSettings()
@@ -47,6 +50,37 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
             isOutlineVisible: true,
             selectedThemeID: PreviewThemeStore.theme(id: defaultThemeID).id,
             fontScale: min(2.0, max(0.6, defaultFontScale))
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case defaultThemeID
+        case defaultFontScale
+        case isLivePreviewEnabled
+        case preservesScrollPosition
+        case allowsRemoteImages
+        case allowsRawHTML
+        case embedsCSSInHTMLExport
+        case embedsLocalImagesInHTMLExport
+        case restoresLastOpenedDocuments
+        case richMarkdownOptions
+    }
+
+    public init(from decoder: Decoder) throws {
+        let defaults = ApplicationSettings.default
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.init(
+            defaultThemeID: try container.decodeIfPresent(String.self, forKey: .defaultThemeID) ?? defaults.defaultThemeID,
+            defaultFontScale: try container.decodeIfPresent(Double.self, forKey: .defaultFontScale) ?? defaults.defaultFontScale,
+            isLivePreviewEnabled: try container.decodeIfPresent(Bool.self, forKey: .isLivePreviewEnabled) ?? defaults.isLivePreviewEnabled,
+            preservesScrollPosition: try container.decodeIfPresent(Bool.self, forKey: .preservesScrollPosition) ?? defaults.preservesScrollPosition,
+            allowsRemoteImages: try container.decodeIfPresent(Bool.self, forKey: .allowsRemoteImages) ?? defaults.allowsRemoteImages,
+            allowsRawHTML: try container.decodeIfPresent(Bool.self, forKey: .allowsRawHTML) ?? defaults.allowsRawHTML,
+            embedsCSSInHTMLExport: try container.decodeIfPresent(Bool.self, forKey: .embedsCSSInHTMLExport) ?? defaults.embedsCSSInHTMLExport,
+            embedsLocalImagesInHTMLExport: try container.decodeIfPresent(Bool.self, forKey: .embedsLocalImagesInHTMLExport) ?? defaults.embedsLocalImagesInHTMLExport,
+            restoresLastOpenedDocuments: try container.decodeIfPresent(Bool.self, forKey: .restoresLastOpenedDocuments) ?? defaults.restoresLastOpenedDocuments,
+            richMarkdownOptions: try container.decodeIfPresent(RichMarkdownOptions.self, forKey: .richMarkdownOptions) ?? defaults.richMarkdownOptions
         )
     }
 }

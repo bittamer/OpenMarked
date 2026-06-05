@@ -2,7 +2,7 @@
 
 Thanks for helping build OpenMarked.
 
-The MVP is implemented, so the most useful contributions are focused, tested, and aligned with `ROADMAP.md`, `Docs/BACKLOG.md`, and the original context in `MVP_IMPLEMENTATION_PLAN.md`.
+The MVP is implemented, so the most useful contributions are focused, tested, and aligned with `ROADMAP.md`, `Docs/BACKLOG.md`, and the original context in `Docs/MVP_IMPLEMENTATION_PLAN.md`.
 
 ## Build
 

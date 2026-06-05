@@ -404,7 +404,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             let result = try renderer.render(
                 RenderRequest(
                     document: markdownDocument,
-                    options: RenderOptions(allowsRawHTML: settings.allowsRawHTML),
+                    options: RenderOptions(
+                        allowsRawHTML: settings.allowsRawHTML,
+                        richMarkdownOptions: settings.richMarkdownOptions
+                    ),
                     theme: PreviewThemeStore.theme(id: state.layout.selectedThemeID),
                     fontScale: state.layout.fontScale,
                     allowsRemoteImages: settings.allowsRemoteImages

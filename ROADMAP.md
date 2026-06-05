@@ -62,6 +62,10 @@ Make the MVP easier to trust, install, test, and visually validate.
 
 Add the highest-value Markdown extensions that make the app more useful for developers and technical writers.
 
+Detailed plan: `Docs/0.3.0_IMPLEMENTATION_PLAN.md`.
+Backlog tracker: `Docs/0.3.0_BACKLOG.md`.
+Dependency policy: `Docs/RICH_CONTENT_DEPENDENCIES.md`.
+
 - Mermaid diagrams.
 - KaTeX math.
 - GitHub alerts/callouts.

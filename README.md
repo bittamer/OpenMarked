@@ -9,7 +9,10 @@ The project is currently at `0.2.0`: the MVP is tagged, and the app now has repe
 This repository currently contains:
 
 - Product design: `DESIGN.md`.
-- MVP implementation plan: `MVP_IMPLEMENTATION_PLAN.md`.
+- MVP implementation plan: `Docs/MVP_IMPLEMENTATION_PLAN.md`.
+- 0.3.0 Markdown Power Pack plan: `Docs/0.3.0_IMPLEMENTATION_PLAN.md`.
+- 0.3.0 backlog tracker: `Docs/0.3.0_BACKLOG.md`.
+- Rich content dependency policy: `Docs/RICH_CONTENT_DEPENDENCIES.md`.
 - Roadmap: `ROADMAP.md`.
 - Swift Package based native macOS app shell.
 - App/window state models for empty, loading, loaded, and error states.

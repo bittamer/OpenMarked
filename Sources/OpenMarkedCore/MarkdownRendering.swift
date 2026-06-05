@@ -34,19 +34,22 @@ public struct RenderOptions: Equatable, Sendable {
     public var validatesUTF8: Bool
     public var usesGitHubCodeBlockLanguageClass: Bool
     public var enabledExtensions: Set<GFMExtension>
+    public var richMarkdownOptions: RichMarkdownOptions
 
     public init(
         allowsRawHTML: Bool = true,
         parsesFootnotes: Bool = true,
         validatesUTF8: Bool = true,
         usesGitHubCodeBlockLanguageClass: Bool = true,
-        enabledExtensions: Set<GFMExtension> = Set(GFMExtension.allCases)
+        enabledExtensions: Set<GFMExtension> = Set(GFMExtension.allCases),
+        richMarkdownOptions: RichMarkdownOptions = .default
     ) {
         self.allowsRawHTML = allowsRawHTML
         self.parsesFootnotes = parsesFootnotes
         self.validatesUTF8 = validatesUTF8
         self.usesGitHubCodeBlockLanguageClass = usesGitHubCodeBlockLanguageClass
         self.enabledExtensions = enabledExtensions
+        self.richMarkdownOptions = richMarkdownOptions
     }
 
     var cmarkOptions: Int32 {
@@ -88,6 +91,7 @@ public struct RenderResult: Equatable, Sendable {
     public let statistics: DocumentStatistics
     public let rendererName: String
     public let rendererVersion: String?
+    public let richMarkdownState: RichMarkdownRenderState
 
     public init(
         bodyHTML: String,
@@ -96,7 +100,8 @@ public struct RenderResult: Equatable, Sendable {
         diagnostics: [RenderDiagnostic],
         statistics: DocumentStatistics,
         rendererName: String,
-        rendererVersion: String?
+        rendererVersion: String?,
+        richMarkdownState: RichMarkdownRenderState = .empty
     ) {
         self.bodyHTML = bodyHTML
         self.fullHTML = fullHTML
@@ -105,6 +110,7 @@ public struct RenderResult: Equatable, Sendable {
         self.statistics = statistics
         self.rendererName = rendererName
         self.rendererVersion = rendererVersion
+        self.richMarkdownState = richMarkdownState
     }
 }
 
@@ -139,8 +145,15 @@ public enum RenderDiagnosticSeverity: String, Equatable, Sendable {
     case error
 }
 
-public enum RenderDiagnosticKind: String, Equatable, Sendable {
+public enum RenderDiagnosticKind: String, CaseIterable, Equatable, Sendable {
     case missingLocalImage
+    case missingLocalLink
+    case missingHeadingFragment
+    case malformedLink
+    case unsupportedLinkScheme
+    case mermaidRenderFailure
+    case mathRenderFailure
+    case richContentDisabled
     case unsupportedExtension
     case renderFailure
 }
@@ -188,6 +201,10 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
 
     public func render(_ request: RenderRequest) throws -> RenderResult {
         cmark_gfm_core_extensions_ensure_registered()
+        let richMarkdownState = RichMarkdownRenderState(
+            options: request.options.richMarkdownOptions,
+            documentFeatures: RichMarkdownDocumentFeatures.detect(in: request.document)
+        )
 
         guard let parser = cmark_parser_new(request.options.cmarkOptions) else {
             throw RenderError.parserCreationFailed
@@ -195,6 +212,7 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         defer { cmark_parser_free(parser) }
 
         var diagnostics = attachExtensions(to: parser, options: request.options)
+        diagnostics.append(contentsOf: richMarkdownState.disabledFeatureDiagnostics)
 
         request.document.bodyText.withCString { pointer in
             cmark_parser_feed(parser, pointer, request.document.bodyText.utf8.count)
@@ -231,7 +249,8 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
             diagnostics: diagnostics,
             statistics: request.document.statistics,
             rendererName: "cmark-gfm",
-            rendererVersion: cmarkVersionString()
+            rendererVersion: cmarkVersionString(),
+            richMarkdownState: richMarkdownState
         )
     }
 

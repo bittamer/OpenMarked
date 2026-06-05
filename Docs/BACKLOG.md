@@ -1,6 +1,6 @@
 # MVP Backlog Tracker
 
-This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed ticket definitions, acceptance criteria, and dependencies live in that file.
+This tracker mirrors `Docs/MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed ticket definitions, acceptance criteria, and dependencies live in that file.
 
 ## Phase 0: Product and Project Foundation
 

@@ -148,8 +148,49 @@ let restoredSettings = settingsStore.load()
 verify(restoredSettings.defaultThemeID == "default", "settings should normalize unknown theme ids")
 verify(restoredSettings.defaultFontScale == 2.0, "settings should clamp default font scale")
 verify(!restoredSettings.isLivePreviewEnabled, "settings should persist live preview preference")
+verify(restoredSettings.richMarkdownOptions == .default, "settings should default rich Markdown options")
+verify(!restoredSettings.richMarkdownOptions.validatesRemoteLinks, "remote link validation should default off")
 settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL])
 verify(settingsStore.loadLastDocumentURLs().first?.path == markdownDocument.sourceURL.path, "settings store should persist last document paths")
+
+let oldSettingsPayload = Data(
+    """
+    {
+      "defaultThemeID": "missing",
+      "defaultFontScale": 4.0,
+      "isLivePreviewEnabled": false
+    }
+    """.utf8
+)
+let decodedOldSettings = try JSONDecoder().decode(ApplicationSettings.self, from: oldSettingsPayload).normalized()
+verify(decodedOldSettings.richMarkdownOptions == .default, "old settings payloads should decode with rich Markdown defaults")
+
+let richMarkdownSample = """
+> [!NOTE]
+> Fixture callout.
+
+```mermaid
+flowchart LR
+    A --> B
+```
+
+Inline math uses $x + 1$.
+
+[Local](README.md)
+[Heading](#target)
+[Remote](https://example.com)
+"""
+let richMarkdownFeatures = RichMarkdownDocumentFeatures.detect(in: richMarkdownSample)
+verify(richMarkdownFeatures.containsMermaid, "rich feature detection should find Mermaid")
+verify(richMarkdownFeatures.containsMath, "rich feature detection should find math")
+verify(richMarkdownFeatures.containsGitHubCallouts, "rich feature detection should find GitHub callouts")
+verify(richMarkdownFeatures.containsLocalLinks, "rich feature detection should find local links")
+verify(richMarkdownFeatures.containsHeadingLinks, "rich feature detection should find heading links")
+verify(richMarkdownFeatures.containsRemoteLinks, "rich feature detection should find remote links")
+verify(
+    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled]),
+    "diagnostic kinds should include rich Markdown foundation cases"
+)
 
 let renderer = CMarkGFMRenderer()
 let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
@@ -217,6 +258,38 @@ let footnoteURL = URL(fileURLWithPath: "Fixtures/Markdown/footnotes.md").standar
 let footnoteDocument = try MarkdownDocumentLoader.load(url: footnoteURL, createBookmark: false)
 let footnoteResult = try renderer.render(RenderRequest(document: footnoteDocument))
 verify(footnoteResult.bodyHTML.contains("footnote"), "footnotes should render when cmark-gfm footnotes are enabled")
+
+let richFixturePaths = [
+    "Fixtures/Markdown/rich-markdown.md",
+    "Fixtures/Markdown/mermaid.md",
+    "Fixtures/Markdown/math.md",
+    "Fixtures/Markdown/callouts.md",
+    "Fixtures/Markdown/links.md",
+    "Fixtures/Markdown/broken-links.md",
+    "Fixtures/Markdown/github-readme-compat.md"
+]
+
+for path in richFixturePaths {
+    let url = URL(fileURLWithPath: path).standardizedFileURL
+    let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+    let result = try renderer.render(RenderRequest(document: document))
+    verify(!document.bodyText.isEmpty, "\(path) should load source text")
+    verify(!result.fullHTML.isEmpty, "\(path) should render full HTML")
+}
+
+let richDocumentURL = URL(fileURLWithPath: "Fixtures/Markdown/rich-markdown.md").standardizedFileURL
+let richDocument = try MarkdownDocumentLoader.load(url: richDocumentURL, createBookmark: false)
+let disabledRichOptions = RichMarkdownOptions(rendersMermaid: false, rendersMath: false, rendersGitHubCallouts: false)
+let disabledRichResult = try renderer.render(
+    RenderRequest(
+        document: richDocument,
+        options: RenderOptions(richMarkdownOptions: disabledRichOptions)
+    )
+)
+verify(disabledRichResult.richMarkdownState.documentFeatures.containsMermaid, "rich render state should detect Mermaid")
+verify(disabledRichResult.richMarkdownState.documentFeatures.containsMath, "rich render state should detect math")
+verify(disabledRichResult.richMarkdownState.documentFeatures.containsGitHubCallouts, "rich render state should detect callouts")
+verify(disabledRichResult.diagnostics.filter { $0.kind == .richContentDisabled }.count == 3, "disabled rich rendering should produce focused diagnostics")
 
 var renderState = DocumentWindowState()
 renderState.finishOpening(document: OpenedDocument(markdownDocument: markdownDocument))

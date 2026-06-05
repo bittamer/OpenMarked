@@ -115,16 +115,120 @@ final class AppInfoTests: XCTestCase {
         defer { userDefaults.removePersistentDomain(forName: suiteName) }
 
         let store = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "Settings", lastDocumentPathsKey: "LastPaths")
-        store.save(ApplicationSettings(defaultThemeID: "missing", defaultFontScale: 4.0, isLivePreviewEnabled: false))
+        let richOptions = RichMarkdownOptions(rendersMermaid: false, validatesRemoteLinks: true)
+        store.save(
+            ApplicationSettings(
+                defaultThemeID: "missing",
+                defaultFontScale: 4.0,
+                isLivePreviewEnabled: false,
+                richMarkdownOptions: richOptions
+            )
+        )
 
         let restored = store.load()
         XCTAssertEqual(restored.defaultThemeID, "default")
         XCTAssertEqual(restored.defaultFontScale, 2.0)
         XCTAssertFalse(restored.isLivePreviewEnabled)
+        XCTAssertFalse(restored.richMarkdownOptions.rendersMermaid)
+        XCTAssertTrue(restored.richMarkdownOptions.validatesRemoteLinks)
 
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         store.saveLastDocumentURLs([url])
         XCTAssertEqual(store.loadLastDocumentURLs().first?.path, url.path)
+    }
+
+    func testApplicationSettingsDecodeOldPayloadWithRichMarkdownDefaults() throws {
+        let data = Data(
+            """
+            {
+              "defaultThemeID": "missing",
+              "defaultFontScale": 4.0,
+              "isLivePreviewEnabled": false
+            }
+            """.utf8
+        )
+
+        let decoded = try JSONDecoder().decode(ApplicationSettings.self, from: data).normalized()
+
+        XCTAssertEqual(decoded.defaultThemeID, "default")
+        XCTAssertEqual(decoded.defaultFontScale, 2.0)
+        XCTAssertFalse(decoded.isLivePreviewEnabled)
+        XCTAssertEqual(decoded.richMarkdownOptions, .default)
+        XCTAssertFalse(decoded.richMarkdownOptions.validatesRemoteLinks)
+    }
+
+    func testRichMarkdownOptionsDefaultsKeepNetworkValidationOff() {
+        let options = RichMarkdownOptions.default
+
+        XCTAssertTrue(options.rendersMermaid)
+        XCTAssertTrue(options.rendersMath)
+        XCTAssertTrue(options.rendersGitHubCallouts)
+        XCTAssertTrue(options.validatesLocalLinks)
+        XCTAssertTrue(options.validatesHeadingFragments)
+        XCTAssertFalse(options.validatesRemoteLinks)
+        XCTAssertTrue(RichMarkdownFeature.remoteLinkValidation.contactsNetwork)
+    }
+
+    func testRichMarkdownDocumentFeatureDetection() {
+        let markdown = """
+        > [!NOTE]
+        > Fixture callout.
+
+        ```mermaid
+        flowchart LR
+            A --> B
+        ```
+
+        Inline math uses $x + 1$.
+
+        [Local](README.md)
+        [Heading](#target)
+        [Remote](https://example.com)
+        """
+
+        let detected = RichMarkdownDocumentFeatures.detect(in: markdown)
+
+        XCTAssertTrue(detected.containsMermaid)
+        XCTAssertTrue(detected.containsMath)
+        XCTAssertTrue(detected.containsGitHubCallouts)
+        XCTAssertTrue(detected.containsLocalLinks)
+        XCTAssertTrue(detected.containsHeadingLinks)
+        XCTAssertTrue(detected.containsRemoteLinks)
+    }
+
+    func testRichMarkdownDisabledFeatureDiagnostics() {
+        let documentFeatures = RichMarkdownDocumentFeatures(
+            features: [.mermaid, .math, .gitHubCallouts, .localLinkValidation, .remoteLinkValidation]
+        )
+        let options = RichMarkdownOptions(
+            rendersMermaid: false,
+            rendersMath: false,
+            rendersGitHubCallouts: false,
+            validatesLocalLinks: false,
+            validatesRemoteLinks: false
+        )
+        let state = RichMarkdownRenderState(options: options, documentFeatures: documentFeatures)
+
+        XCTAssertEqual(state.disabledFeatureDiagnostics.count, 3)
+        XCTAssertTrue(state.disabledFeatureDiagnostics.allSatisfy { $0.kind == .richContentDisabled })
+        XCTAssertFalse(state.requiresRemoteValidation)
+    }
+
+    func testRenderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {
+        let expectedKinds: Set<RenderDiagnosticKind> = [
+            .missingLocalImage,
+            .missingLocalLink,
+            .missingHeadingFragment,
+            .malformedLink,
+            .unsupportedLinkScheme,
+            .mermaidRenderFailure,
+            .mathRenderFailure,
+            .richContentDisabled,
+            .unsupportedExtension,
+            .renderFailure
+        ]
+
+        XCTAssertEqual(Set(RenderDiagnosticKind.allCases), expectedKinds)
     }
 
     func testCMarkGFMRendererRendersFixtureReadme() throws {
@@ -140,6 +244,46 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.fullHTML.contains("--om-font-scale: 1.000"))
         XCTAssertTrue(result.fullHTML.contains("New York"))
         XCTAssertTrue(result.bodyHTML.contains("om-code-keyword"))
+    }
+
+    func testRichMarkdownFixturesLoadAndRender() throws {
+        let fixturePaths = [
+            "Fixtures/Markdown/rich-markdown.md",
+            "Fixtures/Markdown/mermaid.md",
+            "Fixtures/Markdown/math.md",
+            "Fixtures/Markdown/callouts.md",
+            "Fixtures/Markdown/links.md",
+            "Fixtures/Markdown/broken-links.md",
+            "Fixtures/Markdown/github-readme-compat.md"
+        ]
+
+        let renderer = CMarkGFMRenderer()
+
+        for path in fixturePaths {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+            let result = try renderer.render(RenderRequest(document: document))
+
+            XCTAssertFalse(document.bodyText.isEmpty, "\(path) should load source text")
+            XCTAssertFalse(result.fullHTML.isEmpty, "\(path) should render full HTML")
+        }
+    }
+
+    func testRendererReportsDisabledRichContent() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/rich-markdown.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let options = RichMarkdownOptions(rendersMermaid: false, rendersMath: false, rendersGitHubCallouts: false)
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: options)
+            )
+        )
+
+        XCTAssertTrue(result.richMarkdownState.documentFeatures.containsMermaid)
+        XCTAssertTrue(result.richMarkdownState.documentFeatures.containsMath)
+        XCTAssertTrue(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
+        XCTAssertEqual(result.diagnostics.filter { $0.kind == .richContentDisabled }.count, 3)
     }
 
     func testThemeFallbackAndInjection() throws {
@@ -362,16 +506,125 @@ struct AppInfoTests {
         defer { userDefaults.removePersistentDomain(forName: suiteName) }
 
         let store = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "Settings", lastDocumentPathsKey: "LastPaths")
-        store.save(ApplicationSettings(defaultThemeID: "missing", defaultFontScale: 4.0, isLivePreviewEnabled: false))
+        let richOptions = RichMarkdownOptions(rendersMermaid: false, validatesRemoteLinks: true)
+        store.save(
+            ApplicationSettings(
+                defaultThemeID: "missing",
+                defaultFontScale: 4.0,
+                isLivePreviewEnabled: false,
+                richMarkdownOptions: richOptions
+            )
+        )
 
         let restored = store.load()
         #expect(restored.defaultThemeID == "default")
         #expect(restored.defaultFontScale == 2.0)
         #expect(!restored.isLivePreviewEnabled)
+        #expect(!restored.richMarkdownOptions.rendersMermaid)
+        #expect(restored.richMarkdownOptions.validatesRemoteLinks)
 
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         store.saveLastDocumentURLs([url])
         #expect(store.loadLastDocumentURLs().first?.path == url.path)
+    }
+
+    @Test("Old settings payloads decode with rich Markdown defaults")
+    func applicationSettingsDecodeOldPayloadWithRichMarkdownDefaults() throws {
+        let data = Data(
+            """
+            {
+              "defaultThemeID": "missing",
+              "defaultFontScale": 4.0,
+              "isLivePreviewEnabled": false
+            }
+            """.utf8
+        )
+
+        let decoded = try JSONDecoder().decode(ApplicationSettings.self, from: data).normalized()
+
+        #expect(decoded.defaultThemeID == "default")
+        #expect(decoded.defaultFontScale == 2.0)
+        #expect(!decoded.isLivePreviewEnabled)
+        #expect(decoded.richMarkdownOptions == .default)
+        #expect(!decoded.richMarkdownOptions.validatesRemoteLinks)
+    }
+
+    @Test("Rich Markdown defaults keep network validation off")
+    func richMarkdownOptionsDefaultsKeepNetworkValidationOff() {
+        let options = RichMarkdownOptions.default
+
+        #expect(options.rendersMermaid)
+        #expect(options.rendersMath)
+        #expect(options.rendersGitHubCallouts)
+        #expect(options.validatesLocalLinks)
+        #expect(options.validatesHeadingFragments)
+        #expect(!options.validatesRemoteLinks)
+        #expect(RichMarkdownFeature.remoteLinkValidation.contactsNetwork)
+    }
+
+    @Test("Rich Markdown document feature detection finds planned 0.3 features")
+    func richMarkdownDocumentFeatureDetection() {
+        let markdown = """
+        > [!NOTE]
+        > Fixture callout.
+
+        ```mermaid
+        flowchart LR
+            A --> B
+        ```
+
+        Inline math uses $x + 1$.
+
+        [Local](README.md)
+        [Heading](#target)
+        [Remote](https://example.com)
+        """
+
+        let detected = RichMarkdownDocumentFeatures.detect(in: markdown)
+
+        #expect(detected.containsMermaid)
+        #expect(detected.containsMath)
+        #expect(detected.containsGitHubCallouts)
+        #expect(detected.containsLocalLinks)
+        #expect(detected.containsHeadingLinks)
+        #expect(detected.containsRemoteLinks)
+    }
+
+    @Test("Disabled rich rendering produces low-noise diagnostics")
+    func richMarkdownDisabledFeatureDiagnostics() {
+        let documentFeatures = RichMarkdownDocumentFeatures(
+            features: [.mermaid, .math, .gitHubCallouts, .localLinkValidation, .remoteLinkValidation]
+        )
+        let options = RichMarkdownOptions(
+            rendersMermaid: false,
+            rendersMath: false,
+            rendersGitHubCallouts: false,
+            validatesLocalLinks: false,
+            validatesRemoteLinks: false
+        )
+        let state = RichMarkdownRenderState(options: options, documentFeatures: documentFeatures)
+
+        #expect(state.disabledFeatureDiagnostics.count == 3)
+        #expect(state.disabledFeatureDiagnostics.allSatisfy { $0.kind == .richContentDisabled })
+        #expect(!state.requiresRemoteValidation)
+    }
+
+    @Test("Render diagnostic kinds include rich Markdown foundation kinds")
+    func renderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {
+        let expectedKinds: Set<RenderDiagnosticKind> = [
+            .missingLocalImage,
+            .missingLocalLink,
+            .missingHeadingFragment,
+            .malformedLink,
+            .unsupportedLinkScheme,
+            .mermaidRenderFailure,
+            .mathRenderFailure,
+            .richContentDisabled,
+            .unsupportedExtension,
+            .renderFailure
+        ]
+
+        #expect(Set(RenderDiagnosticKind.allCases) == expectedKinds)
     }
 
     @Test("Markdown document loads source and statistics")
@@ -410,6 +663,48 @@ struct AppInfoTests {
         #expect(result.fullHTML.contains("--om-font-scale: 1.000"))
         #expect(result.fullHTML.contains("New York"))
         #expect(result.bodyHTML.contains("om-code-keyword"))
+    }
+
+    @Test("Rich Markdown fixtures load and render")
+    func richMarkdownFixturesLoadAndRender() throws {
+        let fixturePaths = [
+            "Fixtures/Markdown/rich-markdown.md",
+            "Fixtures/Markdown/mermaid.md",
+            "Fixtures/Markdown/math.md",
+            "Fixtures/Markdown/callouts.md",
+            "Fixtures/Markdown/links.md",
+            "Fixtures/Markdown/broken-links.md",
+            "Fixtures/Markdown/github-readme-compat.md"
+        ]
+
+        let renderer = CMarkGFMRenderer()
+
+        for path in fixturePaths {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+            let result = try renderer.render(RenderRequest(document: document))
+
+            #expect(!document.bodyText.isEmpty)
+            #expect(!result.fullHTML.isEmpty)
+        }
+    }
+
+    @Test("Renderer reports disabled rich content")
+    func rendererReportsDisabledRichContent() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/rich-markdown.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let options = RichMarkdownOptions(rendersMermaid: false, rendersMath: false, rendersGitHubCallouts: false)
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: options)
+            )
+        )
+
+        #expect(result.richMarkdownState.documentFeatures.containsMermaid)
+        #expect(result.richMarkdownState.documentFeatures.containsMath)
+        #expect(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
+        #expect(result.diagnostics.filter { $0.kind == .richContentDisabled }.count == 3)
     }
 
     @Test("Theme fallback and CSS injection work")

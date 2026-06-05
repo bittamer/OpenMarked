@@ -43,10 +43,14 @@ Open every file in `Fixtures/Markdown`:
 - `gfm.md`
 - `local-images.md`
 - `long-document.md`
+- `mermaid.md`
 - `prose.md`
 - `raw-html.md`
+- `rich-markdown.md`
 
 Expected result: no crash, no blank preview, headings render, code blocks keep spacing, tables fit the content width, task lists show checkboxes, footnotes are usable, and front matter is hidden from the rendered body.
+
+For `mermaid.md`, flowchart, sequence, class, state, and ER diagrams should render as SVG diagrams. The intentionally broken Mermaid block should show an inline error and a Mermaid diagnostic without blanking the rest of the preview.
 
 ## File Watching And Local Images
 

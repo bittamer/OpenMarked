@@ -274,6 +274,49 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(status.userMessage, "Rich content rendering timed out")
     }
 
+    func testMermaidPostProcessorBuildsPlaceholdersBeforeHighlighting() {
+        let html = """
+        <pre><code class="language-mermaid">flowchart LR
+        A --&gt; B</code></pre>
+        <pre><code class="language-swift">let value = 1</code></pre>
+        """
+
+        let result = MermaidPostProcessor.process(html)
+        let highlighted = CodeHighlighter.highlight(result.html)
+
+        XCTAssertEqual(result.diagramCount, 1)
+        XCTAssertTrue(highlighted.contains(#"<figure class="om-mermaid" data-openmarked-rich="mermaid" id="om-mermaid-1">"#))
+        XCTAssertTrue(highlighted.contains(#"<pre class="om-mermaid-source"><code>flowchart LR"#))
+        XCTAssertTrue(highlighted.contains("A --&gt; B"))
+        XCTAssertTrue(highlighted.contains(#"class="om-code-block om-code-swift""#))
+        XCTAssertFalse(highlighted.contains(#"language-mermaid">flowchart"#))
+    }
+
+    func testRendererTransformsMermaidFixtureAndReportsPreflightDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.richMarkdownState.requiresMermaidRuntime)
+        XCTAssertTrue(result.bodyHTML.contains(#"id="om-mermaid-1""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"id="om-mermaid-6""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"class="om-code-block om-code-swift""#))
+        XCTAssertFalse(result.bodyHTML.contains("language-mermaid"))
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .mermaidRenderFailure && $0.source == "om-mermaid-6" })
+    }
+
+    func testMermaidStandaloneHTMLExportEmbedsTrustedRuntime() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let html = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+
+        XCTAssertTrue(html.contains("data-openmarked-rich-content-runtime"))
+        XCTAssertTrue(html.contains("openMarkedRichContent"))
+        XCTAssertTrue(html.contains(#"globalThis["mermaid"]"#))
+        XCTAssertTrue(html.contains(#"data-openmarked-rich="mermaid""#))
+    }
+
     func testRenderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {
         let expectedKinds: Set<RenderDiagnosticKind> = [
             .missingLocalImage,
@@ -939,6 +982,52 @@ struct AppInfoTests {
         #expect(status.hasFailure)
         #expect(status.requestedFeatures == [.mermaid])
         #expect(status.userMessage == "Rich content rendering timed out")
+    }
+
+    @Test("Mermaid postprocessor builds placeholders before highlighting")
+    func mermaidPostProcessorBuildsPlaceholdersBeforeHighlighting() {
+        let html = """
+        <pre><code class="language-mermaid">flowchart LR
+        A --&gt; B</code></pre>
+        <pre><code class="language-swift">let value = 1</code></pre>
+        """
+
+        let result = MermaidPostProcessor.process(html)
+        let highlighted = CodeHighlighter.highlight(result.html)
+
+        #expect(result.diagramCount == 1)
+        #expect(highlighted.contains(#"<figure class="om-mermaid" data-openmarked-rich="mermaid" id="om-mermaid-1">"#))
+        #expect(highlighted.contains(#"<pre class="om-mermaid-source"><code>flowchart LR"#))
+        #expect(highlighted.contains("A --&gt; B"))
+        #expect(highlighted.contains(#"class="om-code-block om-code-swift""#))
+        #expect(!highlighted.contains(#"language-mermaid">flowchart"#))
+    }
+
+    @Test("Renderer transforms Mermaid fixture and reports preflight diagnostics")
+    func rendererTransformsMermaidFixtureAndReportsPreflightDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.richMarkdownState.requiresMermaidRuntime)
+        #expect(result.bodyHTML.contains(#"id="om-mermaid-1""#))
+        #expect(result.bodyHTML.contains(#"id="om-mermaid-6""#))
+        #expect(result.bodyHTML.contains(#"class="om-code-block om-code-swift""#))
+        #expect(!result.bodyHTML.contains("language-mermaid"))
+        #expect(result.diagnostics.contains { $0.kind == .mermaidRenderFailure && $0.source == "om-mermaid-6" })
+    }
+
+    @Test("Mermaid standalone HTML export embeds trusted runtime")
+    func mermaidStandaloneHTMLExportEmbedsTrustedRuntime() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let html = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+
+        #expect(html.contains("data-openmarked-rich-content-runtime"))
+        #expect(html.contains("openMarkedRichContent"))
+        #expect(html.contains(#"globalThis["mermaid"]"#))
+        #expect(html.contains(#"data-openmarked-rich="mermaid""#))
     }
 
     @Test("Render diagnostic kinds include rich Markdown foundation kinds")

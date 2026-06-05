@@ -239,7 +239,12 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
             isEnabled: request.options.richMarkdownOptions.rendersGitHubCallouts
         )
         diagnostics.append(contentsOf: calloutProcessed.diagnostics)
-        let highlightedHTML = CodeHighlighter.highlight(calloutProcessed.html)
+        let mermaidProcessed = MermaidPostProcessor.process(
+            calloutProcessed.html,
+            isEnabled: request.options.richMarkdownOptions.rendersMermaid
+        )
+        diagnostics.append(contentsOf: mermaidProcessed.diagnostics)
+        let highlightedHTML = CodeHighlighter.highlight(mermaidProcessed.html)
         let policyHTML = request.allowsRemoteImages ? highlightedHTML : HTMLResourcePolicy.blockRemoteImages(in: highlightedHTML)
         diagnostics.append(
             contentsOf: RenderDiagnosticsCollector.collect(

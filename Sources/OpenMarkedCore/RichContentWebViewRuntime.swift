@@ -57,16 +57,19 @@ public enum RichContentWebViewRuntime {
         }
 
         for script in try RichContentRuntimeAssembler.runtimeScripts(for: state) {
-            _ = try await webView.evaluateJavaScript(script)
+            _ = try await webView.evaluateJavaScript(script + "\n;true;")
         }
 
         let invocationResult = try await webView.evaluateJavaScript(
             RichContentRuntimeAssembler.invocationScript(for: state)
         )
-        let waitResult = try await webView.evaluateJavaScript(
-            RichContentRuntimeAssembler.waitUntilReadyScript(timeoutMilliseconds: timeoutMilliseconds)
+        let waitResult = try await webView.callAsyncJavaScript(
+            RichContentRuntimeAssembler.waitUntilReadyAsyncScript(timeoutMilliseconds: timeoutMilliseconds),
+            arguments: [:],
+            in: nil,
+            contentWorld: .page
         )
-        let statusResult = (waitResult as? [String: Any]) == nil ? invocationResult : waitResult
+        let statusResult = waitResult ?? invocationResult
 
         return status(
             from: statusResult,
@@ -78,6 +81,12 @@ public enum RichContentWebViewRuntime {
         from javaScriptResult: Any?,
         requestedFeatures: Set<RichMarkdownFeature>
     ) -> RichContentRuntimeStatus {
+        if let jsonString = javaScriptResult as? String,
+           let data = jsonString.data(using: .utf8),
+           let dictionary = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] {
+            return status(from: dictionary, requestedFeatures: requestedFeatures)
+        }
+
         guard let dictionary = javaScriptResult as? [String: Any] else {
             return RichContentRuntimeStatus(ready: true, requestedFeatures: requestedFeatures)
         }

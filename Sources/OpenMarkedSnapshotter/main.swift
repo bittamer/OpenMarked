@@ -144,6 +144,7 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             SnapshotCase(id: "default-readme-light", fixturePath: "Fixtures/Markdown/README.md", themeID: "default", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "github-gfm-light", fixturePath: "Fixtures/Markdown/gfm.md", themeID: "github", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "minimal-prose-light", fixturePath: "Fixtures/Markdown/prose.md", themeID: "minimal", appearance: "light", width: 960, height: 720),
+            SnapshotCase(id: "github-rich-markdown-light", fixturePath: "Fixtures/Markdown/rich-markdown.md", themeID: "github", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "default-local-images-light", fixturePath: "Fixtures/Markdown/local-images.md", themeID: "default", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "github-long-document-dark", fixturePath: "Fixtures/Markdown/long-document.md", themeID: "github", appearance: "dark", width: 960, height: 720)
         ]

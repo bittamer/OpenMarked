@@ -92,9 +92,9 @@ These artifacts are not notarized by default. Gatekeeper behavior is documented 
 
 Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
 
-OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, and GitHub alert/callout blockquotes through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
+OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, GitHub alert/callout blockquotes, and Mermaid diagrams through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
-In the `0.3.0` development line, OpenMarked also bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources and has the trusted WebKit runtime pipeline in place. Actual Mermaid diagram rendering and KaTeX math transforms are the next implementation phases.
+In the `0.3.0` development line, OpenMarked bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources. Mermaid renders offline in preview, PDF/print, snapshots, and standalone HTML export; KaTeX math transforms are the next implementation phase.
 
 Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 

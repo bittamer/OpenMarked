@@ -19,6 +19,37 @@
 
 .om-mermaid {
   overflow-x: auto;
+  page-break-inside: avoid;
+  text-align: center;
+}
+
+.om-mermaid-source {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: pre;
+  width: 1px;
+}
+
+.om-mermaid-output {
+  display: block;
+  min-height: 2.5rem;
+}
+
+.om-mermaid-output svg {
+  display: block;
+  height: auto;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.om-mermaid[data-openmarked-render-state="failed"] {
+  text-align: left;
 }
 
 .om-math-display {
@@ -32,4 +63,15 @@
   color: var(--om-muted-foreground, inherit);
   font-size: 0.875em;
   padding: 0.65em 0.75em;
+}
+
+@media print {
+  .om-mermaid {
+    break-inside: avoid;
+    overflow: visible;
+  }
+
+  .om-mermaid-output svg {
+    max-width: 100%;
+  }
 }

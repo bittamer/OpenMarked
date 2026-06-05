@@ -1,0 +1,156 @@
+import Foundation
+
+public enum MermaidPostProcessor {
+    public struct Result: Equatable, Sendable {
+        public let html: String
+        public let diagnostics: [RenderDiagnostic]
+        public let diagramCount: Int
+
+        public init(html: String, diagnostics: [RenderDiagnostic] = [], diagramCount: Int = 0) {
+            self.html = html
+            self.diagnostics = diagnostics
+            self.diagramCount = diagramCount
+        }
+    }
+
+    public static func process(_ html: String, isEnabled: Bool = true) -> Result {
+        guard isEnabled else {
+            return Result(html: html)
+        }
+
+        let pattern = #"(?is)<pre([^>]*)>\s*<code([^>]*)>(.*?)</code>\s*</pre>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return Result(html: html)
+        }
+
+        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
+        guard !matches.isEmpty else {
+            return Result(html: html)
+        }
+
+        var replacements: [(range: Range<String.Index>, html: String)] = []
+        var diagnostics: [RenderDiagnostic] = []
+        var diagramCount = 0
+
+        for match in matches {
+            guard
+                let fullRange = Range(match.range(at: 0), in: html),
+                let preAttributesRange = Range(match.range(at: 1), in: html),
+                let codeAttributesRange = Range(match.range(at: 2), in: html),
+                let codeRange = Range(match.range(at: 3), in: html)
+            else {
+                continue
+            }
+
+            let preAttributes = String(html[preAttributesRange])
+            let codeAttributes = String(html[codeAttributesRange])
+            guard isMermaidLanguage(languageIdentifier(preAttributes: preAttributes, codeAttributes: codeAttributes)) else {
+                continue
+            }
+
+            diagramCount += 1
+            let diagramID = "om-mermaid-\(diagramCount)"
+            let source = HTMLUtilities.decodeEntities(in: String(html[codeRange]))
+            let replacement = placeholderHTML(id: diagramID, index: diagramCount, source: source)
+            diagnostics.append(contentsOf: preflightDiagnostics(for: source, diagramID: diagramID))
+            replacements.append((fullRange, replacement))
+        }
+
+        var rendered = html
+        for replacement in replacements.reversed() {
+            rendered.replaceSubrange(replacement.range, with: replacement.html)
+        }
+
+        return Result(html: rendered, diagnostics: diagnostics, diagramCount: diagramCount)
+    }
+
+    private static func placeholderHTML(id: String, index: Int, source: String) -> String {
+        let escapedID = HTMLUtilities.escapeAttribute(id)
+        let label = "Mermaid diagram \(index)"
+        let escapedLabel = HTMLUtilities.escapeAttribute(label)
+        let escapedSource = HTMLUtilities.escapeText(source)
+
+        return """
+        <figure class="om-mermaid" data-openmarked-rich="mermaid" id="\(escapedID)">
+          <figcaption class="om-rich-content-status">\(HTMLUtilities.escapeText(label))</figcaption>
+          <pre class="om-mermaid-source"><code>\(escapedSource)</code></pre>
+          <div class="om-mermaid-output" role="img" aria-label="\(escapedLabel)" aria-live="polite"></div>
+        </figure>
+        """
+    }
+
+    private static func preflightDiagnostics(for source: String, diagramID: String) -> [RenderDiagnostic] {
+        let trimmedSource = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSource.isEmpty else {
+            return [
+                RenderDiagnostic(
+                    severity: .warning,
+                    kind: .mermaidRenderFailure,
+                    message: "Mermaid diagram \(diagramID) is empty.",
+                    source: diagramID
+                )
+            ]
+        }
+
+        let lines = trimmedSource.split(whereSeparator: \.isNewline).map(String.init)
+        for (index, line) in lines.enumerated() {
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            if lineEndsWithDanglingConnector(trimmedLine) {
+                return [
+                    RenderDiagnostic(
+                        severity: .warning,
+                        kind: .mermaidRenderFailure,
+                        message: "Mermaid diagram \(diagramID) may be incomplete near line \(index + 1).",
+                        source: diagramID
+                    )
+                ]
+            }
+        }
+
+        return []
+    }
+
+    private static func lineEndsWithDanglingConnector(_ line: String) -> Bool {
+        line.range(
+            of: #"(?:(?:--|==|-\.)(?:[ox>])?|(?:-->|==>|-\.->))\s*$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func languageIdentifier(preAttributes: String, codeAttributes: String) -> String? {
+        if let language = firstCapture(pattern: #"lang\s*=\s*["']([^"']+)["']"#, in: preAttributes) {
+            return language
+        }
+
+        if let language = firstCapture(pattern: #"class\s*=\s*["'][^"']*language-([A-Za-z0-9_+-]+)[^"']*["']"#, in: codeAttributes) {
+            return language
+        }
+
+        return nil
+    }
+
+    private static func isMermaidLanguage(_ language: String?) -> Bool {
+        guard let language else {
+            return false
+        }
+
+        switch language.lowercased() {
+        case "mermaid", "mmd":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func firstCapture(pattern: String, in text: String) -> String? {
+        guard
+            let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+            let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
+            let range = Range(match.range(at: 1), in: text)
+        else {
+            return nil
+        }
+
+        return String(text[range])
+    }
+}

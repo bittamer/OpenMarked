@@ -126,7 +126,7 @@ Link validation behavior:
 
 ## Rich Content Resource Direction
 
-Phase 3 of 0.3.0 establishes the bundled resource and WebKit readiness pipeline for Mermaid and KaTeX.
+Phase 3 and Phase 4 of 0.3.0 establish the bundled resource pipeline and Mermaid rendering path. KaTeX uses the same resource foundation but its math transforms are still scheduled for Phase 5.
 
 Rich content behavior:
 
@@ -134,7 +134,9 @@ Rich content behavior:
 - `RichContentAssetStore` is the only code path that should resolve rich assets; it supports both source-tree paths and SwiftPM's flattened processed-resource layout.
 - `HTMLDocumentAssembler` conditionally adds OpenMarked rich CSS and KaTeX CSS/font references when the detected, enabled document features require them.
 - `PreviewWebView`, PDF/print export, and `OpenMarkedSnapshotter` call `RichContentWebViewRuntime.installAndWait` after sanitized HTML loads.
-- Phase 3 does not yet transform Mermaid fences or math delimiters into rendered output; Phase 4 and Phase 5 will add those DOM transforms behind the existing runtime completion signal.
+- `MermaidPostProcessor` replaces Mermaid code fences with stable figure placeholders before syntax highlighting, preserving source text for diagnostics and offline export.
+- The OpenMarked runtime renders Mermaid placeholders to SVG with the bundled Mermaid library and reports inline/runtime failures through the shared rich-content status result.
+- Math delimiters are still plain Markdown output until Phase 5 adds KaTeX placeholder and render transforms.
 
 ## Export Direction
 
@@ -142,7 +144,7 @@ Phase 8 keeps export document assembly in `OpenMarkedCore` and platform workflow
 
 Export behavior:
 
-- Standalone HTML export uses `HTMLExportDocumentBuilder`, sanitizes the same scripts/event handlers as preview, preserves the current theme CSS, and embeds local images as data URLs by default.
+- Standalone HTML export uses `HTMLExportDocumentBuilder`, sanitizes the same scripts/event handlers as preview, preserves the current theme CSS, embeds local images as data URLs by default, and injects trusted bundled rich-content runtime scripts when Mermaid or future math output requires them.
 - Copy Rendered HTML copies the rendered body fragment to both HTML and plain-text pasteboard flavors.
 - PDF export and Print use an offscreen `WKWebView` loaded with the current standalone HTML and AppKit print operations, so print CSS applies through the native print pipeline.
 - Save-panel cancellation is treated as a no-op. Write/PDF failures use `ExportError` and show a short native alert plus status-bar feedback.

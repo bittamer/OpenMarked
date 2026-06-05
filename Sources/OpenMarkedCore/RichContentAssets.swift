@@ -241,13 +241,13 @@ public enum RichContentRuntimeAssembler {
         return """
         (function() {
           if (!window.openMarkedRichContent || !window.openMarkedRichContent.run) {
-            return { ready: false, errors: ['OpenMarked rich content runtime is unavailable.'] };
+            return JSON.stringify({ ready: false, errors: ['OpenMarked rich content runtime is unavailable.'] });
           }
 
-          return window.openMarkedRichContent.run({
+          return JSON.stringify(window.openMarkedRichContent.run({
             mermaid: \(state.requiresMermaidRuntime ? "true" : "false"),
             katex: \(state.requiresMathRuntime ? "true" : "false")
-          });
+          }));
         })();
         """
     }
@@ -256,11 +256,24 @@ public enum RichContentRuntimeAssembler {
         """
         (function() {
           if (!window.openMarkedRichContent || !window.openMarkedRichContent.waitUntilReady) {
-            return { ready: false, errors: ['OpenMarked rich content runtime is unavailable.'] };
+            return JSON.stringify({ ready: false, errors: ['OpenMarked rich content runtime is unavailable.'] });
           }
 
-          return window.openMarkedRichContent.waitUntilReady(\(timeoutMilliseconds));
+          return window.openMarkedRichContent.waitUntilReady(\(timeoutMilliseconds)).then(function(result) {
+            return JSON.stringify(result);
+          });
         })();
+        """
+    }
+
+    public static func waitUntilReadyAsyncScript(timeoutMilliseconds: Int = defaultTimeoutMilliseconds) -> String {
+        """
+        if (!window.openMarkedRichContent || !window.openMarkedRichContent.waitUntilReady) {
+          return JSON.stringify({ ready: false, errors: ['OpenMarked rich content runtime is unavailable.'] });
+        }
+
+        const result = await window.openMarkedRichContent.waitUntilReady(\(timeoutMilliseconds));
+        return JSON.stringify(result);
         """
     }
 }

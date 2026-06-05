@@ -15,7 +15,14 @@ swift test
 swift package describe >/dev/null
 git diff --check
 
-if LC_ALL=C rg -n "[^[:ascii:]]" --glob '!.build/**' --glob '!.git/**' --glob '!dist/**' .; then
+if LC_ALL=C rg -n "[^[:ascii:]]" \
+  --glob '!.build/**' \
+  --glob '!.git/**' \
+  --glob '!dist/**' \
+  --glob '!Sources/OpenMarkedCore/Resources/RichContent/Mermaid/mermaid.min.js' \
+  --glob '!Sources/OpenMarkedCore/Resources/RichContent/KaTeX/katex.min.js' \
+  --glob '!Sources/OpenMarkedCore/Resources/RichContent/KaTeX/katex.min.css' \
+  .; then
   echo "Non-ASCII text found outside generated build output." >&2
   exit 1
 fi

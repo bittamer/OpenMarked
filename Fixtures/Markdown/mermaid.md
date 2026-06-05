@@ -21,6 +21,41 @@ sequenceDiagram
     OpenMarked-->>User: Render preview
 ```
 
+## Class
+
+```mermaid
+classDiagram
+    class MarkdownDocument {
+        +String sourceText
+        +String displayTitle
+    }
+    class PreviewRenderer {
+        +render()
+    }
+    MarkdownDocument --> PreviewRenderer
+```
+
+## State
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loaded
+    Loaded --> Rendering
+    Rendering --> Ready
+    Ready --> Rendering: source changed
+```
+
+## ER
+
+```mermaid
+erDiagram
+    DOCUMENT ||--o{ DIAGRAM : contains
+    DIAGRAM {
+        string id
+        string source
+    }
+```
+
 ## Broken Diagram
 
 ```mermaid
@@ -34,4 +69,3 @@ flowchart TD
 let language = "swift"
 print(language)
 ```
-

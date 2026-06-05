@@ -321,6 +321,19 @@ for path in richFixturePaths {
     verify(!result.fullHTML.isEmpty, "\(path) should render full HTML")
 }
 
+let mermaidURL = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
+let mermaidDocument = try MarkdownDocumentLoader.load(url: mermaidURL, createBookmark: false)
+let mermaidResult = try renderer.render(RenderRequest(document: mermaidDocument))
+verify(mermaidResult.richMarkdownState.requiresMermaidRuntime, "Mermaid fixture should require the Mermaid runtime")
+verify(mermaidResult.bodyHTML.contains(#"id="om-mermaid-1""#), "Mermaid fixture should include the first placeholder")
+verify(mermaidResult.bodyHTML.contains(#"id="om-mermaid-6""#), "Mermaid fixture should include all Mermaid placeholders")
+verify(mermaidResult.bodyHTML.contains(#"class="om-code-block om-code-swift""#), "ordinary code in Mermaid fixture should still highlight")
+verify(!mermaidResult.bodyHTML.contains("language-mermaid"), "Mermaid code fences should be consumed before code highlighting")
+verify(mermaidResult.diagnostics.contains { $0.kind == .mermaidRenderFailure && $0.source == "om-mermaid-6" }, "broken Mermaid fixture diagram should produce a preflight diagnostic")
+let mermaidExportHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: mermaidResult, document: mermaidDocument)
+verify(mermaidExportHTML.contains("data-openmarked-rich-content-runtime"), "Mermaid HTML export should embed the trusted runtime")
+verify(mermaidExportHTML.contains(#"globalThis["mermaid"]"#), "Mermaid HTML export should embed the bundled Mermaid runtime")
+
 let linkExtractorHTML = ##"<p><a href="guide.md">Guide</a><code>&lt;a href=&quot;ignored.md&quot;&gt;</code><a href="#existing-heading">Heading</a><a href="">Empty</a></p>"##
 let extractedLinks = LinkReferenceExtractor.linkReferences(from: linkExtractorHTML)
 verify(extractedLinks.map(\.source) == ["guide.md", "#existing-heading"], "link extractor should read rendered anchors and ignore empty links")

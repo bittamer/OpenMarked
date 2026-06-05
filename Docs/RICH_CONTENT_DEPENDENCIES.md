@@ -19,6 +19,7 @@ These pins were checked against the npm registry on 2026-06-05.
 - Version files must record the package name, version, source URL, registry tarball URL, and date vendored.
 - Use package-prefixed metadata filenames because SwiftPM processed resources cannot contain duplicate leaf names.
 - Updates must be deliberate commits, not floating version ranges.
+- Release ASCII checks intentionally exclude the upstream minified Mermaid/KaTeX payloads so those assets remain byte-for-byte vendored from npm.
 
 ## Vendored Resource Layout
 
@@ -62,7 +63,7 @@ katex 0.17.0 MIT
 
 ## Security Notes
 
-- Mermaid must run in the safest practical security configuration.
+- Mermaid runs from the bundled asset with `startOnLoad: false`, strict security mode, deterministic IDs, and no CDN dependency.
 - KaTeX must render with `trust: false`.
 - User-authored `<script>` tags and inline event handlers must remain blocked by the existing preview sanitizer.
 - Remote link validation remains disabled by default and must be manual or opt-in if implemented.

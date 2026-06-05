@@ -23,10 +23,16 @@ public enum ExportError: Error, Equatable, LocalizedError, Sendable {
 public struct HTMLExportOptions: Equatable, Sendable {
     public var embedsLocalImages: Bool
     public var embedsThemeCSS: Bool
+    public var embedsRichContentRuntime: Bool
 
-    public init(embedsLocalImages: Bool = true, embedsThemeCSS: Bool = true) {
+    public init(
+        embedsLocalImages: Bool = true,
+        embedsThemeCSS: Bool = true,
+        embedsRichContentRuntime: Bool = true
+    ) {
         self.embedsLocalImages = embedsLocalImages
         self.embedsThemeCSS = embedsThemeCSS
+        self.embedsRichContentRuntime = embedsRichContentRuntime
     }
 }
 
@@ -46,7 +52,56 @@ public enum HTMLExportDocumentBuilder {
             html = stripEmbeddedStyles(from: html)
         }
 
+        if options.embedsRichContentRuntime {
+            html = embedTrustedRichContentRuntime(in: html, state: renderResult.richMarkdownState)
+        }
+
         return html
+    }
+
+    private static func embedTrustedRichContentRuntime(in html: String, state: RichMarkdownRenderState) -> String {
+        guard state.requiresRichContentRuntime,
+              let scripts = try? RichContentRuntimeAssembler.runtimeScripts(for: state),
+              !scripts.isEmpty
+        else {
+            return html
+        }
+
+        let runtimeScript = (scripts + [exportInvocationScript(for: state)])
+            .joined(separator: "\n")
+            .replacingOccurrences(of: "</script", with: "<\\/script", options: [.caseInsensitive])
+        let scriptBlock = """
+
+        <script data-openmarked-rich-content-runtime>
+        \(runtimeScript)
+        </script>
+        """
+
+        if let bodyCloseRange = html.range(of: "</body>", options: [.caseInsensitive, .backwards]) {
+            var exportedHTML = html
+            exportedHTML.insert(contentsOf: scriptBlock, at: bodyCloseRange.lowerBound)
+            return exportedHTML
+        }
+
+        return html + scriptBlock
+    }
+
+    private static func exportInvocationScript(for state: RichMarkdownRenderState) -> String {
+        let invocationScript = RichContentRuntimeAssembler.invocationScript(for: state)
+        return """
+        (function() {
+          function runOpenMarkedRichContent() {
+            window.openMarkedPrefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            \(invocationScript)
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', runOpenMarkedRichContent, { once: true });
+          } else {
+            runOpenMarkedRichContent();
+          }
+        })();
+        """
     }
 
     private static func stripEmbeddedStyles(from html: String) -> String {

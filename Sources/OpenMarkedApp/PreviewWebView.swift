@@ -40,6 +40,8 @@ struct PreviewWebView: NSViewRepresentable {
     let baseURL: URL
     let navigationRequest: PreviewNavigationRequest?
     let searchRequest: PreviewSearchRequest?
+    let preservesScrollPosition: Bool
+    let usesReducedMotion: Bool
     let onStatusUpdate: (String) -> Void
     let onSearchResult: (PreviewSearchResult) -> Void
 
@@ -62,6 +64,8 @@ struct PreviewWebView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.onStatusUpdate = onStatusUpdate
         context.coordinator.onSearchResult = onSearchResult
+        context.coordinator.preservesScrollPosition = preservesScrollPosition
+        context.coordinator.usesReducedMotion = usesReducedMotion
         context.coordinator.load(renderResult: renderResult, baseURL: baseURL)
 
         if context.coordinator.lastNavigationRequestID != navigationRequest?.id {
@@ -87,6 +91,8 @@ struct PreviewWebView: NSViewRepresentable {
         var lastBaseURL: URL?
         var lastNavigationRequestID: UUID?
         var lastSearchRequestID: UUID?
+        var preservesScrollPosition = true
+        var usesReducedMotion = false
         private var pendingNavigationID: String?
         private var pendingSearchRequest: PreviewSearchRequest?
         private var activeSearchQuery = ""
@@ -119,6 +125,12 @@ struct PreviewWebView: NSViewRepresentable {
                 return
             }
 
+            guard preservesScrollPosition else {
+                scrollRatio = 0
+                webView.loadHTMLString(securedHTML, baseURL: baseURL)
+                return
+            }
+
             captureScrollRatio { [weak self, weak webView] ratio in
                 self?.scrollRatio = ratio
                 webView?.loadHTMLString(securedHTML, baseURL: baseURL)
@@ -132,11 +144,12 @@ struct PreviewWebView: NSViewRepresentable {
             }
 
             let escapedID = PreviewJavaScriptEscaper.escape(id)
+            let behavior = usesReducedMotion ? "auto" : "smooth"
             let script = """
             (function() {
               var target = document.getElementById('\(escapedID)');
               if (!target) { return false; }
-              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              target.scrollIntoView({ behavior: '\(behavior)', block: 'start' });
               target.classList.add('om-heading-target');
               window.setTimeout(function() { target.classList.remove('om-heading-target'); }, 900);
               return true;
@@ -277,6 +290,7 @@ struct PreviewWebView: NSViewRepresentable {
                 style.textContent = '.om-heading-target { outline: 2px solid -webkit-focus-ring-color; outline-offset: 4px; transition: outline-color 0.2s ease; } .om-search-match { background: color-mix(in srgb, Highlight 28%, transparent); color: inherit; border-radius: 2px; } .om-search-current { background: Mark; color: MarkText; }';
                 document.head.appendChild(style);
               }
+              window.openMarkedPrefersReducedMotion = \(usesReducedMotion ? "true" : "false");
               window.openMarkedSearch = {
                 state: { query: '', index: -1 },
                 clear: function() {
@@ -356,7 +370,7 @@ struct PreviewWebView: NSViewRepresentable {
                     }
                   }
                   matches[index].classList.add('om-search-current');
-                  matches[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  matches[index].scrollIntoView({ behavior: window.openMarkedPrefersReducedMotion ? 'auto' : 'smooth', block: 'center' });
                   this.state = { query: query, index: index };
                   return { query: query, count: matches.length, selectedIndex: index + 1 };
                 }

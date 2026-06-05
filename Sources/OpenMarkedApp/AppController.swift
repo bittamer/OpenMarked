@@ -8,11 +8,16 @@ final class AppController: ObservableObject {
     static let shared = AppController()
 
     @Published private(set) var activeWindowController: DocumentWindowController?
+    @Published private(set) var settings: ApplicationSettings
 
     private var retainedWindows: [UUID: NSWindow] = [:]
     private var retainedWindowDelegates: [UUID: WindowLifecycleDelegate] = [:]
+    private let settingsStore = ApplicationSettingsStore.shared
+    private var didAttemptSessionRestore = false
 
-    private init() {}
+    private init() {
+        self.settings = settingsStore.load()
+    }
 
     var activeCanReloadPreview: Bool {
         activeWindowController?.state.canReloadPreview ?? false
@@ -69,6 +74,10 @@ final class AppController: ObservableObject {
             return
         }
 
+        if settings.restoresLastOpenedDocuments {
+            settingsStore.saveLastDocumentURLs(supportedURLs)
+        }
+
         let target = preferredController ?? activeWindowController
         var remaining = supportedURLs
 
@@ -110,6 +119,21 @@ final class AppController: ObservableObject {
 
     func setTheme(id: String) {
         activeWindowController?.setTheme(id: id)
+    }
+
+    func updateSettings(_ transform: (inout ApplicationSettings) -> Void) {
+        let previousSettings = settings
+        var updatedSettings = settings
+        transform(&updatedSettings)
+        settings = updatedSettings.normalized()
+        settingsStore.save(settings)
+        if !settings.restoresLastOpenedDocuments {
+            settingsStore.saveLastDocumentURLs([])
+        } else if !previousSettings.restoresLastOpenedDocuments,
+                  let currentURL = activeWindowController?.state.currentDocument?.url {
+            settingsStore.saveLastDocumentURLs([currentURL])
+        }
+        activeWindowController?.applySettings(settings)
     }
 
     func exportHTML() {
@@ -154,6 +178,24 @@ final class AppController: ObservableObject {
 
     func showHelpPlaceholder() {
         activeWindowController?.helpPlaceholder()
+    }
+
+    func restoreLastSessionIfNeeded() {
+        guard !didAttemptSessionRestore else {
+            return
+        }
+        didAttemptSessionRestore = true
+
+        guard settings.restoresLastOpenedDocuments else {
+            return
+        }
+
+        let urls = settingsStore.loadLastDocumentURLs().filter { FileManager.default.fileExists(atPath: $0.path) }
+        guard !urls.isEmpty else {
+            return
+        }
+
+        openURLs(urls, preferredController: activeWindowController, replacePreferredController: true)
     }
 
     private func createDocumentWindow(opening url: URL) {

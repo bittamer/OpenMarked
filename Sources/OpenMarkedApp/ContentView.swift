@@ -106,6 +106,7 @@ private struct AppToolbar: View {
             .pickerStyle(.menu)
             .frame(width: 150)
             .help("Preview theme")
+            .accessibilityLabel("Preview theme")
 
             Button {
                 controller.showSearch()
@@ -248,6 +249,7 @@ private struct OutlineSidebar: View {
 
 private struct PreviewShell: View {
     @EnvironmentObject private var appController: AppController
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var controller: DocumentWindowController
     let isDropTargeted: Bool
 
@@ -299,6 +301,8 @@ private struct PreviewShell: View {
                         baseURL: document.url.deletingLastPathComponent(),
                         navigationRequest: controller.previewNavigationRequest,
                         searchRequest: controller.previewSearchRequest,
+                        preservesScrollPosition: appController.settings.preservesScrollPosition,
+                        usesReducedMotion: reduceMotion,
                         onStatusUpdate: { message in
                             controller.updatePreviewStatus(message)
                         },
@@ -411,6 +415,8 @@ private struct EmptyDocumentView: View {
             .padding(.top, 4)
         }
         .padding()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Empty document")
     }
 }
 
@@ -447,6 +453,8 @@ private struct LoadedDocumentPlaceholder: View {
             .padding(.top, 4)
         }
         .padding(32)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Loaded document summary")
     }
 }
 
@@ -471,6 +479,8 @@ private struct PreviewErrorView: View {
             }
         }
         .padding(32)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Preview render error")
     }
 }
 
@@ -502,6 +512,8 @@ private struct ErrorDocumentView: View {
             .controlSize(.large)
         }
         .padding(32)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Document open error")
     }
 }
 
@@ -670,21 +682,67 @@ private struct DiagnosticsPopover: View {
 }
 
 struct SettingsView: View {
+    @EnvironmentObject private var appController: AppController
+
     var body: some View {
         Form {
-            Section("MVP Defaults") {
-                Picker("Default Theme", selection: .constant(PreviewThemeStore.defaultThemeID)) {
+            Section("Preview Defaults") {
+                Picker("Default Theme", selection: settingBinding(\.defaultThemeID)) {
                     ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
                         Text(theme.name).tag(theme.id)
                     }
                 }
+                .accessibilityLabel("Default preview theme")
 
-                Toggle("Live updates", isOn: .constant(true))
-                Toggle("Preserve scroll position", isOn: .constant(true))
+                HStack {
+                    Slider(value: fontScaleBinding, in: 0.6...2.0, step: 0.05) {
+                        Text("Default Font Scale")
+                    }
+                    Text("\(Int((appController.settings.defaultFontScale * 100).rounded()))%")
+                        .monospacedDigit()
+                        .frame(width: 48, alignment: .trailing)
+                }
+
+                Toggle("Live updates", isOn: settingBinding(\.isLivePreviewEnabled))
+                Toggle("Preserve scroll position", isOn: settingBinding(\.preservesScrollPosition))
+                Toggle("Restore last opened documents", isOn: settingBinding(\.restoresLastOpenedDocuments))
+            }
+
+            Section("Content") {
+                Toggle("Load remote images", isOn: settingBinding(\.allowsRemoteImages))
+                Toggle("Allow raw HTML", isOn: settingBinding(\.allowsRawHTML))
+            }
+
+            Section("Export") {
+                Toggle("Embed CSS in HTML export", isOn: settingBinding(\.embedsCSSInHTMLExport))
+                Toggle("Embed local images in HTML export", isOn: settingBinding(\.embedsLocalImagesInHTMLExport))
             }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 420)
+        .frame(width: 460)
+        .accessibilityLabel("OpenMarked settings")
+    }
+
+    private func settingBinding<Value>(_ keyPath: WritableKeyPath<ApplicationSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { appController.settings[keyPath: keyPath] },
+            set: { newValue in
+                appController.updateSettings { settings in
+                    settings[keyPath: keyPath] = newValue
+                }
+            }
+        )
+    }
+
+    private var fontScaleBinding: Binding<Double> {
+        Binding(
+            get: { appController.settings.defaultFontScale },
+            set: { newValue in
+                appController.updateSettings { settings in
+                    settings.defaultFontScale = newValue
+                }
+            }
+        )
     }
 }

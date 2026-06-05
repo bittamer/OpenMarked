@@ -100,6 +100,16 @@ let restored = store.restore(forDocumentID: markdownDocument.id)
 verify(restored?.layout == savedLayout, "window layout should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
 
+let settingsStore = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "VerifierSettings", lastDocumentPathsKey: "VerifierLastPaths")
+let savedSettings = ApplicationSettings(defaultThemeID: "missing", defaultFontScale: 4.0, isLivePreviewEnabled: false)
+settingsStore.save(savedSettings)
+let restoredSettings = settingsStore.load()
+verify(restoredSettings.defaultThemeID == "default", "settings should normalize unknown theme ids")
+verify(restoredSettings.defaultFontScale == 2.0, "settings should clamp default font scale")
+verify(!restoredSettings.isLivePreviewEnabled, "settings should persist live preview preference")
+settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL])
+verify(settingsStore.loadLastDocumentURLs().first?.path == markdownDocument.sourceURL.path, "settings store should persist last document paths")
+
 let renderer = CMarkGFMRenderer()
 let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
 verify(renderResult.rendererName == "cmark-gfm", "renderer name should identify cmark-gfm")
@@ -126,6 +136,13 @@ let gfmResult = try renderer.render(RenderRequest(document: gfmDocument))
 verify(gfmResult.bodyHTML.contains("<del>scope creep</del>"), "strikethrough extension should render")
 verify(gfmResult.bodyHTML.contains("type=\"checkbox\""), "task list extension should render checkboxes")
 
+let remoteImageURL = FileManager.default.temporaryDirectory.appendingPathComponent("openmarked-remote-image-\(UUID().uuidString).md")
+try "# Remote\n\n![Remote](https://example.com/image.png)\n".write(to: remoteImageURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: remoteImageURL) }
+let remoteImageDocument = try MarkdownDocumentLoader.load(url: remoteImageURL, createBookmark: false)
+let remoteBlockedResult = try renderer.render(RenderRequest(document: remoteImageDocument, allowsRemoteImages: false))
+verify(remoteBlockedResult.bodyHTML.contains("data-openmarked-blocked-src"), "remote images should be blocked when disabled")
+
 let localImageURL = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
 let localImageDocument = try MarkdownDocumentLoader.load(url: localImageURL, createBookmark: false)
 let localImageResult = try renderer.render(RenderRequest(document: localImageDocument))
@@ -135,6 +152,12 @@ verify(localImageAssetURLs.contains { $0.lastPathComponent == "sample-mark.svg" 
 let exportedLocalImageHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: localImageResult, document: localImageDocument)
 verify(exportedLocalImageHTML.contains("<!doctype html>"), "standalone HTML export should include document structure")
 verify(exportedLocalImageHTML.contains("data:image/svg+xml;base64,"), "standalone HTML export should embed local image assets")
+let unstyledExportHTML = HTMLExportDocumentBuilder.standaloneHTML(
+    renderResult: localImageResult,
+    document: localImageDocument,
+    options: HTMLExportOptions(embedsLocalImages: false, embedsThemeCSS: false)
+)
+verify(!unstyledExportHTML.contains("<style>"), "HTML export should be able to omit embedded CSS")
 
 let htmlExportURL = FileManager.default.temporaryDirectory.appendingPathComponent("openmarked-export-\(UUID().uuidString).html")
 try HTMLExportWriter.write(html: exportedLocalImageHTML, to: htmlExportURL)
@@ -214,4 +237,4 @@ let creationEvent = try waitForWatchEvent(url: missingWatchedURL) { url in
 }
 verify(creationEvent.kind == .replaced || creationEvent.kind == .changed, "creation of a missing watched file should be detected")
 
-print("OpenMarked Phase 8 verifier passed.")
+print("OpenMarked Phase 9 verifier passed.")

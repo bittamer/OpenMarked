@@ -108,6 +108,24 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(restored?.frame?.width, 900)
     }
 
+    func testApplicationSettingsStorePersistsAndNormalizesSettings() throws {
+        let suiteName = "OpenMarkedSettingsTests-\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let store = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "Settings", lastDocumentPathsKey: "LastPaths")
+        store.save(ApplicationSettings(defaultThemeID: "missing", defaultFontScale: 4.0, isLivePreviewEnabled: false))
+
+        let restored = store.load()
+        XCTAssertEqual(restored.defaultThemeID, "default")
+        XCTAssertEqual(restored.defaultFontScale, 2.0)
+        XCTAssertFalse(restored.isLivePreviewEnabled)
+
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        store.saveLastDocumentURLs([url])
+        XCTAssertEqual(store.loadLastDocumentURLs().first?.path, url.path)
+    }
+
     func testCMarkGFMRendererRendersFixtureReadme() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -151,6 +169,18 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.bodyHTML.contains("<del>scope creep</del>"))
         XCTAssertTrue(result.bodyHTML.contains(#"type="checkbox""#))
         XCTAssertTrue(result.bodyHTML.contains("<table>"))
+    }
+
+    func testRemoteImagesCanBeBlocked() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("openmarked-remote-image-\(UUID().uuidString).md")
+        try "# Remote\n\n![Remote](https://example.com/image.png)\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document, allowsRemoteImages: false))
+
+        XCTAssertTrue(result.bodyHTML.contains("data-openmarked-blocked-src"))
     }
 
     func testHeadingSlugsAreDeduplicated() {
@@ -211,6 +241,13 @@ final class AppInfoTests: XCTestCase {
         let exportedHTML = try String(contentsOf: destinationURL, encoding: .utf8)
 
         XCTAssertTrue(exportedHTML.contains("data:image/svg+xml;base64,"))
+
+        let unstyledHTML = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: result,
+            document: document,
+            options: HTMLExportOptions(embedsLocalImages: false, embedsThemeCSS: false)
+        )
+        XCTAssertFalse(unstyledHTML.contains("<style>"))
     }
 
     func testFootnotesRenderWhenEnabled() throws {
@@ -313,6 +350,28 @@ struct AppInfoTests {
         #expect(state.search.query.isEmpty)
     }
 
+    @Test("Application settings store persists and normalizes settings")
+    func applicationSettingsStorePersistsAndNormalizesSettings() throws {
+        let suiteName = "OpenMarkedSettingsTests-\(UUID().uuidString)"
+        guard let userDefaults = UserDefaults(suiteName: suiteName) else {
+            #expect(Bool(false))
+            return
+        }
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let store = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "Settings", lastDocumentPathsKey: "LastPaths")
+        store.save(ApplicationSettings(defaultThemeID: "missing", defaultFontScale: 4.0, isLivePreviewEnabled: false))
+
+        let restored = store.load()
+        #expect(restored.defaultThemeID == "default")
+        #expect(restored.defaultFontScale == 2.0)
+        #expect(!restored.isLivePreviewEnabled)
+
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        store.saveLastDocumentURLs([url])
+        #expect(store.loadLastDocumentURLs().first?.path == url.path)
+    }
+
     @Test("Markdown document loads source and statistics")
     func markdownDocumentLoadsSourceAndStats() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
@@ -384,6 +443,19 @@ struct AppInfoTests {
         #expect(result.bodyHTML.contains("<table>"))
     }
 
+    @Test("Remote images can be blocked")
+    func remoteImagesCanBeBlocked() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("openmarked-remote-image-\(UUID().uuidString).md")
+        try "# Remote\n\n![Remote](https://example.com/image.png)\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document, allowsRemoteImages: false))
+
+        #expect(result.bodyHTML.contains("data-openmarked-blocked-src"))
+    }
+
     @Test("Outline filter matches heading titles")
     func outlineFilterMatchesHeadingTitles() {
         let outline = [
@@ -425,6 +497,13 @@ struct AppInfoTests {
         let exportedHTML = try String(contentsOf: destinationURL, encoding: .utf8)
 
         #expect(exportedHTML.contains("data:image/svg+xml;base64,"))
+
+        let unstyledHTML = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: result,
+            document: document,
+            options: HTMLExportOptions(embedsLocalImages: false, embedsThemeCSS: false)
+        )
+        #expect(!unstyledHTML.contains("<style>"))
     }
 
     @Test("Preview state can hold render result")

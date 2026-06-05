@@ -353,6 +353,10 @@ public struct DocumentWindowState: Equatable {
         livePreview = .watching
     }
 
+    public mutating func noteLivePreviewInactive() {
+        livePreview = .inactive
+    }
+
     public mutating func beginLivePreviewUpdate() {
         livePreview = .updating
     }

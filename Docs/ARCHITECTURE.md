@@ -109,6 +109,19 @@ Export behavior:
 - Save-panel cancellation is treated as a no-op. Write/PDF failures use `ExportError` and show a short native alert plus status-bar feedback.
 - Automated smoke coverage validates standalone HTML structure, image embedding, and export writing. PDF remains covered by build/smoke launch and manual visual inspection because robust PDF visual assertions are out of scope for the MVP.
 
+## Settings And Polish Direction
+
+Phase 9 keeps persistent preferences in `OpenMarkedCore` and applies them from the app coordinator to the active document window.
+
+Settings behavior:
+
+- `ApplicationSettings` is a small codable value that stores preview defaults, content policy, export defaults, live preview behavior, scroll preservation, and optional session restoration.
+- `ApplicationSettingsStore` persists settings and last-opened document paths through `UserDefaults`, with normalization for unknown themes and out-of-range font scales.
+- Current documents re-render when content policy or preview defaults change, while newly opened documents use the normalized default layout unless a per-document layout was restored.
+- Reduced-motion preferences are read from SwiftUI environment and passed into `PreviewWebView`, which switches smooth scrolling helpers to immediate scrolling.
+- Remote images can be disabled before preview/export assembly by rewriting remote image sources to inert placeholders while retaining the original URL in a diagnostic attribute.
+- Accessibility polish is kept mostly in SwiftUI view declarations: primary toolbar controls, settings, empty/error states, and picker/search controls expose labels or native labels.
+
 ## Sandboxing Direction
 
 OpenMarked should be designed for sandboxed file access:

@@ -22,9 +22,11 @@ public enum ExportError: Error, Equatable, LocalizedError, Sendable {
 
 public struct HTMLExportOptions: Equatable, Sendable {
     public var embedsLocalImages: Bool
+    public var embedsThemeCSS: Bool
 
-    public init(embedsLocalImages: Bool = true) {
+    public init(embedsLocalImages: Bool = true, embedsThemeCSS: Bool = true) {
         self.embedsLocalImages = embedsLocalImages
+        self.embedsThemeCSS = embedsThemeCSS
     }
 }
 
@@ -40,7 +42,19 @@ public enum HTMLExportDocumentBuilder {
             html = embedLocalImages(in: html, document: document)
         }
 
+        if !options.embedsThemeCSS {
+            html = stripEmbeddedStyles(from: html)
+        }
+
         return html
+    }
+
+    private static func stripEmbeddedStyles(from html: String) -> String {
+        html.replacingOccurrences(
+            of: #"(?is)\s*<style\b[^>]*>.*?</style>"#,
+            with: "",
+            options: .regularExpression
+        )
     }
 
     private static func embedLocalImages(in html: String, document: MarkdownDocument) -> String {

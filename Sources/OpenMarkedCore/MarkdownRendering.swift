@@ -11,17 +11,20 @@ public struct RenderRequest: Equatable, Sendable {
     public let options: RenderOptions
     public let theme: PreviewTheme
     public let fontScale: Double
+    public let allowsRemoteImages: Bool
 
     public init(
         document: MarkdownDocument,
         options: RenderOptions = RenderOptions(),
         theme: PreviewTheme = PreviewThemeStore.defaultTheme,
-        fontScale: Double = 1.0
+        fontScale: Double = 1.0,
+        allowsRemoteImages: Bool = true
     ) {
         self.document = document
         self.options = options
         self.theme = theme
         self.fontScale = fontScale
+        self.allowsRemoteImages = allowsRemoteImages
     }
 }
 
@@ -211,17 +214,18 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         let renderedHTML = String(cString: htmlPointer)
         let processed = HeadingPostProcessor.process(renderedHTML)
         let highlightedHTML = CodeHighlighter.highlight(processed.html)
-        diagnostics.append(contentsOf: RenderDiagnosticsCollector.collect(from: highlightedHTML, document: request.document))
+        let policyHTML = request.allowsRemoteImages ? highlightedHTML : HTMLResourcePolicy.blockRemoteImages(in: highlightedHTML)
+        diagnostics.append(contentsOf: RenderDiagnosticsCollector.collect(from: policyHTML, document: request.document))
         let fullHTML = HTMLDocumentAssembler.assemble(
             title: request.document.displayTitle,
-            bodyHTML: highlightedHTML,
+            bodyHTML: policyHTML,
             baseURL: request.document.sourceURL.deletingLastPathComponent(),
             theme: request.theme,
             fontScale: request.fontScale
         )
 
         return RenderResult(
-            bodyHTML: highlightedHTML,
+            bodyHTML: policyHTML,
             fullHTML: fullHTML,
             outline: processed.outline,
             diagnostics: diagnostics,
@@ -419,6 +423,35 @@ public enum HeadingPostProcessor {
 
         let slug = String(String.UnicodeScalarView(scalars))
         return slug.isEmpty ? "heading" : slug
+    }
+}
+
+public enum HTMLResourcePolicy {
+    public static func blockRemoteImages(in html: String) -> String {
+        let pattern = #"(?i)(<img\b[^>]*\bsrc\s*=\s*)(["'])(https?://[^"']+)(["'])"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return html
+        }
+
+        var rendered = html
+        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
+        for match in matches.reversed() {
+            guard
+                let fullRange = Range(match.range(at: 0), in: html),
+                let prefixRange = Range(match.range(at: 1), in: html),
+                let quoteRange = Range(match.range(at: 2), in: html),
+                let sourceRange = Range(match.range(at: 3), in: html)
+            else {
+                continue
+            }
+
+            let source = String(html[sourceRange])
+            let quote = String(html[quoteRange])
+            let replacement = "\(html[prefixRange])\(quote)about:blank\(quote) data-openmarked-blocked-src=\(quote)\(HTMLUtilities.escapeAttribute(source))\(quote)"
+            rendered.replaceSubrange(fullRange, with: replacement)
+        }
+
+        return rendered
     }
 }
 

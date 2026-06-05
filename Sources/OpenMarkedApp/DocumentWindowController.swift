@@ -43,6 +43,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             state.finishOpening(document: document)
             if let restoredState = stateStore.restore(forDocumentID: markdownDocument.id) {
                 state.applyRestoredLayout(restoredState.layout)
+            } else {
+                state.applyRestoredLayout(AppController.shared.settings.defaultLayout)
             }
             render(markdownDocument)
             startSourceWatcher(for: markdownDocument)
@@ -156,7 +158,11 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         do {
             let html = HTMLExportDocumentBuilder.standaloneHTML(
                 renderResult: context.renderResult,
-                document: context.document
+                document: context.document,
+                options: HTMLExportOptions(
+                    embedsLocalImages: AppController.shared.settings.embedsLocalImagesInHTMLExport,
+                    embedsThemeCSS: AppController.shared.settings.embedsCSSInHTMLExport
+                )
             )
             try HTMLExportWriter.write(html: html, to: destinationURL)
             state.notePlaceholderAction("Exported HTML to \(destinationURL.lastPathComponent)")
@@ -339,6 +345,21 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         state.notePlaceholderAction("Copied source path")
     }
 
+    func applySettings(_ settings: ApplicationSettings) {
+        state.applyRestoredLayout(settings.defaultLayout)
+
+        if let markdownDocument = state.currentMarkdownDocument {
+            render(markdownDocument)
+            if settings.isLivePreviewEnabled {
+                startSourceWatcher(for: markdownDocument)
+            } else {
+                stopLivePreview()
+                state.noteLivePreviewInactive()
+            }
+            persistCurrentWindowState()
+        }
+    }
+
     func helpPlaceholder() {
         state.notePlaceholderAction("Help documentation lands after the core MVP")
     }
@@ -377,13 +398,16 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     private func render(_ markdownDocument: MarkdownDocument) {
         state.beginRendering(documentName: markdownDocument.displayName)
+        let settings = AppController.shared.settings
 
         do {
             let result = try renderer.render(
                 RenderRequest(
                     document: markdownDocument,
+                    options: RenderOptions(allowsRawHTML: settings.allowsRawHTML),
                     theme: PreviewThemeStore.theme(id: state.layout.selectedThemeID),
-                    fontScale: state.layout.fontScale
+                    fontScale: state.layout.fontScale,
+                    allowsRemoteImages: settings.allowsRemoteImages
                 )
             )
             state.finishRendering(result)
@@ -394,6 +418,12 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     private func startSourceWatcher(for markdownDocument: MarkdownDocument, markWatching: Bool = true) {
+        guard AppController.shared.settings.isLivePreviewEnabled else {
+            stopLivePreview()
+            state.noteLivePreviewInactive()
+            return
+        }
+
         sourceWatcher?.stop()
         let watcher = FileSystemWatcher(url: markdownDocument.sourceURL) { [weak self] event in
             Task { @MainActor [weak self] in

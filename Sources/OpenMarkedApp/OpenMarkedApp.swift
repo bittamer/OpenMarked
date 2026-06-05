@@ -18,6 +18,7 @@ struct OpenMarkedApplication: App {
 
         Settings {
             SettingsView()
+                .environmentObject(appController)
         }
     }
 }

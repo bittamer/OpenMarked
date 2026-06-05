@@ -1,6 +1,12 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        DispatchQueue.main.async {
+            AppController.shared.restoreLastSessionIfNeeded()
+        }
+    }
+
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         AppController.shared.openURLs([URL(fileURLWithPath: filename)])
         return true
@@ -10,4 +16,3 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppController.shared.openURLs(urls)
     }
 }
-

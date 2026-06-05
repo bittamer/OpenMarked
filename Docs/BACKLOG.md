@@ -91,7 +91,13 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 9: Settings, Accessibility, and Polish
 
-- [ ] MVP-901 through MVP-907.
+- [x] MVP-901: Build Settings Window.
+- [x] MVP-902: Wire All Keyboard Shortcuts.
+- [x] MVP-903: Accessibility Pass.
+- [x] MVP-904: Dark Mode and Appearance QA.
+- [x] MVP-905: Window and App Restoration.
+- [x] MVP-906: Add User Documentation.
+- [x] MVP-907: Add Issue Templates and Feedback Links.
 
 ## Phase 10: QA, Packaging, and Release
 

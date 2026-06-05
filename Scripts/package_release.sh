@@ -28,7 +28,9 @@ DIST_DIR="$ROOT_DIR/dist"
 PACKAGE_DIR="$DIST_DIR/OpenMarked-${VERSION}"
 APP_DIR="$PACKAGE_DIR/$APP_NAME"
 ZIP_PATH="$DIST_DIR/OpenMarked-${VERSION}-macOS.zip"
+DMG_PATH="$DIST_DIR/OpenMarked-${VERSION}-macOS.dmg"
 RESOURCE_BUNDLE="$BIN_DIR/OpenMarked_OpenMarkedCore.bundle"
+SIGN_IDENTITY="${OPENMARKED_SIGN_IDENTITY:--}"
 
 if [[ ! -x "$BIN_DIR/OpenMarked" ]]; then
   echo "Release executable was not found at $BIN_DIR/OpenMarked" >&2
@@ -40,7 +42,7 @@ if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   exit 1
 fi
 
-rm -rf "$PACKAGE_DIR" "$ZIP_PATH"
+rm -rf "$PACKAGE_DIR" "$ZIP_PATH" "$DMG_PATH"
 install -d "$APP_DIR/Contents/MacOS"
 install -d "$APP_DIR/Contents/Resources"
 
@@ -58,7 +60,7 @@ sed \
 /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_DIR/Contents/Info.plist" >/dev/null
 
 if [[ "${OPENMARKED_SKIP_CODESIGN:-0}" != "1" ]]; then
-  codesign --force --deep --sign - "$APP_DIR"
+  codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_DIR"
   codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 else
   echo "Skipping ad hoc codesign because OPENMARKED_SKIP_CODESIGN=1"
@@ -69,5 +71,26 @@ fi
   ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" "$ZIP_PATH"
 )
 
+hdiutil create -volname "OpenMarked ${VERSION}" -srcfolder "$PACKAGE_DIR" -ov -format UDZO "$DMG_PATH"
+
+if [[ "${OPENMARKED_SKIP_CODESIGN:-0}" != "1" && "$SIGN_IDENTITY" != "-" ]]; then
+  codesign --force --sign "$SIGN_IDENTITY" "$DMG_PATH"
+fi
+
+if [[ "${OPENMARKED_NOTARIZE:-0}" == "1" ]]; then
+  if [[ -z "${APPLE_ID:-}" || -z "${APPLE_TEAM_ID:-}" || -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]]; then
+    echo "OPENMARKED_NOTARIZE=1 requires APPLE_ID, APPLE_TEAM_ID, and APPLE_APP_SPECIFIC_PASSWORD." >&2
+    exit 1
+  fi
+
+  xcrun notarytool submit "$DMG_PATH" \
+    --apple-id "$APPLE_ID" \
+    --team-id "$APPLE_TEAM_ID" \
+    --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+    --wait
+  xcrun stapler staple "$DMG_PATH"
+fi
+
 echo "Created $APP_DIR"
 echo "Created $ZIP_PATH"
+echo "Created $DMG_PATH"

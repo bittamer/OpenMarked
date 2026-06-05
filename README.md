@@ -2,7 +2,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently through Phase 10: QA, packaging, and release preparation. The first MVP is focused on a beautiful local Markdown preview experience, reliable CommonMark/GitHub Flavored Markdown rendering, file watching, document navigation, built-in themes, HTML/PDF export, persistent user preferences, and repeatable developer release packaging.
+The project is currently at `0.2.0`: the MVP is tagged, and the app now has repeatable visual QA, PDF/export artifact checks, README screenshots, ZIP/DMG packaging, and optional Developer ID/notarization hooks.
 
 ## Current Status
 
@@ -25,12 +25,20 @@ This repository currently contains:
 - A native Settings window for preview defaults, content loading, export defaults, live preview, scroll preservation, and session restoration.
 - Keyboard shortcuts for core document, preview, navigation, zoom, search, export, and print actions.
 - Accessibility labels for primary controls and states, plus reduced-motion handling for preview navigation/search scrolling.
-- Manual QA checklist, release notes, release gate notes, performance smoke coverage, and a developer packaging script that creates `OpenMarked.app` and a ZIP artifact.
+- Manual QA checklist, release notes, release gate notes, performance smoke coverage, WebKit screenshot baselines, PDF/export artifact checks, and a developer packaging script that creates `OpenMarked.app`, a ZIP artifact, and a DMG.
 - Core test target.
 - Markdown fixture corpus.
-- CI workflow for Swift build and tests.
+- CI workflow for Swift build, verifier, visual snapshots, export artifacts, and tests.
 
-Signing credentials, notarization, DMG creation, Homebrew Cask, and automated visual regression tests are deferred beyond the MVP.
+Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.2.0`. The packaging script supports Developer ID signing and notarization when credentials are available.
+
+## Screenshots
+
+![Default theme preview](Docs/Screenshots/visual-qa/default-readme-light.png)
+
+![GitHub theme with GFM](Docs/Screenshots/visual-qa/github-gfm-light.png)
+
+![Minimal prose theme](Docs/Screenshots/visual-qa/minimal-prose-light.png)
 
 ## Platform
 
@@ -68,9 +76,11 @@ Create a local developer artifact with:
 Scripts/package_release.sh
 ```
 
-The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.1.0/OpenMarked.app`, copies SwiftPM resources, ad hoc signs the bundle when `codesign` is available, verifies the signature, and creates `dist/OpenMarked-0.1.0-macOS.zip`.
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.2.0/OpenMarked.app`, copies SwiftPM resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.2.0-macOS.zip` plus `dist/OpenMarked-0.2.0-macOS.dmg`.
 
-This artifact is not notarized. Gatekeeper behavior is documented in `Docs/RELEASE.md` and `RELEASE_NOTES.md`.
+By default the app is ad hoc signed. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID certificate. Set `OPENMARKED_NOTARIZE=1` with `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD` to submit the DMG for notarization.
+
+These artifacts are not notarized by default. Gatekeeper behavior is documented in `Docs/RELEASE.md` and `RELEASE_NOTES.md`.
 
 ## Usage
 
@@ -90,11 +100,11 @@ OpenMarked is designed as a local-first viewer. It does not send document conten
 
 ## Known Limitations
 
-The MVP developer artifact is ad hoc signed but not notarized. It does not yet ship as a DMG or Homebrew Cask. PDF and print output use WebKit/AppKit and should be visually checked before publishing release artifacts. Custom themes, plugin processors, DOCX/EPUB export, grammar tools, and browser integrations are intentionally deferred.
+The `0.2.0` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Print panel behavior still needs a human check before publishing public artifacts. Custom themes, plugin processors, DOCX/EPUB export, grammar tools, and browser integrations are intentionally deferred.
 
 ## Feedback
 
-Use the GitHub issue templates for [bug reports](.github/ISSUE_TEMPLATE/bug_report.md), [rendering issues](.github/ISSUE_TEMPLATE/rendering_issue.md), and [feature requests](.github/ISSUE_TEMPLATE/feature_request.md). Rendering issues are most useful with a small Markdown sample and any local assets needed to reproduce the output.
+Use the GitHub issue templates for [bug reports](.github/ISSUE_TEMPLATE/bug_report.md), [rendering issues](.github/ISSUE_TEMPLATE/rendering_issue.md), and [feature requests](.github/ISSUE_TEMPLATE/feature_request.md). Rendering issues are most useful with a small Markdown sample and any local assets needed to reproduce the output. See [diagnostics guidance](Docs/DIAGNOSTICS.md) before sharing logs or crash reports.
 
 ## MVP Non-Goals
 

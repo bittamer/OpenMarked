@@ -32,3 +32,5 @@ Describe what went wrong and what you expected to happen.
 ## Logs Or Screenshots
 
 Attach screenshots, crash reports, or terminal output if available.
+
+See `Docs/DIAGNOSTICS.md` for privacy-preserving guidance before attaching logs or crash reports.

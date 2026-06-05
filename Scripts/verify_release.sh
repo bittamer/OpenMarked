@@ -9,6 +9,8 @@ swift build --product OpenMarked
 swift build -c release --product OpenMarked
 swift run OpenMarkedVerifier
 swift run OpenMarkedVerifier --performance-smoke
+Scripts/verify_visual_snapshots.sh
+Scripts/verify_export_artifacts.sh
 swift test
 swift package describe >/dev/null
 git diff --check

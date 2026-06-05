@@ -24,5 +24,11 @@ jobs:
       - name: MVP verifier
         run: swift run OpenMarkedVerifier
 
+      - name: Visual snapshots
+        run: Scripts/verify_visual_snapshots.sh
+
+      - name: Export artifacts
+        run: Scripts/verify_export_artifacts.sh
+
       - name: Test
         run: swift test

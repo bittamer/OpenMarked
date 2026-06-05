@@ -16,6 +16,10 @@ let package = Package(
             name: "OpenMarkedVerifier",
             targets: ["OpenMarkedVerifier"]
         ),
+        .executable(
+            name: "OpenMarkedSnapshotter",
+            targets: ["OpenMarkedSnapshotter"]
+        ),
         .library(
             name: "OpenMarkedCore",
             targets: ["OpenMarkedCore"]
@@ -42,6 +46,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "OpenMarkedVerifier",
+            dependencies: ["OpenMarkedCore"]
+        ),
+        .executableTarget(
+            name: "OpenMarkedSnapshotter",
             dependencies: ["OpenMarkedCore"]
         ),
         .testTarget(

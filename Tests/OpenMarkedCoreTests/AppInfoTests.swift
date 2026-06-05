@@ -18,8 +18,8 @@ final class AppInfoTests: XCTestCase {
     }
 
     func testVersionIsMVPReleaseVersion() {
-        XCTAssertEqual(AppInfo.version, "0.1.0")
-        XCTAssertEqual(AppInfo.build, "1")
+        XCTAssertEqual(AppInfo.version, "0.2.0")
+        XCTAssertEqual(AppInfo.build, "2")
     }
 
     func testWindowStateTransitions() throws {
@@ -299,10 +299,10 @@ struct AppInfoTests {
         #expect(!AppInfo.supportsFileExtension(""))
     }
 
-    @Test("MVP release uses 0.1.0 version")
+    @Test("QA hardening release uses 0.2.0 version")
     func versionIsMVPReleaseVersion() {
-        #expect(AppInfo.version == "0.1.0")
-        #expect(AppInfo.build == "1")
+        #expect(AppInfo.version == "0.2.0")
+        #expect(AppInfo.build == "2")
     }
 
     @Test("Window state transitions from empty to loaded")

@@ -4,7 +4,7 @@
 
 The MVP is a native macOS Markdown previewer that can open local Markdown files, render them beautifully, follow edits from external editors, navigate long documents, and export HTML/PDF.
 
-Current state: 0.1.0 is implemented as a release candidate. Automated release verification and developer ZIP packaging pass locally. The remaining release work is manual fixture visual QA, PDF/print visual QA, a clean-account or second-Mac launch check, owner approval, and a release tag.
+Current state: 0.1.0 is tagged. 0.2.0 adds distribution and QA hardening on top of the MVP.
 
 ### 0.1.0-alpha.1: Foundation
 
@@ -46,19 +46,19 @@ Current state: 0.1.0 is implemented as a release candidate. Automated release ve
 - Developer ZIP artifact is available.
 - Standard macOS menu bar and default app/window commands work when OpenMarked is focused.
 
-## Recommended Next Milestone: 0.2.0 Distribution And QA Hardening
+## 0.2.0 Distribution And QA Hardening
 
-Before adding large new feature surfaces, make the MVP easier to trust, install, test, and visually validate.
+Make the MVP easier to trust, install, test, and visually validate.
 
-- Complete and record the manual QA pass in `Docs/QA.md` and `Docs/RELEASE.md`.
-- Add screenshot-based visual regression coverage for built-in themes, tables, code blocks, local images, search highlights, and dark mode.
+- Record a Computer Use visual QA pass in `Docs/VISUAL_QA.md`.
+- Add screenshot-based visual coverage for built-in themes, tables, code blocks, local images, and dark mode.
 - Add PDF/export fixture verification beyond smoke tests.
-- Add Developer ID signing and notarization when credentials are available.
+- Add Developer ID signing and notarization hooks for when credentials are available.
 - Produce a DMG with clear install instructions and Gatekeeper expectations.
 - Add crash/log collection guidance for issue reports without sending user data anywhere.
-- Add a small screenshots/gallery section to README once visual QA is complete.
+- Add a small screenshots/gallery section to README.
 
-## 0.3.0 Markdown Power Pack
+## Recommended Next Milestone: 0.3.0 Markdown Power Pack
 
 Add the highest-value Markdown extensions that make the app more useful for developers and technical writers.
 

@@ -25,6 +25,7 @@ Current package targets:
 - `OpenMarkedCore`: library target for app-independent types and services.
 - `CMarkdownGFM`: C shim target that links against the system `libcmark-gfm`.
 - `OpenMarkedVerifier`: executable target for local smoke and release verification.
+- `OpenMarkedSnapshotter`: executable target for WebKit visual snapshots and PDF/export artifact checks.
 - `OpenMarkedCoreTests`: XCTest target for core behavior.
 
 Planned package/module boundaries:
@@ -152,14 +153,14 @@ Phase 10 keeps distribution lightweight and reproducible while the project is st
 
 Distribution behavior:
 
-- `Scripts/verify_release.sh` runs the automated release gate: debug build, app product build, release build, verifier, performance smoke, SwiftPM tests, package metadata, diff hygiene, ASCII scan, packaging, ad hoc signing, and ZIP creation.
-- `Scripts/package_release.sh` wraps the SwiftPM release executable into `dist/OpenMarked-0.1.0/OpenMarked.app`, copies the SwiftPM resource bundle under `Contents/Resources`, writes Info.plist metadata from `Packaging/Info.plist.template`, ad hoc signs the bundle, and creates `dist/OpenMarked-0.1.0-macOS.zip`.
+- `Scripts/verify_release.sh` runs the automated release gate: debug build, app product build, release build, verifier, performance smoke, visual snapshots, PDF/export artifact checks, SwiftPM tests, package metadata, diff hygiene, ASCII scan, packaging, signing, ZIP creation, and DMG creation.
+- `Scripts/package_release.sh` wraps the SwiftPM release executable into `dist/OpenMarked-0.2.0/OpenMarked.app`, copies the SwiftPM resource bundle under `Contents/Resources`, writes Info.plist metadata from `Packaging/Info.plist.template`, signs the bundle, and creates `dist/OpenMarked-0.2.0-macOS.zip` plus `dist/OpenMarked-0.2.0-macOS.dmg`.
 - Release notes live in `RELEASE_NOTES.md`; the owner gate and tag instructions live in `Docs/RELEASE.md`; the manual pass lives in `Docs/QA.md`.
-- The MVP artifact is ad hoc signed and not notarized. Users and contributors should treat it as a developer artifact until signing credentials and notarization are available.
+- Artifacts are ad hoc signed by default and not notarized unless Developer ID credentials are supplied through environment variables.
 
 Later phases can add:
 
 - Developer ID signing.
 - Notarization.
-- DMG creation.
+- Sparkle or another update mechanism.
 - Homebrew Cask.

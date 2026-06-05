@@ -1,6 +1,6 @@
-# OpenMarked 0.1.0
+# OpenMarked 0.2.0
 
-OpenMarked 0.1.0 is the first MVP release candidate for an open source, native macOS Markdown previewer.
+OpenMarked 0.2.0 hardens the MVP release with visual QA, export verification, screenshots, and improved packaging.
 
 ## Highlights
 
@@ -13,6 +13,10 @@ OpenMarked 0.1.0 is the first MVP release candidate for an open source, native m
 - Standalone HTML export, copy rendered HTML, PDF export, and native Print.
 - Settings for preview defaults, content policy, export defaults, live updates, scroll preservation, and optional session restoration.
 - Accessibility labels for primary controls and states, plus reduced-motion-aware preview navigation.
+- WebKit screenshot baselines for built-in themes, GFM tables/code, local images, and dark mode.
+- Automated PDF/export artifact verification.
+- ZIP and DMG developer artifacts.
+- Optional Developer ID signing and notarization hooks in `Scripts/package_release.sh`.
 
 ## Supported Files
 
@@ -20,20 +24,20 @@ OpenMarked supports Markdown and text files with these extensions: `.md`, `.mark
 
 ## Installation
 
-The developer ZIP artifact is created by:
+The developer artifacts are created by:
 
 ```sh
 Scripts/package_release.sh
 ```
 
-The resulting file is `dist/OpenMarked-0.1.0-macOS.zip`. Expand it and move `OpenMarked.app` to Applications if desired.
+The resulting files are `dist/OpenMarked-0.2.0-macOS.zip` and `dist/OpenMarked-0.2.0-macOS.dmg`.
 
-This MVP artifact is ad hoc signed but not notarized. On macOS, Gatekeeper may require opening it from Finder's context menu. Only run local developer artifacts from sources you trust.
+These developer artifacts are ad hoc signed by default but not notarized unless Apple signing credentials are supplied. On macOS, Gatekeeper may require opening them from Finder's context menu. Only run local developer artifacts from sources you trust.
 
 ## Known Limitations
 
-- The app is not notarized and does not yet ship as a DMG or Homebrew Cask.
-- PDF and print output use WebKit/AppKit and should be visually checked before publishing release artifacts.
+- The app is not notarized by default and does not yet ship as a Homebrew Cask.
+- Native print panel behavior should be checked manually before publishing public release artifacts.
 - Custom themes, plugin processors, DOCX/EPUB export, RTF/RTFD import, Scrivener project rendering, browser integrations, grammar tools, and AI features are deferred.
 - Automated visual regression coverage is not yet implemented.
 

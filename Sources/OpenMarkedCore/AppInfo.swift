@@ -2,8 +2,8 @@ import Foundation
 
 public enum AppInfo {
     public static let name = "OpenMarked"
-    public static let version = "0.1.0"
-    public static let build = "1"
+    public static let version = "0.2.0"
+    public static let build = "2"
     public static let bundleIdentifier = "org.openmarked.OpenMarked"
     public static let minimumMacOSVersion = "13.0"
     public static let repositoryURL = URL(string: "https://github.com/openmarked/openmarked")!

@@ -1,0 +1,62 @@
+{
+  "appBuild" : "2",
+  "appVersion" : "0.2.0",
+  "schemaVersion" : 1,
+  "snapshots" : [
+    {
+      "appearance" : "light",
+      "bytes" : 152373,
+      "file" : "default-readme-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/README.md",
+      "height" : 720,
+      "id" : "default-readme-light",
+      "sha256" : "7d74103e5cffe2bc8c28cfa50772be3ab216f128da7363d92c8f70913368c5ee",
+      "themeID" : "default",
+      "width" : 960
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 168266,
+      "file" : "github-gfm-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/gfm.md",
+      "height" : 720,
+      "id" : "github-gfm-light",
+      "sha256" : "01249e341970df487ac4a41beec179019ce571b0b7af9264e1fbb40c7457b498",
+      "themeID" : "github",
+      "width" : 960
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 169662,
+      "file" : "minimal-prose-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/prose.md",
+      "height" : 720,
+      "id" : "minimal-prose-light",
+      "sha256" : "3983a44acdbab19f0e3bc9b22273d27c78a6479ee8fd7df2f72888a3eb490062",
+      "themeID" : "minimal",
+      "width" : 960
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 84881,
+      "file" : "default-local-images-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/local-images.md",
+      "height" : 720,
+      "id" : "default-local-images-light",
+      "sha256" : "ec00f7cb874101b56fb07efa885e871c12314cb3de787918e005ec9a1dcccc88",
+      "themeID" : "default",
+      "width" : 960
+    },
+    {
+      "appearance" : "dark",
+      "bytes" : 184298,
+      "file" : "github-long-document-dark.png",
+      "fixturePath" : "Fixtures\/Markdown\/long-document.md",
+      "height" : 720,
+      "id" : "github-long-document-dark",
+      "sha256" : "b150573e95e95d6b3fa8780b4839b185b235ee95fd68dad2db40ac34c933a9e5",
+      "themeID" : "github",
+      "width" : 960
+    }
+  ]
+}

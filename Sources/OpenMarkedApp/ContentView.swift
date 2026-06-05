@@ -631,20 +631,29 @@ private struct DiagnosticsPopover: View {
                     .foregroundStyle(.secondary)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(diagnostics) { diagnostic in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Label(diagnostic.severity.rawValue.capitalized, systemImage: icon(for: diagnostic))
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(color(for: diagnostic))
-                                Text(diagnostic.message)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                if let source = diagnostic.source {
-                                    Text(source)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(2)
-                                        .truncationMode(.middle)
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(groupedDiagnostics) { group in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(group.title)
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.secondary)
+
+                                ForEach(group.diagnostics) { diagnostic in
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Label(diagnostic.severity.rawValue.capitalized, systemImage: icon(for: diagnostic))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(color(for: diagnostic))
+                                        Text(diagnostic.message)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        if let source = diagnostic.source {
+                                            Text(source)
+                                                .font(.caption.monospaced())
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(3)
+                                                .truncationMode(.middle)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -658,7 +667,41 @@ private struct DiagnosticsPopover: View {
         .frame(width: 360)
     }
 
+    private struct DiagnosticGroup: Identifiable {
+        let id: String
+        let title: String
+        let diagnostics: [RenderDiagnostic]
+    }
+
+    private var groupedDiagnostics: [DiagnosticGroup] {
+        var groups: [DiagnosticGroup] = []
+
+        for diagnostic in diagnostics {
+            let title = kindTitle(for: diagnostic.kind)
+            if let index = groups.firstIndex(where: { $0.title == title }) {
+                var groupDiagnostics = groups[index].diagnostics
+                groupDiagnostics.append(diagnostic)
+                groups[index] = DiagnosticGroup(id: groups[index].id, title: title, diagnostics: groupDiagnostics)
+            } else {
+                groups.append(DiagnosticGroup(id: diagnostic.kind.rawValue, title: title, diagnostics: [diagnostic]))
+            }
+        }
+
+        return groups
+    }
+
     private func icon(for diagnostic: RenderDiagnostic) -> String {
+        switch diagnostic.kind {
+        case .missingLocalImage:
+            return "photo"
+        case .missingLocalLink, .malformedLink, .unsupportedLinkScheme, .linkValidationSkipped:
+            return "link"
+        case .missingHeadingFragment:
+            return "number"
+        default:
+            break
+        }
+
         switch diagnostic.severity {
         case .info:
             return "info.circle"
@@ -677,6 +720,35 @@ private struct DiagnosticsPopover: View {
             return .orange
         case .error:
             return .red
+        }
+    }
+
+    private func kindTitle(for kind: RenderDiagnosticKind) -> String {
+        switch kind {
+        case .missingLocalImage:
+            return "Images"
+        case .missingLocalLink:
+            return "Missing Links"
+        case .missingHeadingFragment:
+            return "Heading Links"
+        case .malformedLink:
+            return "Malformed Links"
+        case .unsupportedLinkScheme:
+            return "Unsupported Links"
+        case .linkValidationSkipped:
+            return "Skipped Link Checks"
+        case .mermaidRenderFailure:
+            return "Mermaid"
+        case .mathRenderFailure:
+            return "Math"
+        case .richContentDisabled:
+            return "Disabled Features"
+        case .malformedGitHubCallout:
+            return "Callouts"
+        case .unsupportedExtension:
+            return "Renderer Extensions"
+        case .renderFailure:
+            return "Rendering"
         }
     }
 }

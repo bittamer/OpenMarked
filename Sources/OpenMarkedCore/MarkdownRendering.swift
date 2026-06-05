@@ -155,6 +155,7 @@ public enum RenderDiagnosticKind: String, CaseIterable, Equatable, Sendable {
     case mathRenderFailure
     case richContentDisabled
     case malformedGitHubCallout
+    case linkValidationSkipped
     case unsupportedExtension
     case renderFailure
 }
@@ -240,7 +241,14 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         diagnostics.append(contentsOf: calloutProcessed.diagnostics)
         let highlightedHTML = CodeHighlighter.highlight(calloutProcessed.html)
         let policyHTML = request.allowsRemoteImages ? highlightedHTML : HTMLResourcePolicy.blockRemoteImages(in: highlightedHTML)
-        diagnostics.append(contentsOf: RenderDiagnosticsCollector.collect(from: policyHTML, document: request.document))
+        diagnostics.append(
+            contentsOf: RenderDiagnosticsCollector.collect(
+                from: policyHTML,
+                document: request.document,
+                outline: processed.outline,
+                options: request.options.richMarkdownOptions
+            )
+        )
         let fullHTML = HTMLDocumentAssembler.assemble(
             title: request.document.displayTitle,
             bodyHTML: policyHTML,
@@ -639,8 +647,21 @@ public enum HTMLResourcePolicy {
 }
 
 public enum RenderDiagnosticsCollector {
-    public static func collect(from html: String, document: MarkdownDocument) -> [RenderDiagnostic] {
-        collectMissingLocalImages(from: html, document: document)
+    public static func collect(
+        from html: String,
+        document: MarkdownDocument,
+        outline: [OutlineItem] = [],
+        options: RichMarkdownOptions = .default
+    ) -> [RenderDiagnostic] {
+        deduplicated(
+            collectMissingLocalImages(from: html, document: document)
+                + LinkValidator.diagnostics(
+                    from: html,
+                    document: document,
+                    outline: outline,
+                    options: options
+                )
+        )
     }
 
     private static func collectMissingLocalImages(from html: String, document: MarkdownDocument) -> [RenderDiagnostic] {
@@ -656,6 +677,13 @@ public enum RenderDiagnosticsCollector {
                 message: "Local image '\(source)' could not be found.",
                 source: source
             )
+        }
+    }
+
+    private static func deduplicated(_ diagnostics: [RenderDiagnostic]) -> [RenderDiagnostic] {
+        var seenIDs = Set<String>()
+        return diagnostics.filter { diagnostic in
+            seenIDs.insert(diagnostic.id).inserted
         }
     }
 }

@@ -108,8 +108,21 @@ Navigation behavior:
 - The outline sidebar renders the renderer-provided heading list, filters headings through `OutlineFilter`, and sends heading IDs to the WebView navigation bridge.
 - Preview search uses a small injected JavaScript helper rather than relying on WebKit find APIs, so highlighting and next/previous behavior are predictable on the MVP deployment target.
 - Source actions are native AppKit operations: reveal in Finder, open in the default editor, copy path, and reload from disk.
-- Render diagnostics are exposed through a status-bar popover. Missing-image warnings are descriptive even when no exact preview location is available.
+- Render diagnostics are exposed through a status-bar popover. Missing-image, missing-link, heading-fragment, malformed-link, unsupported-scheme, and skipped link checks are grouped by kind so warnings stay scannable.
 - Status statistics stay compact in the bar, with character and line counts available through tooltips.
+
+## Link Validation Direction
+
+Phase 2 of 0.3.0 keeps link validation local-first and render-pipeline owned.
+
+Link validation behavior:
+
+- `LinkReferenceExtractor` reads rendered anchor tags, so code examples are ignored.
+- Local file links resolve relative to the source document directory.
+- Same-document fragments validate against the final renderer heading IDs.
+- Cross-document Markdown heading fragments are inspected only for local, readable, size-limited target files.
+- Remote HTTP(S) links are parsed but not crawled during normal rendering.
+- Unsupported schemes and malformed URLs produce diagnostics without interrupting preview.
 
 ## Export Direction
 

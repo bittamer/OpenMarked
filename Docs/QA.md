@@ -74,6 +74,17 @@ Expected result: no crash, no blank preview, headings render, code blocks keep s
 5. Use zoom in, zoom out, and actual size.
    Expected result: rendered text scales between supported bounds.
 
+## Link Validation
+
+1. Open `Fixtures/Markdown/links.md`.
+   Expected result: no link diagnostics appear.
+2. Open `Fixtures/Markdown/broken-links.md`.
+   Expected result: diagnostics include missing local links, a missing heading fragment, an unsupported scheme, a malformed URL, and a missing image.
+3. Open the diagnostics popover.
+   Expected result: diagnostics are grouped by kind and long sources remain readable without overlapping the popover.
+4. Click a valid local link or heading link.
+   Expected result: the preview does not replace the document; local/external targets open through macOS behavior.
+
 ## Themes, Appearance, And Accessibility
 
 1. Switch through Default, GitHub, and Minimal themes.

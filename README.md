@@ -13,6 +13,7 @@ This repository currently contains:
 - 0.3.0 Markdown Power Pack plan: `Docs/0.3.0_IMPLEMENTATION_PLAN.md`.
 - 0.3.0 backlog tracker: `Docs/0.3.0_BACKLOG.md`.
 - Rich content dependency policy: `Docs/RICH_CONTENT_DEPENDENCIES.md`.
+- Link validation behavior: `Docs/LINK_VALIDATION.md`.
 - Roadmap: `ROADMAP.md`.
 - Swift Package based native macOS app shell.
 - App/window state models for empty, loading, loaded, and error states.
@@ -21,6 +22,7 @@ This repository currently contains:
 - Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
 - Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
 - GitHub alert/callout rendering for note, tip, important, warning, and caution blockquotes in the 0.3.0 development line.
+- Local link, heading-fragment, cross-document heading, malformed URL, and unsupported-scheme diagnostics in the 0.3.0 development line.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
 - Built-in preview themes, print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
@@ -90,7 +92,7 @@ These artifacts are not notarized by default. Gatekeeper behavior is documented 
 
 Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
 
-OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, and GitHub alert/callout blockquotes through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image diagnostics, document statistics, and offline code highlighting for common MVP languages.
+OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, and GitHub alert/callout blockquotes through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
 Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 
@@ -100,7 +102,7 @@ Export supports standalone HTML, copying the rendered HTML fragment, PDF export,
 
 Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover default theme, default font scale, live updates, scroll preservation, remote image loading, raw HTML rendering, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents.
 
-OpenMarked is designed as a local-first viewer. It does not send document contents to a service. Remote images are loaded only when the setting is enabled; remote scripts and inline event handlers are blocked in preview HTML. Last opened document paths are saved only when session restoration is enabled by the user.
+OpenMarked is designed as a local-first viewer. It does not send document contents to a service. Remote images are loaded only when the setting is enabled; remote scripts and inline event handlers are blocked in preview HTML. Link validation does not crawl remote URLs during normal rendering. Last opened document paths are saved only when session restoration is enabled by the user.
 
 ## Known Limitations
 

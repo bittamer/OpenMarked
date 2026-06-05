@@ -188,7 +188,7 @@ verify(richMarkdownFeatures.containsLocalLinks, "rich feature detection should f
 verify(richMarkdownFeatures.containsHeadingLinks, "rich feature detection should find heading links")
 verify(richMarkdownFeatures.containsRemoteLinks, "rich feature detection should find remote links")
 verify(
-    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled, .malformedGitHubCallout]),
+    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled, .malformedGitHubCallout, .linkValidationSkipped]),
     "diagnostic kinds should include rich Markdown foundation cases"
 )
 
@@ -276,6 +276,73 @@ for path in richFixturePaths {
     verify(!document.bodyText.isEmpty, "\(path) should load source text")
     verify(!result.fullHTML.isEmpty, "\(path) should render full HTML")
 }
+
+let linkExtractorHTML = ##"<p><a href="guide.md">Guide</a><code>&lt;a href=&quot;ignored.md&quot;&gt;</code><a href="#existing-heading">Heading</a><a href="">Empty</a></p>"##
+let extractedLinks = LinkReferenceExtractor.linkReferences(from: linkExtractorHTML)
+verify(extractedLinks.map(\.source) == ["guide.md", "#existing-heading"], "link extractor should read rendered anchors and ignore empty links")
+
+let linksURL = URL(fileURLWithPath: "Fixtures/Markdown/links.md").standardizedFileURL
+let linksDocument = try MarkdownDocumentLoader.load(url: linksURL, createBookmark: false)
+let linksResult = try renderer.render(RenderRequest(document: linksDocument))
+let linkDiagnosticKinds: Set<RenderDiagnosticKind> = [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .linkValidationSkipped]
+verify(!linksResult.diagnostics.contains { linkDiagnosticKinds.contains($0.kind) }, "valid links fixture should not produce link diagnostics")
+
+let brokenLinksURL = URL(fileURLWithPath: "Fixtures/Markdown/broken-links.md").standardizedFileURL
+let brokenLinksDocument = try MarkdownDocumentLoader.load(url: brokenLinksURL, createBookmark: false)
+let brokenLinksResult = try renderer.render(RenderRequest(document: brokenLinksDocument))
+verify(brokenLinksResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "#missing-heading" }, "broken links fixture should report missing same-document heading")
+verify(brokenLinksResult.diagnostics.contains { $0.kind == .missingLocalLink && $0.source == "missing-guide.md" }, "broken links fixture should report missing local file")
+verify(brokenLinksResult.diagnostics.contains { $0.kind == .missingLocalLink && $0.source == "../Assets/missing-image.png" }, "broken links fixture should report missing linked image file")
+verify(brokenLinksResult.diagnostics.contains { $0.kind == .missingLocalImage && $0.source == "../Assets/missing-image.png" }, "broken links fixture should still report missing image diagnostics")
+verify(brokenLinksResult.diagnostics.contains { $0.kind == .unsupportedLinkScheme && $0.source == "javascript:alert" }, "broken links fixture should report unsupported schemes")
+verify(brokenLinksResult.diagnostics.contains { $0.kind == .malformedLink && $0.source == "https://" }, "broken links fixture should report malformed remote URLs")
+
+let disabledLinkOptions = RichMarkdownOptions(validatesLocalLinks: false, validatesHeadingFragments: false)
+let disabledLinkResult = try renderer.render(
+    RenderRequest(
+        document: brokenLinksDocument,
+        options: RenderOptions(richMarkdownOptions: disabledLinkOptions)
+    )
+)
+verify(!disabledLinkResult.diagnostics.contains { $0.kind == .missingLocalLink }, "local link validation should be disableable")
+verify(!disabledLinkResult.diagnostics.contains { $0.kind == .missingHeadingFragment }, "heading link validation should be disableable")
+verify(disabledLinkResult.diagnostics.contains { $0.kind == .missingLocalImage }, "image diagnostics should remain independent of link validation")
+
+let linkValidationDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("OpenMarkedLinkValidation-\(UUID().uuidString)", isDirectory: true)
+try FileManager.default.createDirectory(at: linkValidationDirectory, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: linkValidationDirectory) }
+let targetHeadingURL = linkValidationDirectory.appendingPathComponent("guide one.md")
+try "# Target Heading\n\nBody.\n".write(to: targetHeadingURL, atomically: true, encoding: .utf8)
+let sourceHeadingURL = linkValidationDirectory.appendingPathComponent("source.md")
+try """
+# Source
+
+[Valid cross-doc heading](guide%20one.md?download=1#target-heading)
+[Missing cross-doc heading](guide%20one.md#missing-heading)
+[Missing current heading](source.md#missing-current)
+""".write(to: sourceHeadingURL, atomically: true, encoding: .utf8)
+let sourceHeadingDocument = try MarkdownDocumentLoader.load(url: sourceHeadingURL, createBookmark: false)
+let sourceHeadingResult = try renderer.render(RenderRequest(document: sourceHeadingDocument))
+verify(!sourceHeadingResult.diagnostics.contains { $0.kind == .missingLocalLink && ($0.source?.contains("guide%20one") ?? false) }, "percent-escaped local links should resolve")
+verify(sourceHeadingResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "guide%20one.md#missing-heading" }, "cross-document missing headings should warn")
+verify(sourceHeadingResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "source.md#missing-current" }, "current-file relative heading links should warn")
+verify(!sourceHeadingResult.diagnostics.contains { $0.source == "guide%20one.md?download=1#target-heading" }, "valid cross-document heading links with queries should pass")
+
+let remoteLinkURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("openmarked-remote-link-\(UUID().uuidString).md")
+try "# Remote\n\n[Remote](https://example.com/openmarked)\n".write(to: remoteLinkURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: remoteLinkURL) }
+let remoteLinkDocument = try MarkdownDocumentLoader.load(url: remoteLinkURL, createBookmark: false)
+let defaultRemoteLinkResult = try renderer.render(RenderRequest(document: remoteLinkDocument))
+verify(!defaultRemoteLinkResult.diagnostics.contains { $0.kind == .linkValidationSkipped }, "remote link checks should be off by default")
+let optInRemoteLinkResult = try renderer.render(
+    RenderRequest(
+        document: remoteLinkDocument,
+        options: RenderOptions(richMarkdownOptions: RichMarkdownOptions(validatesRemoteLinks: true))
+    )
+)
+verify(optInRemoteLinkResult.diagnostics.contains { $0.kind == .linkValidationSkipped && $0.source == "https://example.com/openmarked" }, "opt-in remote link validation should not crawl automatically")
 
 let richDocumentURL = URL(fileURLWithPath: "Fixtures/Markdown/rich-markdown.md").standardizedFileURL
 let richDocument = try MarkdownDocumentLoader.load(url: richDocumentURL, createBookmark: false)

@@ -225,6 +225,7 @@ final class AppInfoTests: XCTestCase {
             .mathRenderFailure,
             .richContentDisabled,
             .malformedGitHubCallout,
+            .linkValidationSkipped,
             .unsupportedExtension,
             .renderFailure
         ]
@@ -285,6 +286,125 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.richMarkdownState.documentFeatures.containsMath)
         XCTAssertTrue(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
         XCTAssertEqual(result.diagnostics.filter { $0.kind == .richContentDisabled }.count, 3)
+    }
+
+    func testLinkReferenceExtractorFindsRenderedAnchors() {
+        let html = ##"<p><a href="guide.md">Guide</a><code>&lt;a href=&quot;ignored.md&quot;&gt;</code><a href="#existing-heading">Heading</a><a href="">Empty</a></p>"##
+        let references = LinkReferenceExtractor.linkReferences(from: html)
+
+        XCTAssertEqual(references.map(\.source), ["guide.md", "#existing-heading"])
+        XCTAssertEqual(references.map(\.text), ["Guide", "Heading"])
+    }
+
+    func testValidLinkFixtureProducesNoLinkDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/links.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let linkDiagnosticKinds: Set<RenderDiagnosticKind> = [
+            .missingLocalLink,
+            .missingHeadingFragment,
+            .malformedLink,
+            .unsupportedLinkScheme,
+            .linkValidationSkipped
+        ]
+
+        XCTAssertFalse(result.diagnostics.contains { linkDiagnosticKinds.contains($0.kind) })
+    }
+
+    func testBrokenLinkFixtureProducesLinkDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/broken-links.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "#missing-heading" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingLocalLink && $0.source == "missing-guide.md" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingLocalLink && $0.source == "../Assets/missing-image.png" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingLocalImage && $0.source == "../Assets/missing-image.png" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .unsupportedLinkScheme && $0.source == "javascript:alert" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .malformedLink && $0.source == "https://" })
+    }
+
+    func testLinkValidationHandlesPercentEscapesQueriesAndCrossDocumentHeadings() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedLinkValidation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let targetURL = directory.appendingPathComponent("guide one.md")
+        try "# Target Heading\n\nBody.\n".write(to: targetURL, atomically: true, encoding: .utf8)
+
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try """
+        # Source
+
+        [Valid cross-doc heading](guide%20one.md?download=1#target-heading)
+        [Missing cross-doc heading](guide%20one.md#missing-heading)
+        [Missing current heading](source.md#missing-current)
+        """.write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertFalse(result.diagnostics.contains { $0.kind == .missingLocalLink && $0.source.contains("guide%20one") })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "guide%20one.md#missing-heading" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "source.md#missing-current" })
+        XCTAssertFalse(result.diagnostics.contains { $0.source == "guide%20one.md?download=1#target-heading" })
+    }
+
+    func testLinkValidationOptionsCanDisableLocalAndHeadingDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/broken-links.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let options = RichMarkdownOptions(validatesLocalLinks: false, validatesHeadingFragments: false)
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: options)
+            )
+        )
+
+        XCTAssertFalse(result.diagnostics.contains { $0.kind == .missingLocalLink })
+        XCTAssertFalse(result.diagnostics.contains { $0.kind == .missingHeadingFragment })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingLocalImage })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .unsupportedLinkScheme })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .malformedLink })
+    }
+
+    func testRemoteLinkValidationIsOptInAndDoesNotCrawl() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-remote-link-\(UUID().uuidString).md")
+        try "# Remote\n\n[Remote](https://example.com/openmarked)\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let defaultResult = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        XCTAssertFalse(defaultResult.diagnostics.contains { $0.kind == .linkValidationSkipped })
+
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: RichMarkdownOptions(validatesRemoteLinks: true))
+            )
+        )
+
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .linkValidationSkipped && $0.source == "https://example.com/openmarked" })
+    }
+
+    func testLargeCrossDocumentHeadingValidationIsSkipped() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedLargeLinkValidation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let largeTargetURL = directory.appendingPathComponent("large.md")
+        try Data(repeating: 65, count: Int(LinkValidator.maxCrossDocumentHeadingFileSize) + 1).write(to: largeTargetURL)
+
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try "# Source\n\n[Large](large.md#heading)\n".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .linkValidationSkipped && $0.source == "large.md#heading" })
     }
 
     func testGitHubCalloutPostProcessorTransformsSupportedMarkers() {
@@ -710,6 +830,7 @@ struct AppInfoTests {
             .mathRenderFailure,
             .richContentDisabled,
             .malformedGitHubCallout,
+            .linkValidationSkipped,
             .unsupportedExtension,
             .renderFailure
         ]
@@ -795,6 +916,132 @@ struct AppInfoTests {
         #expect(result.richMarkdownState.documentFeatures.containsMath)
         #expect(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
         #expect(result.diagnostics.filter { $0.kind == .richContentDisabled }.count == 3)
+    }
+
+    @Test("Link reference extractor finds rendered anchors")
+    func linkReferenceExtractorFindsRenderedAnchors() {
+        let html = ##"<p><a href="guide.md">Guide</a><code>&lt;a href=&quot;ignored.md&quot;&gt;</code><a href="#existing-heading">Heading</a><a href="">Empty</a></p>"##
+        let references = LinkReferenceExtractor.linkReferences(from: html)
+
+        #expect(references.map(\.source) == ["guide.md", "#existing-heading"])
+        #expect(references.map(\.text) == ["Guide", "Heading"])
+    }
+
+    @Test("Valid link fixture produces no link diagnostics")
+    func validLinkFixtureProducesNoLinkDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/links.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let linkDiagnosticKinds: Set<RenderDiagnosticKind> = [
+            .missingLocalLink,
+            .missingHeadingFragment,
+            .malformedLink,
+            .unsupportedLinkScheme,
+            .linkValidationSkipped
+        ]
+
+        #expect(!result.diagnostics.contains { linkDiagnosticKinds.contains($0.kind) })
+    }
+
+    @Test("Broken link fixture produces link diagnostics")
+    func brokenLinkFixtureProducesLinkDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/broken-links.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "#missing-heading" })
+        #expect(result.diagnostics.contains { $0.kind == .missingLocalLink && $0.source == "missing-guide.md" })
+        #expect(result.diagnostics.contains { $0.kind == .missingLocalLink && $0.source == "../Assets/missing-image.png" })
+        #expect(result.diagnostics.contains { $0.kind == .missingLocalImage && $0.source == "../Assets/missing-image.png" })
+        #expect(result.diagnostics.contains { $0.kind == .unsupportedLinkScheme && $0.source == "javascript:alert" })
+        #expect(result.diagnostics.contains { $0.kind == .malformedLink && $0.source == "https://" })
+    }
+
+    @Test("Link validation handles percent escapes, queries, and cross-document headings")
+    func linkValidationHandlesPercentEscapesQueriesAndCrossDocumentHeadings() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedLinkValidation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let targetURL = directory.appendingPathComponent("guide one.md")
+        try "# Target Heading\n\nBody.\n".write(to: targetURL, atomically: true, encoding: .utf8)
+
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try """
+        # Source
+
+        [Valid cross-doc heading](guide%20one.md?download=1#target-heading)
+        [Missing cross-doc heading](guide%20one.md#missing-heading)
+        [Missing current heading](source.md#missing-current)
+        """.write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(!result.diagnostics.contains { $0.kind == .missingLocalLink && $0.source?.contains("guide%20one") == true })
+        #expect(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "guide%20one.md#missing-heading" })
+        #expect(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "source.md#missing-current" })
+        #expect(!result.diagnostics.contains { $0.source == "guide%20one.md?download=1#target-heading" })
+    }
+
+    @Test("Link validation options can disable local and heading diagnostics")
+    func linkValidationOptionsCanDisableLocalAndHeadingDiagnostics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/broken-links.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let options = RichMarkdownOptions(validatesLocalLinks: false, validatesHeadingFragments: false)
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: options)
+            )
+        )
+
+        #expect(!result.diagnostics.contains { $0.kind == .missingLocalLink })
+        #expect(!result.diagnostics.contains { $0.kind == .missingHeadingFragment })
+        #expect(result.diagnostics.contains { $0.kind == .missingLocalImage })
+        #expect(result.diagnostics.contains { $0.kind == .unsupportedLinkScheme })
+        #expect(result.diagnostics.contains { $0.kind == .malformedLink })
+    }
+
+    @Test("Remote link validation is opt-in and does not crawl")
+    func remoteLinkValidationIsOptInAndDoesNotCrawl() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-remote-link-\(UUID().uuidString).md")
+        try "# Remote\n\n[Remote](https://example.com/openmarked)\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let defaultResult = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        #expect(!defaultResult.diagnostics.contains { $0.kind == .linkValidationSkipped })
+
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: RichMarkdownOptions(validatesRemoteLinks: true))
+            )
+        )
+
+        #expect(result.diagnostics.contains { $0.kind == .linkValidationSkipped && $0.source == "https://example.com/openmarked" })
+    }
+
+    @Test("Large cross-document heading validation is skipped")
+    func largeCrossDocumentHeadingValidationIsSkipped() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedLargeLinkValidation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let largeTargetURL = directory.appendingPathComponent("large.md")
+        try Data(repeating: 65, count: Int(LinkValidator.maxCrossDocumentHeadingFileSize) + 1).write(to: largeTargetURL)
+
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try "# Source\n\n[Large](large.md#heading)\n".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.diagnostics.contains { $0.kind == .linkValidationSkipped && $0.source == "large.md#heading" })
     }
 
     @Test("GitHub callout postprocessor transforms supported markers")

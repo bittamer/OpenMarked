@@ -117,6 +117,19 @@ public struct OutlineItem: Equatable, Identifiable, Sendable {
     }
 }
 
+public enum OutlineFilter {
+    public static func filter(_ outline: [OutlineItem], query: String) -> [OutlineItem] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            return outline
+        }
+
+        return outline.filter { item in
+            item.title.range(of: trimmedQuery, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
+}
+
 public enum RenderDiagnosticSeverity: String, Equatable, Sendable {
     case info
     case warning

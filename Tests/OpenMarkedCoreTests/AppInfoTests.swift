@@ -51,6 +51,20 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(state.livePreview, .updated(Date(timeIntervalSince1970: 1)))
     }
 
+    func testPreviewSearchStateTransitions() {
+        var state = DocumentWindowState()
+
+        state.showPreviewSearch()
+        XCTAssertTrue(state.search.isVisible)
+        state.updatePreviewSearchQuery("table")
+        XCTAssertEqual(state.search.query, "table")
+        state.updatePreviewSearchResult(matchCount: 4, selectedMatchIndex: 3)
+        XCTAssertEqual(state.search.resultSummary, "3 of 4")
+        state.hidePreviewSearch()
+        XCTAssertFalse(state.search.isVisible)
+        XCTAssertTrue(state.search.query.isEmpty)
+    }
+
     func testMarkdownDocumentLoadsSourceAndStats() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -145,6 +159,18 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(processed.html.contains(#"id="repeat""#))
         XCTAssertTrue(processed.html.contains(#"id="repeat-1""#))
         XCTAssertEqual(processed.outline.map(\.id), ["repeat", "repeat-1"])
+    }
+
+    func testOutlineFilterMatchesHeadingTitles() {
+        let outline = [
+            OutlineItem(id: "intro", level: 1, title: "Introduction"),
+            OutlineItem(id: "goals", level: 2, title: "Goals"),
+            OutlineItem(id: "details", level: 3, title: "Implementation Details")
+        ]
+
+        XCTAssertEqual(OutlineFilter.filter(outline, query: "").map(\.id), ["intro", "goals", "details"])
+        XCTAssertEqual(OutlineFilter.filter(outline, query: "GOAL").map(\.id), ["goals"])
+        XCTAssertEqual(OutlineFilter.filter(outline, query: "missing"), [])
     }
 
     func testMissingLocalImageDiagnostic() throws {
@@ -253,6 +279,21 @@ struct AppInfoTests {
         #expect(state.livePreview == .updated(Date(timeIntervalSince1970: 1)))
     }
 
+    @Test("Preview search state tracks query and results")
+    func previewSearchStateTransitions() {
+        var state = DocumentWindowState()
+
+        state.showPreviewSearch()
+        #expect(state.search.isVisible)
+        state.updatePreviewSearchQuery("table")
+        #expect(state.search.query == "table")
+        state.updatePreviewSearchResult(matchCount: 4, selectedMatchIndex: 3)
+        #expect(state.search.resultSummary == "3 of 4")
+        state.hidePreviewSearch()
+        #expect(!state.search.isVisible)
+        #expect(state.search.query.isEmpty)
+    }
+
     @Test("Markdown document loads source and statistics")
     func markdownDocumentLoadsSourceAndStats() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
@@ -322,6 +363,19 @@ struct AppInfoTests {
         #expect(result.bodyHTML.contains("<del>scope creep</del>"))
         #expect(result.bodyHTML.contains(#"type="checkbox""#))
         #expect(result.bodyHTML.contains("<table>"))
+    }
+
+    @Test("Outline filter matches heading titles")
+    func outlineFilterMatchesHeadingTitles() {
+        let outline = [
+            OutlineItem(id: "intro", level: 1, title: "Introduction"),
+            OutlineItem(id: "goals", level: 2, title: "Goals"),
+            OutlineItem(id: "details", level: 3, title: "Implementation Details")
+        ]
+
+        #expect(OutlineFilter.filter(outline, query: "").map(\.id) == ["intro", "goals", "details"])
+        #expect(OutlineFilter.filter(outline, query: "GOAL").map(\.id) == ["goals"])
+        #expect(OutlineFilter.filter(outline, query: "missing").isEmpty)
     }
 
     @Test("Local asset extractor finds image references")

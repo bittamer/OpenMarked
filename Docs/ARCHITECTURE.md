@@ -85,6 +85,18 @@ Live preview behavior:
 - Missing, moved, or unreadable source files leave the window open and show preview/update failure feedback instead of crashing or replacing the whole window state.
 - Watchers are restarted when documents reload and stopped when windows close.
 
+## Navigation Direction
+
+Phase 7 keeps document navigation native where possible and preview-specific behavior inside `PreviewWebView`.
+
+Navigation behavior:
+
+- The outline sidebar renders the renderer-provided heading list, filters headings through `OutlineFilter`, and sends heading IDs to the WebView navigation bridge.
+- Preview search uses a small injected JavaScript helper rather than relying on WebKit find APIs, so highlighting and next/previous behavior are predictable on the MVP deployment target.
+- Source actions are native AppKit operations: reveal in Finder, open in the default editor, copy path, and reload from disk.
+- Render diagnostics are exposed through a status-bar popover. Missing-image warnings are descriptive even when no exact preview location is available.
+- Status statistics stay compact in the bar, with character and line counts available through tooltips.
+
 ## Sandboxing Direction
 
 OpenMarked should be designed for sandboxed file access:

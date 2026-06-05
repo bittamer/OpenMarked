@@ -168,11 +168,43 @@ public enum LivePreviewStatus: Equatable, Sendable {
     case failed(String)
 }
 
+public struct PreviewSearchState: Equatable, Sendable {
+    public var isVisible: Bool
+    public var query: String
+    public var matchCount: Int
+    public var selectedMatchIndex: Int?
+
+    public init(
+        isVisible: Bool = false,
+        query: String = "",
+        matchCount: Int = 0,
+        selectedMatchIndex: Int? = nil
+    ) {
+        self.isVisible = isVisible
+        self.query = query
+        self.matchCount = matchCount
+        self.selectedMatchIndex = selectedMatchIndex
+    }
+
+    public var resultSummary: String {
+        guard !query.isEmpty else {
+            return ""
+        }
+
+        guard matchCount > 0, let selectedMatchIndex else {
+            return "No results"
+        }
+
+        return "\(selectedMatchIndex) of \(matchCount)"
+    }
+}
+
 public struct DocumentWindowState: Equatable {
     public var content: WindowContentState
     public var preview: PreviewShellState
     public var layout: WindowLayoutState
     public var livePreview: LivePreviewStatus
+    public var search: PreviewSearchState
     public var statusMessage: String
 
     public init(
@@ -180,12 +212,14 @@ public struct DocumentWindowState: Equatable {
         preview: PreviewShellState = .idle,
         layout: WindowLayoutState = WindowLayoutState(),
         livePreview: LivePreviewStatus = .inactive,
+        search: PreviewSearchState = PreviewSearchState(),
         statusMessage: String = "No document"
     ) {
         self.content = content
         self.preview = preview
         self.layout = layout
         self.livePreview = livePreview
+        self.search = search
         self.statusMessage = statusMessage
     }
 
@@ -236,6 +270,7 @@ public struct DocumentWindowState: Equatable {
         content = .loading(PendingDocument(url: url))
         preview = .loading
         livePreview = .inactive
+        search = PreviewSearchState()
         statusMessage = "Opening \(url.lastPathComponent)"
     }
 
@@ -281,6 +316,7 @@ public struct DocumentWindowState: Equatable {
         content = .empty
         preview = .idle
         livePreview = .inactive
+        search = PreviewSearchState()
         statusMessage = "No document"
     }
 
@@ -336,5 +372,32 @@ public struct DocumentWindowState: Equatable {
         preview = .error(previewError)
         livePreview = .failed(previewError.message)
         statusMessage = previewError.message
+    }
+
+    public mutating func showPreviewSearch() {
+        search.isVisible = true
+    }
+
+    public mutating func hidePreviewSearch() {
+        search.isVisible = false
+        search.query = ""
+        search.matchCount = 0
+        search.selectedMatchIndex = nil
+    }
+
+    public mutating func updatePreviewSearchQuery(_ query: String) {
+        search.isVisible = true
+        search.query = query
+        search.matchCount = 0
+        search.selectedMatchIndex = nil
+    }
+
+    public mutating func updatePreviewSearchResult(matchCount: Int, selectedMatchIndex: Int?) {
+        search.matchCount = max(0, matchCount)
+        if let selectedMatchIndex, selectedMatchIndex > 0, selectedMatchIndex <= matchCount {
+            search.selectedMatchIndex = selectedMatchIndex
+        } else {
+            search.selectedMatchIndex = nil
+        }
     }
 }

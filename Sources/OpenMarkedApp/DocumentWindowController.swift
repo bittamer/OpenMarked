@@ -8,6 +8,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     @Published private(set) var state = DocumentWindowState()
     @Published private(set) var previewNavigationRequest: PreviewNavigationRequest?
+    @Published private(set) var previewSearchRequest: PreviewSearchRequest?
 
     private let stateStore = DocumentWindowStateStore.shared
     private let renderer: MarkdownRenderer = CMarkGFMRenderer()
@@ -29,6 +30,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func open(url: URL) {
         stopLivePreview()
+        previewNavigationRequest = nil
+        previewSearchRequest = PreviewSearchRequest(action: .clear)
         state.beginOpening(url: url)
         updateWindowTitle()
 
@@ -153,11 +156,98 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         state.notePlaceholderAction("Print support lands in Phase 8")
     }
 
-    func searchPlaceholder() {
+    func showSearch() {
         guard state.hasDocument else {
             return
         }
-        state.notePlaceholderAction("Search lands in Phase 7")
+        state.showPreviewSearch()
+        if !state.search.query.isEmpty {
+            previewSearchRequest = PreviewSearchRequest(action: .setQuery(state.search.query))
+        }
+    }
+
+    func hideSearch() {
+        state.hidePreviewSearch()
+        previewSearchRequest = PreviewSearchRequest(action: .clear)
+    }
+
+    func updateSearchQuery(_ query: String) {
+        state.updatePreviewSearchQuery(query)
+        previewSearchRequest = query.isEmpty
+            ? PreviewSearchRequest(action: .clear)
+            : PreviewSearchRequest(action: .setQuery(query))
+    }
+
+    func findNext() {
+        guard state.hasDocument else {
+            return
+        }
+
+        state.showPreviewSearch()
+        guard !state.search.query.isEmpty else {
+            return
+        }
+
+        previewSearchRequest = PreviewSearchRequest(action: .next(state.search.query))
+    }
+
+    func findPrevious() {
+        guard state.hasDocument else {
+            return
+        }
+
+        state.showPreviewSearch()
+        guard !state.search.query.isEmpty else {
+            return
+        }
+
+        previewSearchRequest = PreviewSearchRequest(action: .previous(state.search.query))
+    }
+
+    func updateSearchResult(_ result: PreviewSearchResult) {
+        guard result.query == state.search.query || result.query.isEmpty else {
+            return
+        }
+
+        state.updatePreviewSearchResult(matchCount: result.matchCount, selectedMatchIndex: result.selectedMatchIndex)
+    }
+
+    func revealSourceInFinder() {
+        guard let url = currentSourceURL else {
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            state.notePlaceholderAction("Source file is missing")
+            return
+        }
+
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+        state.notePlaceholderAction("Revealed \(url.lastPathComponent)")
+    }
+
+    func openSourceInDefaultEditor() {
+        guard let url = currentSourceURL else {
+            return
+        }
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            state.notePlaceholderAction("Source file is missing")
+            return
+        }
+
+        NSWorkspace.shared.open(url)
+        state.notePlaceholderAction("Opened \(url.lastPathComponent)")
+    }
+
+    func copySourcePath() {
+        guard let url = currentSourceURL else {
+            return
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
+        state.notePlaceholderAction("Copied source path")
     }
 
     func helpPlaceholder() {
@@ -306,5 +396,9 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         } catch {
             state.failLivePreviewUpdate(error)
         }
+    }
+
+    private var currentSourceURL: URL? {
+        state.currentMarkdownDocument?.sourceURL.standardizedFileURL
     }
 }

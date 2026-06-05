@@ -8,14 +8,43 @@ struct PreviewNavigationRequest: Equatable, Identifiable {
     let elementID: String
 }
 
+struct PreviewSearchRequest: Equatable, Identifiable {
+    enum Action: Equatable {
+        case setQuery(String)
+        case next(String)
+        case previous(String)
+        case clear
+    }
+
+    let id = UUID()
+    let action: Action
+
+    var query: String {
+        switch action {
+        case .setQuery(let query), .next(let query), .previous(let query):
+            return query
+        case .clear:
+            return ""
+        }
+    }
+}
+
+struct PreviewSearchResult: Equatable {
+    let query: String
+    let matchCount: Int
+    let selectedMatchIndex: Int?
+}
+
 struct PreviewWebView: NSViewRepresentable {
     let renderResult: RenderResult
     let baseURL: URL
     let navigationRequest: PreviewNavigationRequest?
+    let searchRequest: PreviewSearchRequest?
     let onStatusUpdate: (String) -> Void
+    let onSearchResult: (PreviewSearchResult) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onStatusUpdate: onStatusUpdate)
+        Coordinator(onStatusUpdate: onStatusUpdate, onSearchResult: onSearchResult)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -32,6 +61,7 @@ struct PreviewWebView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.onStatusUpdate = onStatusUpdate
+        context.coordinator.onSearchResult = onSearchResult
         context.coordinator.load(renderResult: renderResult, baseURL: baseURL)
 
         if context.coordinator.lastNavigationRequestID != navigationRequest?.id {
@@ -40,19 +70,34 @@ struct PreviewWebView: NSViewRepresentable {
                 context.coordinator.scrollToElement(id: navigationRequest.elementID)
             }
         }
+
+        if context.coordinator.lastSearchRequestID != searchRequest?.id {
+            context.coordinator.lastSearchRequestID = searchRequest?.id
+            if let searchRequest {
+                context.coordinator.performSearchRequest(searchRequest)
+            }
+        }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         weak var webView: WKWebView?
         var onStatusUpdate: (String) -> Void
+        var onSearchResult: (PreviewSearchResult) -> Void
         var lastHTML: String?
         var lastBaseURL: URL?
         var lastNavigationRequestID: UUID?
+        var lastSearchRequestID: UUID?
         private var pendingNavigationID: String?
+        private var pendingSearchRequest: PreviewSearchRequest?
+        private var activeSearchQuery = ""
         private var scrollRatio: Double = 0
 
-        init(onStatusUpdate: @escaping (String) -> Void) {
+        init(
+            onStatusUpdate: @escaping (String) -> Void,
+            onSearchResult: @escaping (PreviewSearchResult) -> Void
+        ) {
             self.onStatusUpdate = onStatusUpdate
+            self.onSearchResult = onSearchResult
         }
 
         func load(renderResult: RenderResult, baseURL: URL) {
@@ -105,6 +150,52 @@ struct PreviewWebView: NSViewRepresentable {
             }
         }
 
+        func performSearchRequest(_ request: PreviewSearchRequest) {
+            guard lastHTML != nil else {
+                pendingSearchRequest = request
+                return
+            }
+
+            let actionName: String
+            switch request.action {
+            case .setQuery:
+                actionName = "set"
+            case .next:
+                actionName = "next"
+            case .previous:
+                actionName = "previous"
+            case .clear:
+                actionName = "clear"
+            }
+
+            activeSearchQuery = request.query
+            let escapedQuery = PreviewJavaScriptEscaper.escape(request.query)
+            let script = """
+            (function() {
+              if (!window.openMarkedSearch) { return { query: '\(escapedQuery)', count: 0, selectedIndex: 0 }; }
+              return window.openMarkedSearch.run('\(escapedQuery)', '\(actionName)');
+            })();
+            """
+
+            webView?.evaluateJavaScript(script) { [weak self] result, _ in
+                guard let self else {
+                    return
+                }
+
+                let dictionary = result as? [String: Any]
+                let query = dictionary?["query"] as? String ?? request.query
+                let count = (dictionary?["count"] as? NSNumber)?.intValue ?? dictionary?["count"] as? Int ?? 0
+                let selectedIndex = (dictionary?["selectedIndex"] as? NSNumber)?.intValue ?? dictionary?["selectedIndex"] as? Int
+                self.onSearchResult(
+                    PreviewSearchResult(
+                        query: query,
+                        matchCount: count,
+                        selectedMatchIndex: selectedIndex == 0 ? nil : selectedIndex
+                    )
+                )
+            }
+        }
+
         private func captureScrollRatio(completion: @escaping (Double) -> Void) {
             let script = """
             (function() {
@@ -130,12 +221,24 @@ struct PreviewWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            installPreviewHelpers()
-            restoreScrollRatio()
+            installPreviewHelpers { [weak self] in
+                guard let self else {
+                    return
+                }
 
-            if let pendingNavigationID {
-                self.pendingNavigationID = nil
-                scrollToElement(id: pendingNavigationID)
+                self.restoreScrollRatio()
+
+                if let pendingNavigationID = self.pendingNavigationID {
+                    self.pendingNavigationID = nil
+                    self.scrollToElement(id: pendingNavigationID)
+                }
+
+                if let pendingSearchRequest = self.pendingSearchRequest {
+                    self.pendingSearchRequest = nil
+                    self.performSearchRequest(pendingSearchRequest)
+                } else if !self.activeSearchQuery.isEmpty {
+                    self.performSearchRequest(PreviewSearchRequest(action: .setQuery(self.activeSearchQuery)))
+                }
             }
         }
 
@@ -165,17 +268,104 @@ struct PreviewWebView: NSViewRepresentable {
             decisionHandler(.cancel)
         }
 
-        private func installPreviewHelpers() {
+        private func installPreviewHelpers(completion: @escaping () -> Void = {}) {
             let css = """
             (function() {
-              if (document.getElementById('om-preview-helpers')) { return; }
-              var style = document.createElement('style');
-              style.id = 'om-preview-helpers';
-              style.textContent = '.om-heading-target { outline: 2px solid -webkit-focus-ring-color; outline-offset: 4px; transition: outline-color 0.2s ease; }';
-              document.head.appendChild(style);
+              if (!document.getElementById('om-preview-helpers')) {
+                var style = document.createElement('style');
+                style.id = 'om-preview-helpers';
+                style.textContent = '.om-heading-target { outline: 2px solid -webkit-focus-ring-color; outline-offset: 4px; transition: outline-color 0.2s ease; } .om-search-match { background: color-mix(in srgb, Highlight 28%, transparent); color: inherit; border-radius: 2px; } .om-search-current { background: Mark; color: MarkText; }';
+                document.head.appendChild(style);
+              }
+              window.openMarkedSearch = {
+                state: { query: '', index: -1 },
+                clear: function() {
+                  var matches = Array.prototype.slice.call(document.querySelectorAll('.om-search-match'));
+                  matches.forEach(function(match) {
+                    var text = document.createTextNode(match.textContent || '');
+                    match.parentNode.replaceChild(text, match);
+                    if (text.parentNode) { text.parentNode.normalize(); }
+                  });
+                },
+                textNodes: function(root) {
+                  var nodes = [];
+                  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function(node) {
+                      if (!node.nodeValue || !node.nodeValue.trim()) { return NodeFilter.FILTER_REJECT; }
+                      var parent = node.parentElement;
+                      if (!parent) { return NodeFilter.FILTER_REJECT; }
+                      if (parent.closest('script, style, textarea, select, .om-search-match')) { return NodeFilter.FILTER_REJECT; }
+                      return NodeFilter.FILTER_ACCEPT;
+                    }
+                  });
+                  while (walker.nextNode()) { nodes.push(walker.currentNode); }
+                  return nodes;
+                },
+                highlight: function(query) {
+                  var root = document.querySelector('.om-document') || document.body;
+                  var lowerQuery = query.toLocaleLowerCase();
+                  var nodes = this.textNodes(root);
+                  var matches = [];
+                  nodes.forEach(function(node) {
+                    var text = node.nodeValue;
+                    var lowerText = text.toLocaleLowerCase();
+                    var start = 0;
+                    var index = lowerText.indexOf(lowerQuery, start);
+                    if (index === -1) { return; }
+                    var fragment = document.createDocumentFragment();
+                    while (index !== -1) {
+                      if (index > start) {
+                        fragment.appendChild(document.createTextNode(text.slice(start, index)));
+                      }
+                      var span = document.createElement('mark');
+                      span.className = 'om-search-match';
+                      span.textContent = text.slice(index, index + query.length);
+                      fragment.appendChild(span);
+                      matches.push(span);
+                      start = index + query.length;
+                      index = lowerText.indexOf(lowerQuery, start);
+                    }
+                    if (start < text.length) {
+                      fragment.appendChild(document.createTextNode(text.slice(start)));
+                    }
+                    node.parentNode.replaceChild(fragment, node);
+                  });
+                  return matches;
+                },
+                run: function(query, action) {
+                  this.clear();
+                  query = query || '';
+                  if (!query) {
+                    this.state = { query: '', index: -1 };
+                    return { query: '', count: 0, selectedIndex: 0 };
+                  }
+                  var prior = this.state;
+                  var matches = this.highlight(query);
+                  if (!matches.length) {
+                    this.state = { query: query, index: -1 };
+                    return { query: query, count: 0, selectedIndex: 0 };
+                  }
+                  var index = 0;
+                  if (prior.query === query && prior.index >= 0) {
+                    if (action === 'previous') {
+                      index = (prior.index - 1 + matches.length) % matches.length;
+                    } else if (action === 'next') {
+                      index = (prior.index + 1) % matches.length;
+                    } else {
+                      index = Math.min(prior.index, matches.length - 1);
+                    }
+                  }
+                  matches[index].classList.add('om-search-current');
+                  matches[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  this.state = { query: query, index: index };
+                  return { query: query, count: matches.length, selectedIndex: index + 1 };
+                }
+              };
             })();
             """
-            webView?.evaluateJavaScript(css)
+            webView?.evaluateJavaScript(css) { _, _ in
+                completion()
+            }
         }
     }
 }

@@ -72,7 +72,13 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 7: Navigation and Document Tools
 
-- [ ] MVP-701 through MVP-707.
+- [x] MVP-701: Implement Outline Sidebar.
+- [x] MVP-702: Add Outline Filtering.
+- [x] MVP-703: Implement Preview Search.
+- [x] MVP-704: Add Status Bar Statistics.
+- [x] MVP-705: Add Source File Actions.
+- [x] MVP-706: Show Render Diagnostics.
+- [x] MVP-707: Implement Link Click Behavior.
 
 ## Phase 8: Export and Print
 

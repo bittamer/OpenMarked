@@ -22,6 +22,10 @@ final class AppController: ObservableObject {
         activeWindowController?.state.canExport ?? false
     }
 
+    var activeHasDocument: Bool {
+        activeWindowController?.state.hasDocument ?? false
+    }
+
     func registerWindowController(_ controller: DocumentWindowController) {
         if activeWindowController == nil {
             activeWindowController = controller
@@ -121,7 +125,27 @@ final class AppController: ObservableObject {
     }
 
     func showSearchPlaceholder() {
-        activeWindowController?.searchPlaceholder()
+        activeWindowController?.showSearch()
+    }
+
+    func findNext() {
+        activeWindowController?.findNext()
+    }
+
+    func findPrevious() {
+        activeWindowController?.findPrevious()
+    }
+
+    func revealSourceInFinder() {
+        activeWindowController?.revealSourceInFinder()
+    }
+
+    func openSourceInDefaultEditor() {
+        activeWindowController?.openSourceInDefaultEditor()
+    }
+
+    func copySourcePath() {
+        activeWindowController?.copySourcePath()
     }
 
     func showHelpPlaceholder() {

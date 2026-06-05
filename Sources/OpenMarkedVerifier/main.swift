@@ -65,6 +65,14 @@ state.beginLivePreviewUpdate()
 verify(state.livePreview == .updating, "live preview should enter updating state")
 state.finishLivePreviewUpdate(updatedAt: Date(timeIntervalSince1970: 1))
 verify(state.livePreview == .updated(Date(timeIntervalSince1970: 1)), "live preview should record update feedback")
+state.showPreviewSearch()
+verify(state.search.isVisible, "search should become visible")
+state.updatePreviewSearchQuery("preview")
+verify(state.search.query == "preview", "search query should update")
+state.updatePreviewSearchResult(matchCount: 3, selectedMatchIndex: 2)
+verify(state.search.resultSummary == "2 of 3", "search result summary should show selected match")
+state.hidePreviewSearch()
+verify(!state.search.isVisible && state.search.query.isEmpty, "search should clear when hidden")
 
 do {
     _ = try DocumentOpenValidator.validate(url: URL(fileURLWithPath: "Package.swift"))
@@ -98,6 +106,9 @@ verify(renderResult.rendererName == "cmark-gfm", "renderer name should identify 
 verify(renderResult.bodyHTML.contains("<h1 id=\"openmarked-fixture-readme\">"), "headings should receive stable ids")
 verify(renderResult.bodyHTML.contains("<table>"), "GFM tables should render")
 verify(renderResult.outline.first?.title == "OpenMarked Fixture README", "outline should include h1")
+let filteredOutline = OutlineFilter.filter(renderResult.outline, query: "goals")
+verify(filteredOutline.count == 1 && filteredOutline.first?.title == "Goals", "outline filtering should match headings case-insensitively")
+verify(OutlineFilter.filter(renderResult.outline, query: "").count == renderResult.outline.count, "empty outline filter should return all headings")
 verify(renderResult.fullHTML.contains("<!doctype html>"), "full HTML document should be assembled")
 verify(renderResult.fullHTML.contains("--om-font-scale: 1.000"), "default font scale should be injected")
 verify(renderResult.fullHTML.contains("New York"), "default theme CSS should be injected")
@@ -194,4 +205,4 @@ let creationEvent = try waitForWatchEvent(url: missingWatchedURL) { url in
 }
 verify(creationEvent.kind == .replaced || creationEvent.kind == .changed, "creation of a missing watched file should be detected")
 
-print("OpenMarked Phase 6 verifier passed.")
+print("OpenMarked Phase 7 verifier passed.")

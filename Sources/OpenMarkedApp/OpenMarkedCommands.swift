@@ -41,6 +41,24 @@ struct OpenMarkedCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command])
             .disabled(!appController.activeCanReloadPreview)
 
+            Button("Find...") {
+                appController.showSearchPlaceholder()
+            }
+            .keyboardShortcut("f", modifiers: [.command])
+            .disabled(!appController.activeHasDocument)
+
+            Button("Find Next") {
+                appController.findNext()
+            }
+            .keyboardShortcut("g", modifiers: [.command])
+            .disabled(!appController.activeHasDocument)
+
+            Button("Find Previous") {
+                appController.findPrevious()
+            }
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(!appController.activeHasDocument)
+
             Divider()
 
             Button("Zoom In") {
@@ -65,6 +83,31 @@ struct OpenMarkedCommands: Commands {
                     appController.setTheme(id: theme.id)
                 }
             }
+        }
+
+        CommandMenu("Source") {
+            Button("Reveal in Finder") {
+                appController.revealSourceInFinder()
+            }
+            .disabled(!appController.activeHasDocument)
+
+            Button("Open in Default Editor") {
+                appController.openSourceInDefaultEditor()
+            }
+            .disabled(!appController.activeHasDocument)
+
+            Button("Copy File Path") {
+                appController.copySourcePath()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(!appController.activeHasDocument)
+
+            Divider()
+
+            Button("Reload from Disk") {
+                appController.reloadPreview()
+            }
+            .disabled(!appController.activeCanReloadPreview)
         }
 
         CommandGroup(after: .sidebar) {

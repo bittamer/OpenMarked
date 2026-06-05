@@ -4,6 +4,8 @@
 
 This document converts the product design in `DESIGN.md` into a detailed, ticket-based implementation plan for the first shippable MVP of OpenMarked.
 
+Status: the MVP implementation is complete through Phase 10 as a `0.1.0` release candidate. Automated release verification and developer ZIP packaging pass locally. Manual fixture visual QA, owner approval, and the release tag remain pending; use `Docs/BACKLOG.md`, `Docs/QA.md`, `Docs/RELEASE.md`, and `ROADMAP.md` for current release status.
+
 The MVP goal is not to match every advanced feature of mature commercial Markdown previewers. The MVP goal is to deliver a beautiful, native macOS app that reliably opens Markdown files, renders them correctly, follows edits from external editors, helps users navigate long documents, and exports clean HTML/PDF.
 
 ## MVP Definition
@@ -59,9 +61,9 @@ Use pre-release milestones:
 - UI: SwiftUI plus AppKit where macOS document/window behavior needs it.
 - Preview: WKWebView.
 - Markdown renderer: `cmark-gfm`, wrapped behind a Swift interface.
-- Syntax highlighting: highlight.js bundled locally for MVP.
-- Minimum deployment target: decide in Phase 0. Recommendation is macOS 13+ for a modern SwiftUI baseline, unless supporting older machines is a project priority.
-- Distribution: signed local build for MVP, with Homebrew Cask or direct DMG deferred until the app is stable.
+- Syntax highlighting: offline Swift-side pre-highlighting for common MVP languages, with future room for tree-sitter or Shiki-like output.
+- Minimum deployment target: macOS 13+.
+- Distribution: ad hoc signed developer ZIP for MVP, with Developer ID signing, notarization, Homebrew Cask, and DMG deferred until the app is stable.
 - Tests: XCTest plus fixture-based rendering and export tests.
 
 ## Ticket Format
@@ -1508,8 +1510,7 @@ Make fenced code blocks useful and attractive.
 
 **Scope**
 
-- Bundle highlight.js locally.
-- Apply highlighting after preview load.
+- Pre-highlight common MVP languages in Swift.
 - Include CSS per theme.
 - Support language identifiers.
 - Handle unknown languages.
@@ -1523,8 +1524,7 @@ Make fenced code blocks useful and attractive.
 
 **Implementation Notes**
 
-- For export, either include highlight.js and CSS or pre-highlight server-side if a future library supports it.
-- MVP can include JS for standalone HTML if documented.
+- Pre-highlighting keeps preview and export offline without requiring remote or bundled code-highlighting JavaScript.
 
 **Test Notes**
 
@@ -2966,4 +2966,3 @@ Before `0.1.0`, verify:
 - App works in light and dark mode.
 - Keyboard-only basic workflow works.
 - README and release notes are accurate.
-

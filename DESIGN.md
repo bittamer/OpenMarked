@@ -173,7 +173,7 @@ Deliverables:
 
 ### Phase 1: Beautiful Core Preview
 
-This is the real MVP.
+This became the core of the MVP and is now implemented through the Phase 10 release candidate.
 
 Deliverables:
 
@@ -357,12 +357,16 @@ OpenMarked should be beautiful because the preview is beautiful, not because the
 
 ### Preview Themes
 
-MVP themes should cover common needs:
+The current MVP ships three built-in themes:
+
+- **Default**: editorial reading style with light and dark variants.
+- **GitHub**: README-oriented rendering for common repository documents.
+- **Minimal**: restrained, print-friendly rendering.
+
+Future themes can cover additional needs:
 
 - **Manuscript**: warm editorial reading style.
-- **GitHub**: close approximation of GitHub README rendering.
 - **Technical**: crisp docs theme with clear code blocks and tables.
-- **Minimal**: distraction-free, high-contrast, print-friendly.
 - **Presentation**: wider layout for rendered reports or project docs.
 
 Every theme should include:
@@ -419,7 +423,7 @@ Pipeline:
 7. Post-process HTML.
 8. Resolve local assets.
 9. Inject theme CSS.
-10. Inject code highlighting CSS/JS if needed.
+10. Inject code highlighting CSS.
 11. Inject optional diagram/math renderers.
 12. Load into preview web view.
 13. Build outline and document metadata.
@@ -484,7 +488,7 @@ Implementation options:
 - UI: SwiftUI for app shell, AppKit where needed for mature macOS document/window behavior.
 - Preview: WKWebView.
 - Markdown: cmark-gfm via Swift package/C module.
-- Syntax highlighting: highlight.js in MVP, with future option for tree-sitter or Shiki-like output.
+- Syntax highlighting: offline Swift-side pre-highlighting for common MVP languages, with future option for tree-sitter or Shiki-like output.
 - Preferences: SwiftUI Settings scene.
 - Persistence: AppStorage/UserDefaults for simple settings; JSON/plist for themes/export profiles.
 - Tests: XCTest plus fixture-based renderer tests.
@@ -599,18 +603,17 @@ Valuable, but not essential to the core viewer.
 
 ## Settings
 
-MVP settings:
+Current MVP settings:
 
 - Default theme.
 - Font scale.
-- Default window layout.
 - Enable/disable live updates.
 - Preserve scroll position.
 - Remote image loading.
 - Raw HTML rendering.
-- Default export folder.
 - Include CSS in HTML exports.
-- Show word count in status bar.
+- Embed local images in HTML exports.
+- Restore last opened documents.
 
 Future settings:
 
@@ -835,4 +838,3 @@ Possible naming directions:
 - InkPreview.
 
 The brand should communicate openness, native polish, and readable documents.
-

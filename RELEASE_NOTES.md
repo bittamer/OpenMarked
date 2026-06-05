@@ -4,7 +4,7 @@ OpenMarked 0.1.0 is the first MVP release candidate for an open source, native m
 
 ## Highlights
 
-- Native macOS app shell with file open, drag/drop, Dock file opening, recent documents, toolbar controls, menus, and keyboard shortcuts.
+- Native macOS app shell with a regular app menu bar, standard app/window commands, file open, drag/drop, Dock file opening, recent documents, toolbar controls, Markdown-specific menus, and keyboard shortcuts.
 - CommonMark and GitHub Flavored Markdown rendering through `cmark-gfm`, including tables, strikethrough, task lists, autolinks, and footnotes.
 - Heading IDs, outline navigation, outline filtering, rendered-preview search, document statistics, and diagnostics.
 - Built-in Default, GitHub, and Minimal themes with print CSS and offline code highlighting.

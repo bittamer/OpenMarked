@@ -14,7 +14,7 @@ This repository currently contains:
 - Swift Package based native macOS app shell.
 - App/window state models for empty, loading, loaded, and error states.
 - File open panel, drag/drop file opening, Dock file opening, and recent-document registration.
-- Native menu commands and a toolbar mapped to Phase 1 shell actions.
+- Native macOS menu bar, standard app/window commands such as Quit, document commands, keyboard shortcuts, and a compact toolbar.
 - Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
 - Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
@@ -74,7 +74,7 @@ This artifact is not notarized. Gatekeeper behavior is documented in `Docs/RELEA
 
 ## Usage
 
-Launch the app from Xcode or with SwiftPM, then open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, and `.txt`.
+Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
 
 OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, and footnotes through `cmark-gfm`. It adds stable heading IDs, an outline sidebar, local-image diagnostics, document statistics, and offline code highlighting for common MVP languages.
 

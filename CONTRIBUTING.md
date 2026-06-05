@@ -2,7 +2,7 @@
 
 Thanks for helping build OpenMarked.
 
-The project is early, so the most useful contributions are focused, tested, and aligned with `MVP_IMPLEMENTATION_PLAN.md`.
+The MVP is implemented, so the most useful contributions are focused, tested, and aligned with `ROADMAP.md`, `Docs/BACKLOG.md`, and the original context in `MVP_IMPLEMENTATION_PLAN.md`.
 
 ## Build
 
@@ -22,7 +22,7 @@ Scripts/verify_release.sh
 
 ## Contribution Guidelines
 
-- Keep MVP work scoped to the current phase unless a later-phase change is needed to unblock it.
+- Keep changes scoped to the active roadmap milestone unless a broader change is needed to unblock it.
 - Prefer native macOS behavior over custom UI where the system control is appropriate.
 - Keep renderer, preview, theme, file watching, and export code separated.
 - Add or update fixtures when changing Markdown rendering behavior.

@@ -12,6 +12,8 @@ Use this checklist for the final `0.1.0` manual QA pass. Run it on macOS 13 or n
    Expected result: the ZIP expands to `OpenMarked.app`.
 4. Open About OpenMarked.
    Expected result: the About panel shows OpenMarked, version `0.1.0`, build `1`, license, and project URL.
+5. Focus OpenMarked and inspect the macOS menu bar.
+   Expected result: the top system menu bar switches to OpenMarked and includes standard app/window commands such as About, Settings, Hide, Quit, Window, and Help.
 
 ## Opening Workflows
 
@@ -25,6 +27,8 @@ Use this checklist for the final `0.1.0` manual QA pass. Run it on macOS 13 or n
    Expected result: each supported file opens in a document window.
 5. Open an unsupported file such as `Package.swift`.
    Expected result: the app shows a readable unsupported-file error.
+6. Press Command-Q.
+   Expected result: OpenMarked quits through the standard macOS Quit command.
 
 ## Rendering Fixtures
 

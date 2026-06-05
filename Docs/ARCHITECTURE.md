@@ -21,8 +21,10 @@ Reasons:
 
 Current package targets:
 
-- `OpenMarkedApp`: executable target containing the native SwiftUI app shell.
+- `OpenMarkedApp`: executable target containing the native SwiftUI app shell and packaged as the `OpenMarked` product.
 - `OpenMarkedCore`: library target for app-independent types and services.
+- `CMarkdownGFM`: C shim target that links against the system `libcmark-gfm`.
+- `OpenMarkedVerifier`: executable target for local smoke and release verification.
 - `OpenMarkedCoreTests`: XCTest target for core behavior.
 
 Planned package/module boundaries:
@@ -61,9 +63,20 @@ Preview behavior:
 - Link clicks are intercepted: external and local file URLs open through `NSWorkspace` instead of replacing the preview.
 - Script tags and inline event handler attributes are stripped before loading preview HTML. Bundled JavaScript needed for preview mechanics is injected through `evaluateJavaScript`, which keeps user document scripts blocked by default.
 
+## App Lifecycle Direction
+
+OpenMarked is a SwiftUI app with an AppKit delegate for macOS-specific lifecycle behavior.
+
+Lifecycle behavior:
+
+- `OpenMarkedApplication` owns the SwiftUI window group, settings scene, and command definitions.
+- `AppDelegate` handles file-open events from Finder/Dock and session restoration after launch.
+- The delegate explicitly sets the activation policy to `.regular` and activates the app at launch so SwiftPM and packaged builds behave like normal foreground Mac apps with a visible menu bar.
+- SwiftUI commands preserve standard macOS app/window behavior while adding Markdown-specific menu items for open, reload, search, outline, theme, source actions, export, print, settings, and About.
+
 ## Theme Direction
 
-Phase 5 theme assets live under `Sources/OpenMarkedCore/Resources/Themes` and are loaded through `Bundle.module`.
+Phase 5 theme assets live under `Sources/OpenMarkedCore/Resources/Themes`. During SwiftPM development they load through `Bundle.module`; packaged app builds copy the resource bundle under `Contents/Resources`, and `PreviewThemeStore` checks that conventional app-bundle location first.
 
 Built-in themes:
 
@@ -140,7 +153,7 @@ Phase 10 keeps distribution lightweight and reproducible while the project is st
 Distribution behavior:
 
 - `Scripts/verify_release.sh` runs the automated release gate: debug build, app product build, release build, verifier, performance smoke, SwiftPM tests, package metadata, diff hygiene, ASCII scan, packaging, ad hoc signing, and ZIP creation.
-- `Scripts/package_release.sh` wraps the SwiftPM release executable into `dist/OpenMarked-0.1.0/OpenMarked.app`, copies the SwiftPM resource bundle to the bundle root for `Bundle.module` lookup, mirrors it under `Contents/Resources`, writes Info.plist metadata from `Packaging/Info.plist.template`, ad hoc signs the bundle, and creates `dist/OpenMarked-0.1.0-macOS.zip`.
+- `Scripts/package_release.sh` wraps the SwiftPM release executable into `dist/OpenMarked-0.1.0/OpenMarked.app`, copies the SwiftPM resource bundle under `Contents/Resources`, writes Info.plist metadata from `Packaging/Info.plist.template`, ad hoc signs the bundle, and creates `dist/OpenMarked-0.1.0-macOS.zip`.
 - Release notes live in `RELEASE_NOTES.md`; the owner gate and tag instructions live in `Docs/RELEASE.md`; the manual pass lives in `Docs/QA.md`.
 - The MVP artifact is ad hoc signed and not notarized. Users and contributors should treat it as a developer artifact until signing credentials and notarization are available.
 

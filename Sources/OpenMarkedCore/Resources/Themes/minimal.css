@@ -50,6 +50,30 @@ blockquote {
   color: #555559;
 }
 
+.om-callout {
+  margin: 0 0 1.1em;
+  padding: 0.7em 0 0.75em 1em;
+  border-left: 3px solid #5f6d7a;
+  color: #303034;
+}
+
+.om-callout-title {
+  margin: 0 0 0.3em;
+  font-size: 0.82em;
+  font-weight: 720;
+  letter-spacing: 0;
+}
+
+.om-callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+.om-callout-note { border-left-color: #3c78a3; }
+.om-callout-tip { border-left-color: #3b8061; }
+.om-callout-important { border-left-color: #755aa8; }
+.om-callout-warning { border-left-color: #9a6b18; }
+.om-callout-caution { border-left-color: #a54247; }
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -77,8 +101,17 @@ img {
     border-left-color: #6e6e73;
   }
 
+  .om-callout {
+    color: #e7e7eb;
+  }
+
+  .om-callout-note { border-left-color: #7db8e5; }
+  .om-callout-tip { border-left-color: #75c79e; }
+  .om-callout-important { border-left-color: #b6a0ea; }
+  .om-callout-warning { border-left-color: #ddb55f; }
+  .om-callout-caution { border-left-color: #e88990; }
+
   th, td {
     border-bottom-color: #38383d;
   }
 }
-

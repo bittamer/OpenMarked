@@ -154,6 +154,7 @@ public enum RenderDiagnosticKind: String, CaseIterable, Equatable, Sendable {
     case mermaidRenderFailure
     case mathRenderFailure
     case richContentDisabled
+    case malformedGitHubCallout
     case unsupportedExtension
     case renderFailure
 }
@@ -231,7 +232,13 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
 
         let renderedHTML = String(cString: htmlPointer)
         let processed = HeadingPostProcessor.process(renderedHTML)
-        let highlightedHTML = CodeHighlighter.highlight(processed.html)
+        let calloutProcessed = GitHubCalloutPostProcessor.process(
+            processed.html,
+            sourceMarkdown: request.document.bodyText,
+            isEnabled: request.options.richMarkdownOptions.rendersGitHubCallouts
+        )
+        diagnostics.append(contentsOf: calloutProcessed.diagnostics)
+        let highlightedHTML = CodeHighlighter.highlight(calloutProcessed.html)
         let policyHTML = request.allowsRemoteImages ? highlightedHTML : HTMLResourcePolicy.blockRemoteImages(in: highlightedHTML)
         diagnostics.append(contentsOf: RenderDiagnosticsCollector.collect(from: policyHTML, document: request.document))
         let fullHTML = HTMLDocumentAssembler.assemble(
@@ -292,6 +299,163 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         }
 
         return String(cString: versionPointer)
+    }
+}
+
+public enum GitHubCalloutKind: String, CaseIterable, Sendable {
+    case note
+    case tip
+    case important
+    case warning
+    case caution
+
+    public init?(marker: String) {
+        self.init(rawValue: marker.lowercased())
+    }
+
+    public var title: String {
+        switch self {
+        case .note:
+            return "Note"
+        case .tip:
+            return "Tip"
+        case .important:
+            return "Important"
+        case .warning:
+            return "Warning"
+        case .caution:
+            return "Caution"
+        }
+    }
+
+    public var marker: String {
+        rawValue.uppercased()
+    }
+}
+
+public enum GitHubCalloutPostProcessor {
+    public struct Result: Equatable, Sendable {
+        public let html: String
+        public let diagnostics: [RenderDiagnostic]
+
+        public init(html: String, diagnostics: [RenderDiagnostic] = []) {
+            self.html = html
+            self.diagnostics = diagnostics
+        }
+    }
+
+    public static func process(_ html: String, sourceMarkdown: String, isEnabled: Bool = true) -> Result {
+        guard isEnabled else {
+            return Result(html: html)
+        }
+
+        var rendered = html
+        let diagnostics = malformedMarkerDiagnostics(in: sourceMarkdown)
+        let pattern = #"(?is)<blockquote([^>]*)>\s*(.*?)\s*</blockquote>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return Result(html: html, diagnostics: diagnostics)
+        }
+
+        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
+        for match in matches.reversed() {
+            guard
+                let fullRange = Range(match.range(at: 0), in: html),
+                let innerRange = Range(match.range(at: 2), in: html)
+            else {
+                continue
+            }
+
+            let innerHTML = String(html[innerRange])
+            guard let calloutHTML = transformBlockquoteInnerHTML(innerHTML) else {
+                continue
+            }
+
+            rendered.replaceSubrange(fullRange, with: calloutHTML)
+        }
+
+        return Result(html: rendered, diagnostics: diagnostics)
+    }
+
+    public static func malformedMarkerDiagnostics(in markdown: String) -> [RenderDiagnostic] {
+        var diagnostics: [RenderDiagnostic] = []
+        var seenSources = Set<String>()
+
+        for line in markdown.split(whereSeparator: \.isNewline) {
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmedLine.hasPrefix(">") else {
+                continue
+            }
+
+            let markerSource = trimmedLine
+                .dropFirst()
+                .trimmingCharacters(in: .whitespaces)
+
+            guard markerSource.hasPrefix("[!") else {
+                continue
+            }
+
+            let uppercasedMarker = markerSource.uppercased()
+            if GitHubCalloutKind.allCases.contains(where: { uppercasedMarker.hasPrefix("[!\($0.marker)]") }) {
+                continue
+            }
+
+            guard GitHubCalloutKind.allCases.contains(where: { uppercasedMarker.hasPrefix("[!\($0.marker)") }) else {
+                continue
+            }
+
+            guard seenSources.insert(markerSource).inserted else {
+                continue
+            }
+
+            diagnostics.append(
+                RenderDiagnostic(
+                    severity: .info,
+                    kind: .malformedGitHubCallout,
+                    message: "GitHub callout marker '\(markerSource)' is malformed and was left as a blockquote.",
+                    source: markerSource
+                )
+            )
+        }
+
+        return diagnostics
+    }
+
+    private static func transformBlockquoteInnerHTML(_ innerHTML: String) -> String? {
+        let markerPattern = #"(?is)^\s*<p>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*?)</p>"#
+        guard
+            let markerRegex = try? NSRegularExpression(pattern: markerPattern),
+            let match = markerRegex.firstMatch(in: innerHTML, range: NSRange(location: 0, length: (innerHTML as NSString).length)),
+            let firstParagraphRange = Range(match.range(at: 0), in: innerHTML),
+            let markerRange = Range(match.range(at: 1), in: innerHTML),
+            let remainderRange = Range(match.range(at: 2), in: innerHTML),
+            let kind = GitHubCalloutKind(marker: String(innerHTML[markerRange]))
+        else {
+            return nil
+        }
+
+        let firstParagraphRemainder = normalizedFirstParagraphRemainder(String(innerHTML[remainderRange]))
+        let firstParagraphReplacement = firstParagraphRemainder.isEmpty ? "" : "<p>\(firstParagraphRemainder)</p>"
+        var bodyHTML = innerHTML
+        bodyHTML.replaceSubrange(firstParagraphRange, with: firstParagraphReplacement)
+        bodyHTML = bodyHTML.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let body = bodyHTML.isEmpty ? "" : "\n\(bodyHTML)\n  "
+        return """
+        <aside class="om-callout om-callout-\(kind.rawValue)" data-callout="\(kind.rawValue)">
+          <p class="om-callout-title">\(kind.title)</p>
+          <div class="om-callout-body">\(body)</div>
+        </aside>
+        """
+    }
+
+    private static func normalizedFirstParagraphRemainder(_ remainder: String) -> String {
+        remainder
+            .replacingOccurrences(
+                of: #"(?is)^\s*(?:<br\s*/?>)?\s*"#,
+                with: "",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

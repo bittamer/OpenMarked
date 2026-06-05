@@ -20,6 +20,7 @@ This repository currently contains:
 - Native macOS menu bar, standard app/window commands such as Quit, document commands, keyboard shortcuts, and a compact toolbar.
 - Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
 - Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
+- GitHub alert/callout rendering for note, tip, important, warning, and caution blockquotes in the 0.3.0 development line.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
 - Built-in preview themes, print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
@@ -89,7 +90,7 @@ These artifacts are not notarized by default. Gatekeeper behavior is documented 
 
 Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
 
-OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, and footnotes through `cmark-gfm`. It adds stable heading IDs, an outline sidebar, local-image diagnostics, document statistics, and offline code highlighting for common MVP languages.
+OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, and GitHub alert/callout blockquotes through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
 Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 

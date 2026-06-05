@@ -20,7 +20,23 @@ a {
 
 pre,
 blockquote,
+.om-callout,
 table {
   break-inside: avoid;
 }
 
+.om-callout {
+  margin: 0 0 0.9em;
+  padding: 0.45em 0 0.5em 0.75em;
+  border-left: 2pt solid #000000;
+  color: #000000;
+}
+
+.om-callout-title {
+  margin: 0 0 0.25em;
+  font-weight: 700;
+}
+
+.om-callout-body > :last-child {
+  margin-bottom: 0;
+}

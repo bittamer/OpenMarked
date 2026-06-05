@@ -61,6 +61,35 @@ blockquote {
   color: #4c5c60;
 }
 
+.om-callout {
+  margin: 0 0 1.15em;
+  padding: 0.75em 1em 0.8em;
+  border-left: 4px solid #547a8c;
+  border-radius: 6px;
+  background: #f3f8fa;
+  color: #27383f;
+}
+
+.om-callout-title {
+  margin: 0 0 0.35em;
+  color: #182d36;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 0.82em;
+  font-weight: 720;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.om-callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+.om-callout-note { border-left-color: #2f80a5; background: #eef8fc; }
+.om-callout-tip { border-left-color: #2f8d62; background: #eef9f3; }
+.om-callout-important { border-left-color: #7a62b7; background: #f5f1fb; }
+.om-callout-warning { border-left-color: #ba7a1b; background: #fff7e8; }
+.om-callout-caution { border-left-color: #bd3f45; background: #fff0f1; }
+
 hr {
   border: 0;
   border-top: 1px solid rgba(32, 32, 32, 0.16);
@@ -123,6 +152,21 @@ sup.footnote-ref {
     color: #c8d2d4;
     border-left-color: #5f7e83;
   }
+
+  .om-callout {
+    color: #edf4f6;
+    background: #273238;
+  }
+
+  .om-callout-title {
+    color: #fbf7ee;
+  }
+
+  .om-callout-note { border-left-color: #66bde4; background: #1f3340; }
+  .om-callout-tip { border-left-color: #6dce9b; background: #1d3529; }
+  .om-callout-important { border-left-color: #b8a1f0; background: #302943; }
+  .om-callout-warning { border-left-color: #e4b35f; background: #3c3020; }
+  .om-callout-caution { border-left-color: #ee8a90; background: #422729; }
 
   th, td {
     border-color: #3b464a;

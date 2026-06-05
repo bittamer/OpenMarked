@@ -224,6 +224,7 @@ final class AppInfoTests: XCTestCase {
             .mermaidRenderFailure,
             .mathRenderFailure,
             .richContentDisabled,
+            .malformedGitHubCallout,
             .unsupportedExtension,
             .renderFailure
         ]
@@ -284,6 +285,94 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.richMarkdownState.documentFeatures.containsMath)
         XCTAssertTrue(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
         XCTAssertEqual(result.diagnostics.filter { $0.kind == .richContentDisabled }.count, 3)
+    }
+
+    func testGitHubCalloutPostProcessorTransformsSupportedMarkers() {
+        let html = """
+        <blockquote>
+        <p>[!NOTE]
+        Notes provide useful context.</p>
+        </blockquote>
+        <blockquote>
+        <p>This is ordinary.</p>
+        </blockquote>
+        """
+
+        let result = GitHubCalloutPostProcessor.process(html, sourceMarkdown: "> [!NOTE]\n> Notes provide useful context.")
+
+        XCTAssertTrue(result.html.contains(#"<aside class="om-callout om-callout-note" data-callout="note">"#))
+        XCTAssertTrue(result.html.contains(#"<p class="om-callout-title">Note</p>"#))
+        XCTAssertTrue(result.html.contains("<p>Notes provide useful context.</p>"))
+        XCTAssertTrue(result.html.contains("<blockquote>"))
+        XCTAssertFalse(result.html.contains("[!NOTE]"))
+        XCTAssertTrue(result.diagnostics.isEmpty)
+    }
+
+    func testGitHubCalloutPostProcessorHandlesMultiParagraphCallouts() {
+        let html = """
+        <blockquote>
+        <p>[!WARNING]</p>
+        <p>First paragraph.</p>
+        <ul>
+        <li>Nested list item.</li>
+        </ul>
+        </blockquote>
+        """
+
+        let result = GitHubCalloutPostProcessor.process(html, sourceMarkdown: "> [!WARNING]\n>\n> First paragraph.")
+
+        XCTAssertTrue(result.html.contains(#"om-callout-warning"#))
+        XCTAssertTrue(result.html.contains("<p>First paragraph.</p>"))
+        XCTAssertTrue(result.html.contains("<li>Nested list item.</li>"))
+        XCTAssertFalse(result.html.contains("[!WARNING]"))
+    }
+
+    func testRendererTransformsGitHubCalloutFixture() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/callouts.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
+        XCTAssertEqual(result.bodyHTML.components(separatedBy: #"class="om-callout "#).count - 1, 5)
+        XCTAssertTrue(result.bodyHTML.contains(#"data-callout="note""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"data-callout="tip""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"data-callout="important""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"data-callout="warning""#))
+        XCTAssertTrue(result.bodyHTML.contains(#"data-callout="caution""#))
+        XCTAssertTrue(result.bodyHTML.contains("<blockquote>"))
+        XCTAssertTrue(result.bodyHTML.contains("[!QUESTION]"))
+        XCTAssertTrue(result.fullHTML.contains(".om-callout"))
+    }
+
+    func testGitHubCalloutsCanBeDisabled() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/callouts.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let options = RichMarkdownOptions(rendersGitHubCallouts: false)
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: options)
+            )
+        )
+
+        XCTAssertFalse(result.bodyHTML.contains("om-callout"))
+        XCTAssertTrue(result.bodyHTML.contains("[!NOTE]"))
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .richContentDisabled && $0.source == RichMarkdownFeature.gitHubCallouts.rawValue })
+    }
+
+    func testMalformedGitHubCalloutDiagnostic() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-malformed-callout-\(UUID().uuidString).md")
+        try "# Malformed\n\n> [!NOTE\n> Missing bracket.\n\n> [!QUESTION]\n> Unknown marker stays quiet.\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .malformedGitHubCallout && $0.source == "[!NOTE" })
+        XCTAssertEqual(result.diagnostics.filter { $0.kind == .malformedGitHubCallout }.count, 1)
+        XCTAssertFalse(result.bodyHTML.contains("om-callout-note"))
+        XCTAssertTrue(result.bodyHTML.contains("[!QUESTION]"))
     }
 
     func testThemeFallbackAndInjection() throws {
@@ -620,6 +709,7 @@ struct AppInfoTests {
             .mermaidRenderFailure,
             .mathRenderFailure,
             .richContentDisabled,
+            .malformedGitHubCallout,
             .unsupportedExtension,
             .renderFailure
         ]
@@ -705,6 +795,99 @@ struct AppInfoTests {
         #expect(result.richMarkdownState.documentFeatures.containsMath)
         #expect(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
         #expect(result.diagnostics.filter { $0.kind == .richContentDisabled }.count == 3)
+    }
+
+    @Test("GitHub callout postprocessor transforms supported markers")
+    func gitHubCalloutPostProcessorTransformsSupportedMarkers() {
+        let html = """
+        <blockquote>
+        <p>[!NOTE]
+        Notes provide useful context.</p>
+        </blockquote>
+        <blockquote>
+        <p>This is ordinary.</p>
+        </blockquote>
+        """
+
+        let result = GitHubCalloutPostProcessor.process(html, sourceMarkdown: "> [!NOTE]\n> Notes provide useful context.")
+
+        #expect(result.html.contains(#"<aside class="om-callout om-callout-note" data-callout="note">"#))
+        #expect(result.html.contains(#"<p class="om-callout-title">Note</p>"#))
+        #expect(result.html.contains("<p>Notes provide useful context.</p>"))
+        #expect(result.html.contains("<blockquote>"))
+        #expect(!result.html.contains("[!NOTE]"))
+        #expect(result.diagnostics.isEmpty)
+    }
+
+    @Test("GitHub callout postprocessor handles multi-paragraph callouts")
+    func gitHubCalloutPostProcessorHandlesMultiParagraphCallouts() {
+        let html = """
+        <blockquote>
+        <p>[!WARNING]</p>
+        <p>First paragraph.</p>
+        <ul>
+        <li>Nested list item.</li>
+        </ul>
+        </blockquote>
+        """
+
+        let result = GitHubCalloutPostProcessor.process(html, sourceMarkdown: "> [!WARNING]\n>\n> First paragraph.")
+
+        #expect(result.html.contains(#"om-callout-warning"#))
+        #expect(result.html.contains("<p>First paragraph.</p>"))
+        #expect(result.html.contains("<li>Nested list item.</li>"))
+        #expect(!result.html.contains("[!WARNING]"))
+    }
+
+    @Test("Renderer transforms GitHub callout fixture")
+    func rendererTransformsGitHubCalloutFixture() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/callouts.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.richMarkdownState.documentFeatures.containsGitHubCallouts)
+        #expect(result.bodyHTML.components(separatedBy: #"class="om-callout "#).count - 1 == 5)
+        #expect(result.bodyHTML.contains(#"data-callout="note""#))
+        #expect(result.bodyHTML.contains(#"data-callout="tip""#))
+        #expect(result.bodyHTML.contains(#"data-callout="important""#))
+        #expect(result.bodyHTML.contains(#"data-callout="warning""#))
+        #expect(result.bodyHTML.contains(#"data-callout="caution""#))
+        #expect(result.bodyHTML.contains("<blockquote>"))
+        #expect(result.bodyHTML.contains("[!QUESTION]"))
+        #expect(result.fullHTML.contains(".om-callout"))
+    }
+
+    @Test("GitHub callouts can be disabled")
+    func gitHubCalloutsCanBeDisabled() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/callouts.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let options = RichMarkdownOptions(rendersGitHubCallouts: false)
+        let result = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(richMarkdownOptions: options)
+            )
+        )
+
+        #expect(!result.bodyHTML.contains("om-callout"))
+        #expect(result.bodyHTML.contains("[!NOTE]"))
+        #expect(result.diagnostics.contains { $0.kind == .richContentDisabled && $0.source == RichMarkdownFeature.gitHubCallouts.rawValue })
+    }
+
+    @Test("Malformed GitHub callout marker produces one diagnostic")
+    func malformedGitHubCalloutDiagnostic() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-malformed-callout-\(UUID().uuidString).md")
+        try "# Malformed\n\n> [!NOTE\n> Missing bracket.\n\n> [!QUESTION]\n> Unknown marker stays quiet.\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(result.diagnostics.contains { $0.kind == .malformedGitHubCallout && $0.source == "[!NOTE" })
+        #expect(result.diagnostics.filter { $0.kind == .malformedGitHubCallout }.count == 1)
+        #expect(!result.bodyHTML.contains("om-callout-note"))
+        #expect(result.bodyHTML.contains("[!QUESTION]"))
     }
 
     @Test("Theme fallback and CSS injection work")

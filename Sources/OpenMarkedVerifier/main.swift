@@ -188,7 +188,7 @@ verify(richMarkdownFeatures.containsLocalLinks, "rich feature detection should f
 verify(richMarkdownFeatures.containsHeadingLinks, "rich feature detection should find heading links")
 verify(richMarkdownFeatures.containsRemoteLinks, "rich feature detection should find remote links")
 verify(
-    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled]),
+    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled, .malformedGitHubCallout]),
     "diagnostic kinds should include rich Markdown foundation cases"
 )
 
@@ -290,6 +290,40 @@ verify(disabledRichResult.richMarkdownState.documentFeatures.containsMermaid, "r
 verify(disabledRichResult.richMarkdownState.documentFeatures.containsMath, "rich render state should detect math")
 verify(disabledRichResult.richMarkdownState.documentFeatures.containsGitHubCallouts, "rich render state should detect callouts")
 verify(disabledRichResult.diagnostics.filter { $0.kind == .richContentDisabled }.count == 3, "disabled rich rendering should produce focused diagnostics")
+
+let calloutsURL = URL(fileURLWithPath: "Fixtures/Markdown/callouts.md").standardizedFileURL
+let calloutsDocument = try MarkdownDocumentLoader.load(url: calloutsURL, createBookmark: false)
+let calloutsResult = try renderer.render(RenderRequest(document: calloutsDocument))
+verify(calloutsResult.richMarkdownState.documentFeatures.containsGitHubCallouts, "callout fixture should detect GitHub callouts")
+verify(calloutsResult.bodyHTML.components(separatedBy: "class=\"om-callout ").count - 1 == 5, "callout fixture should render five supported callouts")
+verify(calloutsResult.bodyHTML.contains("data-callout=\"note\""), "note callout should render")
+verify(calloutsResult.bodyHTML.contains("data-callout=\"tip\""), "tip callout should render")
+verify(calloutsResult.bodyHTML.contains("data-callout=\"important\""), "important callout should render")
+verify(calloutsResult.bodyHTML.contains("data-callout=\"warning\""), "warning callout should render")
+verify(calloutsResult.bodyHTML.contains("data-callout=\"caution\""), "caution callout should render")
+verify(calloutsResult.bodyHTML.contains("[!QUESTION]"), "unknown callout markers should remain normal blockquotes")
+verify(calloutsResult.fullHTML.contains(".om-callout"), "theme CSS should include callout styling")
+
+let disabledCalloutsResult = try renderer.render(
+    RenderRequest(
+        document: calloutsDocument,
+        options: RenderOptions(richMarkdownOptions: RichMarkdownOptions(rendersGitHubCallouts: false))
+    )
+)
+verify(!disabledCalloutsResult.bodyHTML.contains("om-callout"), "disabled callouts should stay as blockquotes")
+verify(disabledCalloutsResult.bodyHTML.contains("[!NOTE]"), "disabled callouts should preserve marker text")
+verify(disabledCalloutsResult.diagnostics.contains { $0.kind == .richContentDisabled && $0.source == RichMarkdownFeature.gitHubCallouts.rawValue }, "disabled callouts should produce an informational diagnostic")
+
+let malformedCalloutURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("openmarked-malformed-callout-\(UUID().uuidString).md")
+try "# Malformed\n\n> [!NOTE\n> Missing bracket.\n\n> [!QUESTION]\n> Unknown marker stays quiet.\n".write(to: malformedCalloutURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: malformedCalloutURL) }
+let malformedCalloutDocument = try MarkdownDocumentLoader.load(url: malformedCalloutURL, createBookmark: false)
+let malformedCalloutResult = try renderer.render(RenderRequest(document: malformedCalloutDocument))
+verify(malformedCalloutResult.diagnostics.contains { $0.kind == .malformedGitHubCallout && $0.source == "[!NOTE" }, "malformed supported callout marker should produce a diagnostic")
+verify(malformedCalloutResult.diagnostics.filter { $0.kind == .malformedGitHubCallout }.count == 1, "malformed callout diagnostics should be low-noise")
+verify(!malformedCalloutResult.bodyHTML.contains("om-callout-note"), "malformed callout marker should stay a blockquote")
+verify(malformedCalloutResult.bodyHTML.contains("[!QUESTION]"), "unknown callout marker should stay quiet")
 
 var renderState = DocumentWindowState()
 renderState.finishOpening(document: OpenedDocument(markdownDocument: markdownDocument))

@@ -67,103 +67,116 @@ private struct AppToolbar: View {
     @ObservedObject var controller: DocumentWindowController
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                appController.presentOpenPanel()
-            } label: {
-                Label("Open", systemImage: "folder")
-            }
-            .labelStyle(.iconOnly)
-            .help("Open a Markdown file")
-            .accessibilityLabel("Open Markdown file")
+        HStack(spacing: 8) {
+            HStack(spacing: 2) {
+                ToolbarIconButton(
+                    systemImage: "folder",
+                    help: "Open a Markdown file",
+                    accessibilityLabel: "Open Markdown file"
+                ) {
+                    appController.presentOpenPanel()
+                }
 
-            Button {
-                controller.reloadPreview()
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .labelStyle(.iconOnly)
-            .help("Reload preview")
-            .accessibilityLabel("Reload preview")
-            .disabled(!controller.state.canReloadPreview)
+                ToolbarIconButton(
+                    systemImage: "arrow.clockwise",
+                    help: "Reload preview",
+                    accessibilityLabel: "Reload preview",
+                    isDisabled: !controller.state.canReloadPreview
+                ) {
+                    controller.reloadPreview()
+                }
 
-            Button {
-                controller.toggleOutline()
-            } label: {
-                Label("Toggle Outline", systemImage: "sidebar.left")
+                ToolbarIconButton(
+                    systemImage: "sidebar.left",
+                    help: "Toggle outline",
+                    accessibilityLabel: "Toggle outline",
+                    isActive: controller.state.layout.isOutlineVisible
+                ) {
+                    controller.toggleOutline()
+                }
             }
-            .labelStyle(.iconOnly)
-            .help("Toggle outline")
-            .accessibilityLabel("Toggle outline")
 
-            Spacer()
+            Spacer(minLength: 12)
+
+            ZoomControl(controller: controller)
+
+            ToolbarSeparator()
 
             Picker("Theme", selection: themeBinding) {
                 ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
                     Text(theme.name).tag(theme.id)
                 }
             }
+            .labelsHidden()
             .pickerStyle(.menu)
-            .frame(width: 150)
+            .frame(width: 132)
             .help("Preview theme")
             .accessibilityLabel("Preview theme")
 
-            Button {
-                controller.showSearch()
-            } label: {
-                Label("Search", systemImage: "magnifyingglass")
-            }
-            .labelStyle(.iconOnly)
-            .help("Search document")
-            .accessibilityLabel("Search document")
-            .disabled(!controller.state.hasDocument)
+            ToolbarSeparator()
 
-            Menu {
-                Button("Reveal in Finder") {
-                    controller.revealSourceInFinder()
+            HStack(spacing: 2) {
+                ToolbarIconButton(
+                    systemImage: "magnifyingglass",
+                    help: "Search document",
+                    accessibilityLabel: "Search document",
+                    isDisabled: !controller.state.hasDocument
+                ) {
+                    controller.showSearch()
                 }
-                Button("Open in Default Editor") {
-                    controller.openSourceInDefaultEditor()
-                }
-                Button("Copy File Path") {
-                    controller.copySourcePath()
-                }
-                Divider()
-                Button("Reload from Disk") {
-                    controller.reloadPreview()
-                }
-            } label: {
-                Label("Source", systemImage: "ellipsis.circle")
-            }
-            .labelStyle(.iconOnly)
-            .help("Source file actions")
-            .accessibilityLabel("Source file actions")
-            .disabled(!controller.state.hasDocument)
 
-            Menu {
-                Button("Export HTML...") {
-                    controller.exportHTML()
+                Menu {
+                    Button("Reveal in Finder") {
+                        controller.revealSourceInFinder()
+                    }
+                    Button("Open in Default Editor") {
+                        controller.openSourceInDefaultEditor()
+                    }
+                    Button("Copy File Path") {
+                        controller.copySourcePath()
+                    }
+                    Divider()
+                    Button("Reload from Disk") {
+                        controller.reloadPreview()
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
-                Button("Export PDF...") {
-                    controller.exportPDF()
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Source file actions")
+                .accessibilityLabel("Source file actions")
+                .disabled(!controller.state.hasDocument)
+
+                Menu {
+                    Button("Export HTML...") {
+                        controller.exportHTML()
+                    }
+                    Button("Export PDF...") {
+                        controller.exportPDF()
+                    }
+                    Button("Copy Rendered HTML") {
+                        controller.copyRenderedHTML()
+                    }
+                    Divider()
+                    Button("Print...") {
+                        controller.printDocument()
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
                 }
-                Button("Copy Rendered HTML") {
-                    controller.copyRenderedHTML()
-                }
-                Divider()
-                Button("Print...") {
-                    controller.printDocument()
-                }
-            } label: {
-                Label("Export", systemImage: "square.and.arrow.up")
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Export document")
+                .accessibilityLabel("Export document")
+                .disabled(!controller.state.canExport)
             }
-            .labelStyle(.iconOnly)
-            .help("Export document")
-            .accessibilityLabel("Export document")
-            .disabled(!controller.state.canExport)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
+        .background(.bar)
     }
 
     private var themeBinding: Binding<String> {
@@ -174,76 +187,305 @@ private struct AppToolbar: View {
     }
 }
 
+private struct ToolbarIconButton: View {
+    let systemImage: String
+    let help: String
+    let accessibilityLabel: String
+    var isActive: Bool = false
+    var isDisabled: Bool = false
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 28, height: 24)
+                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(backgroundFill)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .onHover { isHovering = $0 }
+        .help(help)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var backgroundFill: Color {
+        if isActive {
+            return Color.accentColor.opacity(0.16)
+        }
+        if isHovering && !isDisabled {
+            return Color.primary.opacity(0.08)
+        }
+        return .clear
+    }
+}
+
+private struct ToolbarSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.12))
+            .frame(width: 1, height: 18)
+            .padding(.horizontal, 2)
+    }
+}
+
+private struct ZoomControl: View {
+    @ObservedObject var controller: DocumentWindowController
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ToolbarIconButton(
+                systemImage: "minus.magnifyingglass",
+                help: "Zoom out",
+                accessibilityLabel: "Zoom out",
+                isDisabled: !controller.state.hasDocument
+            ) {
+                controller.zoomOut()
+            }
+
+            Button {
+                controller.resetZoom()
+            } label: {
+                Text("\(Int((controller.state.layout.fontScale * 100).rounded()))%")
+                    .font(.system(size: 11, weight: .medium))
+                    .monospacedDigit()
+                    .frame(width: 40)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .disabled(!controller.state.hasDocument)
+            .help("Reset zoom to 100%")
+            .accessibilityLabel("Reset zoom")
+
+            ToolbarIconButton(
+                systemImage: "plus.magnifyingglass",
+                help: "Zoom in",
+                accessibilityLabel: "Zoom in",
+                isDisabled: !controller.state.hasDocument
+            ) {
+                controller.zoomIn()
+            }
+        }
+    }
+}
+
 private struct OutlineSidebar: View {
     @ObservedObject var controller: DocumentWindowController
     @State private var outlineFilter = ""
+    @State private var selectedItemID: OutlineItem.ID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Outline", systemImage: "list.bullet.indent")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 7) {
+                Image(systemName: "list.bullet.indent")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Outline")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if let count = headingCount {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(Color.primary.opacity(0.08))
+                        )
+                }
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
 
-            TextField("Filter headings", text: $outlineFilter)
-                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                TextField("Filter headings", text: $outlineFilter)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                if !outlineFilter.isEmpty {
+                    Button {
+                        outlineFilter = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
 
-            switch controller.state.content {
-            case .loaded:
-                if let outline = controller.state.currentRenderResult?.outline, !outline.isEmpty {
-                    let filteredOutline = OutlineFilter.filter(outline, query: outlineFilter)
-                    if filteredOutline.isEmpty {
-                        Text("No matching headings.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ForEach(filteredOutline) { item in
-                                    Button {
-                                        controller.scrollToOutlineItem(item)
-                                    } label: {
-                                        Text(item.title)
-                                            .font(.callout)
-                                            .lineLimit(2)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .padding(.leading, outlineLeadingPadding(for: item))
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.vertical, 3)
-                                    .help("Jump to \(item.title)")
+            outlineContent
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(.regularMaterial)
+    }
+
+    private var headingCount: Int? {
+        guard case .loaded = controller.state.content,
+              let outline = controller.state.currentRenderResult?.outline,
+              !outline.isEmpty else {
+            return nil
+        }
+        return outline.count
+    }
+
+    @ViewBuilder
+    private var outlineContent: some View {
+        switch controller.state.content {
+        case .loaded:
+            if let outline = controller.state.currentRenderResult?.outline, !outline.isEmpty {
+                let filteredOutline = OutlineFilter.filter(outline, query: outlineFilter)
+                if filteredOutline.isEmpty {
+                    OutlinePlaceholder(
+                        systemImage: "magnifyingglass",
+                        message: "No matching headings."
+                    )
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 1) {
+                            ForEach(filteredOutline) { item in
+                                OutlineRow(
+                                    item: item,
+                                    isSelected: selectedItemID == item.id,
+                                    leadingPadding: outlineLeadingPadding(for: item)
+                                ) {
+                                    selectedItemID = item.id
+                                    controller.scrollToOutlineItem(item)
                                 }
                             }
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 12)
                     }
-                } else {
-                    Text("This document has no headings.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
                 }
-            case .loading:
-                ProgressView()
-                    .controlSize(.small)
-            case .error:
-                Text("Open a valid Markdown file to build an outline.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            case .empty:
-                Text("Open a Markdown document to build an outline.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+            } else {
+                OutlinePlaceholder(
+                    systemImage: "number",
+                    message: "This document has no headings."
+                )
             }
-
-            Spacer()
+        case .loading:
+            HStack {
+                Spacer()
+                ProgressView().controlSize(.small)
+                Spacer()
+            }
+            .padding(.top, 12)
+        case .error:
+            OutlinePlaceholder(
+                systemImage: "exclamationmark.triangle",
+                message: "Open a valid Markdown file to build an outline."
+            )
+        case .empty:
+            OutlinePlaceholder(
+                systemImage: "doc.text",
+                message: "Open a Markdown document to build an outline."
+            )
         }
-        .padding()
-        .background(.regularMaterial)
     }
 
     private func outlineLeadingPadding(for item: OutlineItem) -> CGFloat {
         if outlineFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return CGFloat(max(0, item.level - 1)) * 12
+            return CGFloat(max(0, item.level - 1)) * 13
         }
         return 0
+    }
+}
+
+private struct OutlineRow: View {
+    let item: OutlineItem
+    let isSelected: Bool
+    let leadingPadding: CGFloat
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 0) {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Color.accentColor)
+                        .frame(width: 3, height: 14)
+                        .padding(.trailing, leadingPadding + 6)
+                } else {
+                    Spacer().frame(width: leadingPadding + 9)
+                }
+
+                Text(item.title)
+                    .font(.system(size: 12.5, weight: item.level <= 1 ? .semibold : .regular))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(backgroundFill)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("Jump to \(item.title)")
+    }
+
+    private var backgroundFill: Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.12)
+        }
+        if isHovering {
+            return Color.primary.opacity(0.07)
+        }
+        return .clear
+    }
+}
+
+private struct OutlinePlaceholder: View {
+    let systemImage: String
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(.tertiary)
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.top, 24)
     }
 }
 
@@ -259,12 +501,26 @@ private struct PreviewShell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if isDropTargeted {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8, 6]))
-                    .padding(18)
-                    .allowsHitTesting(false)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, dash: [9, 7]))
+
+                    VStack(spacing: 12) {
+                        Image(systemName: "arrow.down.doc.fill")
+                            .font(.system(size: 40, weight: .medium))
+                        Text("Drop Markdown to open")
+                            .font(.title3.weight(.semibold))
+                    }
+                    .foregroundStyle(Color.accentColor)
+                }
+                .padding(16)
+                .allowsHitTesting(false)
+                .transition(.opacity)
             }
         }
+        .animation(.easeOut(duration: 0.15), value: isDropTargeted)
         .background(Color(nsColor: .textBackgroundColor))
     }
 
@@ -402,10 +658,15 @@ private struct EmptyDocumentView: View {
     let openAction: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 22) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.10))
+                    .frame(width: 112, height: 112)
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.system(size: 46, weight: .regular))
+                    .foregroundStyle(Color.accentColor)
+            }
 
             VStack(spacing: 8) {
                 Text(AppInfo.name)
@@ -414,6 +675,7 @@ private struct EmptyDocumentView: View {
                 Text(AppInfo.summary)
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
 
             Button(action: openAction) {
@@ -421,11 +683,42 @@ private struct EmptyDocumentView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .padding(.top, 4)
+            .padding(.top, 2)
+
+            HStack(spacing: 18) {
+                EmptyStateHint(systemImage: "command", text: "⌘O to open")
+                EmptyStateHint(systemImage: "arrow.down.doc", text: "Drag a file here")
+                EmptyStateHint(systemImage: "clock.arrow.circlepath", text: "File ▸ Open Recent")
+            }
+            .padding(.top, 6)
         }
-        .padding()
+        .padding(40)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Empty document")
+    }
+}
+
+private struct EmptyStateHint: View {
+    let systemImage: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(
+            Capsule().fill(Color.primary.opacity(0.05))
+        )
+        .overlay(
+            Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
@@ -559,21 +852,28 @@ private struct StatusBar: View {
                 }
             }
             if let richContentStatusTitle {
-                Label(richContentStatusTitle, systemImage: richContentStatusIcon)
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(richContentStatusColor)
+                StatusPill(
+                    title: richContentStatusTitle,
+                    systemImage: richContentStatusIcon,
+                    tint: richContentStatusColor
+                )
             }
             if let livePreviewStatusTitle {
-                Label(livePreviewStatusTitle, systemImage: livePreviewStatusIcon)
-                    .labelStyle(.titleAndIcon)
+                StatusPill(
+                    title: livePreviewStatusTitle,
+                    systemImage: livePreviewStatusIcon,
+                    tint: .secondary
+                )
             }
-            Text(PreviewThemeStore.theme(id: controller.state.layout.selectedThemeID).name)
-            Text("Zoom \(Int((controller.state.layout.fontScale * 100).rounded()))%")
+            Label(PreviewThemeStore.theme(id: controller.state.layout.selectedThemeID).name, systemImage: "paintpalette")
+                .labelStyle(.titleAndIcon)
+            Text("\(Int((controller.state.layout.fontScale * 100).rounded()))%")
+                .monospacedDigit()
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .background(.bar)
     }
 
@@ -664,6 +964,24 @@ private struct StatusBar: View {
         default:
             return .secondary
         }
+    }
+}
+
+private struct StatusPill: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.titleAndIcon)
+            .font(.caption)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                Capsule().fill(tint.opacity(0.12))
+            )
     }
 }
 

@@ -22,7 +22,7 @@ body {
   line-height: 1.68;
   background: #ffffff;
   min-height: 100vh;
-  box-shadow: 0 0 0 1px rgba(28, 38, 44, 0.08);
+  box-shadow: 0 0 0 1px rgba(28, 38, 44, 0.06), 0 12px 40px rgba(28, 38, 44, 0.10);
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -132,8 +132,8 @@ sup.footnote-ref {
 
   .om-document {
     color: #eceef0;
-    background: #202326;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    background: #24282c;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 50px rgba(0, 0, 0, 0.45);
   }
 
   h1, h2, h3, h4, h5, h6 {

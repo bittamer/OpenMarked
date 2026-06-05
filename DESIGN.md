@@ -370,7 +370,7 @@ light and dark variants driven by the system appearance:
 - **Tokyo Night** (Day / Night)
 - **Everforest** (light / dark)
 - **Nord** (Snow Storm / Polar Night)
-- **Rosé Pine** (Dawn / Moon)
+- **Rose Pine** (Dawn / Moon)
 - **Dracula** (Alucard / Dracula)
 - **Gruvbox** (light / dark)
 

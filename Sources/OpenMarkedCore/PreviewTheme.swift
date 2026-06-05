@@ -65,7 +65,7 @@ public enum PreviewThemeStore {
         case "nord":
             return loadTheme(id: "nord", name: "Nord", supportsDarkMode: true, defaultMaxWidth: 880)
         case "rose-pine":
-            return loadTheme(id: "rose-pine", name: "Rosé Pine", supportsDarkMode: true, defaultMaxWidth: 880)
+            return loadTheme(id: "rose-pine", name: "Rose Pine", supportsDarkMode: true, defaultMaxWidth: 880)
         case "dracula":
             return loadTheme(id: "dracula", name: "Dracula", supportsDarkMode: true, defaultMaxWidth: 880)
         case "gruvbox":

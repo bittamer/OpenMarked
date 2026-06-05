@@ -27,10 +27,19 @@ pdf_dir = pathlib.Path(sys.argv[3])
 manifest = json.loads(manifest_path.read_text())
 entries = manifest.get("snapshots", [])
 
-if len(entries) < 8:
-    raise SystemExit(f"Expected at least eight export fixture entries, found {len(entries)}")
+if len(entries) < 22:
+    raise SystemExit(f"Expected at least 22 export fixture entries, found {len(entries)}")
 
 required_ids = {entry["id"] for entry in entries}
+palette_theme_ids = {"catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"}
+required_palette_ids = set()
+for theme_id in palette_theme_ids:
+    required_palette_ids.add(f"{theme_id}-gfm-light")
+    required_palette_ids.add(f"{theme_id}-rich-dark")
+missing_palette_ids = sorted(required_palette_ids - required_ids)
+if missing_palette_ids:
+    raise SystemExit(f"Missing palette-theme export fixtures: {', '.join(missing_palette_ids)}")
+
 for required_id in sorted(required_ids):
     png_path = snapshot_dir / f"{required_id}.png"
     pdf_path = pdf_dir / f"{required_id}.pdf"
@@ -43,7 +52,7 @@ for required_id in sorted(required_ids):
     if pdf_size < 10_000:
         raise SystemExit(f"PDF export artifact is too small: {pdf_path} ({pdf_size} bytes)")
 
-for rich_id in ("github-rich-markdown-light", "github-rich-markdown-dark"):
+for rich_id in [entry["id"] for entry in entries if "rich" in entry["id"]]:
     if rich_id not in required_ids:
         raise SystemExit(f"Missing rich Markdown export fixture: {rich_id}")
 

@@ -27,14 +27,18 @@ strict_hashes = sys.argv[3] == "1"
 
 work = json.loads(work_manifest.read_text())
 entries = work.get("snapshots", [])
-if len(entries) < 8:
-    raise SystemExit("Expected at least eight visual snapshots")
+if len(entries) < 22:
+    raise SystemExit("Expected at least 22 visual snapshots")
 
+palette_theme_ids = {"catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"}
 required_ids = {"github-rich-markdown-light", "github-rich-markdown-dark", "github-broken-links-light"}
+for theme_id in palette_theme_ids:
+    required_ids.add(f"{theme_id}-gfm-light")
+    required_ids.add(f"{theme_id}-rich-dark")
 work_ids = {entry["id"] for entry in entries}
 missing_required_ids = sorted(required_ids - work_ids)
 if missing_required_ids:
-    raise SystemExit(f"Missing required rich Markdown visual snapshots: {', '.join(missing_required_ids)}")
+    raise SystemExit(f"Missing required visual snapshots: {', '.join(missing_required_ids)}")
 
 for entry in entries:
     image_path = work_manifest.parent / entry["file"]

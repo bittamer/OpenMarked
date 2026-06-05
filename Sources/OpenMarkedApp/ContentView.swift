@@ -686,9 +686,9 @@ private struct EmptyDocumentView: View {
             .padding(.top, 2)
 
             HStack(spacing: 18) {
-                EmptyStateHint(systemImage: "command", text: "⌘O to open")
+                EmptyStateHint(systemImage: "command", text: "Cmd-O to open")
                 EmptyStateHint(systemImage: "arrow.down.doc", text: "Drag a file here")
-                EmptyStateHint(systemImage: "clock.arrow.circlepath", text: "File ▸ Open Recent")
+                EmptyStateHint(systemImage: "clock.arrow.circlepath", text: "File > Open Recent")
             }
             .padding(.top, 6)
         }

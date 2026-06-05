@@ -164,7 +164,23 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
     }
 
     private var snapshotCases: [SnapshotCase] {
-        [
+        let paletteThemeIDs = [
+            "catppuccin",
+            "tokyo-night",
+            "everforest",
+            "nord",
+            "rose-pine",
+            "dracula",
+            "gruvbox"
+        ]
+        let paletteThemeCases = paletteThemeIDs.flatMap { themeID in
+            [
+                SnapshotCase(id: "\(themeID)-gfm-light", fixturePath: "Fixtures/Markdown/gfm.md", themeID: themeID, appearance: "light", width: 960, height: 720),
+                SnapshotCase(id: "\(themeID)-rich-dark", fixturePath: "Fixtures/Markdown/rich-markdown.md", themeID: themeID, appearance: "dark", width: 960, height: 720)
+            ]
+        }
+
+        return [
             SnapshotCase(id: "default-readme-light", fixturePath: "Fixtures/Markdown/README.md", themeID: "default", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "github-gfm-light", fixturePath: "Fixtures/Markdown/gfm.md", themeID: "github", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "minimal-prose-light", fixturePath: "Fixtures/Markdown/prose.md", themeID: "minimal", appearance: "light", width: 960, height: 720),
@@ -173,7 +189,7 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             SnapshotCase(id: "github-broken-links-light", fixturePath: "Fixtures/Markdown/broken-links.md", themeID: "github", appearance: "light", width: 960, height: 720, requiredDiagnosticKinds: [.missingHeadingFragment, .missingLocalLink, .unsupportedLinkScheme, .malformedLink]),
             SnapshotCase(id: "default-local-images-light", fixturePath: "Fixtures/Markdown/local-images.md", themeID: "default", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "github-long-document-dark", fixturePath: "Fixtures/Markdown/long-document.md", themeID: "github", appearance: "dark", width: 960, height: 720)
-        ]
+        ] + paletteThemeCases
     }
 
     private func capture(

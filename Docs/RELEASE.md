@@ -8,7 +8,7 @@ This document captures the current release process. Do not tag a release until `
 Scripts/verify_release.sh
 ```
 
-The command builds debug and release products, runs the verifier, runs the performance smoke test, captures and verifies visual snapshots, verifies PDF/export artifacts, runs SwiftPM tests, checks package metadata, checks diff whitespace, scans for accidental non-ASCII text outside generated output, builds `OpenMarked.app`, signs it, verifies the signature, and creates ZIP and DMG artifacts.
+The command builds debug and release products, runs the verifier, runs the performance smoke test, captures and verifies visual snapshots, verifies PDF/export artifacts, runs SwiftPM tests, checks package metadata, checks diff whitespace, scans for accidental non-ASCII text outside generated output, builds `OpenMarked.app`, verifies packaged rich-content resources, signs it, verifies the signature, and creates ZIP and DMG artifacts.
 
 ## Artifact
 
@@ -25,7 +25,7 @@ The app bundle is ad hoc signed by default for local developer distribution. Set
 
 - QA checklist: partially recorded in `Docs/VISUAL_QA.md`
 - Fixture visual QA: screenshot baseline and Computer Use pass recorded in `Docs/VISUAL_QA.md`
-- PDF/export artifact QA: automated through `Scripts/verify_export_artifacts.sh`
+- PDF/export artifact QA: automated through `Scripts/verify_export_artifacts.sh`, including rich Markdown light/dark PDFs
 - Print panel QA: not yet owner-recorded
 - Second Mac or clean-account launch: not yet owner-recorded
 - Owner approval: pending

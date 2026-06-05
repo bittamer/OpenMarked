@@ -517,6 +517,46 @@ verify(optInRemoteLinkResult.diagnostics.contains { $0.kind == .linkValidationSk
 
 let richDocumentURL = URL(fileURLWithPath: "Fixtures/Markdown/rich-markdown.md").standardizedFileURL
 let richDocument = try MarkdownDocumentLoader.load(url: richDocumentURL, createBookmark: false)
+let richResult = try renderer.render(RenderRequest(document: richDocument, theme: githubTheme))
+let richExportHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: richResult, document: richDocument)
+verify(richResult.richMarkdownState.requiresMermaidRuntime, "rich Markdown fixture should require Mermaid runtime")
+verify(richResult.richMarkdownState.requiresMathRuntime, "rich Markdown fixture should require KaTeX runtime")
+verify(richExportHTML.contains("om-callout"), "rich HTML export should preserve GitHub callout markup")
+verify(richExportHTML.contains("om-rich-content-assets"), "rich HTML export should include rich content CSS")
+verify(richExportHTML.contains("katex-version"), "rich HTML export should include KaTeX CSS and font references")
+verify(richExportHTML.contains("data-openmarked-rich-content-runtime"), "rich HTML export should embed the trusted runtime")
+verify(richExportHTML.contains(#"globalThis["mermaid"]"#), "rich HTML export should embed bundled Mermaid JavaScript")
+verify(richExportHTML.contains("KaTeX parse error"), "rich HTML export should embed bundled KaTeX JavaScript")
+let richExportWithoutRuntime = HTMLExportDocumentBuilder.standaloneHTML(
+    renderResult: richResult,
+    document: richDocument,
+    options: HTMLExportOptions(embedsRichContentRuntime: false)
+)
+verify(richExportWithoutRuntime.contains("om-rich-content-assets"), "rich HTML export without runtime should keep rich styles")
+verify(!richExportWithoutRuntime.contains("data-openmarked-rich-content-runtime"), "rich HTML export should allow runtime embedding to be disabled")
+let scriptedRichURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("openmarked-scripted-rich-\(UUID().uuidString).md")
+try """
+# Scripted Rich Export
+
+<script src="https://example.com/user-script.js"></script>
+
+```mermaid
+flowchart LR
+    A --> B
+```
+
+Inline math $x + 1$.
+""".write(to: scriptedRichURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: scriptedRichURL) }
+let scriptedRichDocument = try MarkdownDocumentLoader.load(url: scriptedRichURL, createBookmark: false)
+let scriptedRichResult = try renderer.render(RenderRequest(document: scriptedRichDocument, theme: githubTheme))
+let scriptedRichExportHTML = HTMLExportDocumentBuilder.standaloneHTML(
+    renderResult: scriptedRichResult,
+    document: scriptedRichDocument
+)
+verify(scriptedRichExportHTML.contains("data-openmarked-rich-content-runtime"), "scripted rich export should keep trusted runtime scripts")
+verify(!scriptedRichExportHTML.lowercased().contains(#"<script src="https://example.com/user-script.js""#), "scripted rich export should remove user-authored scripts")
 let disabledRichOptions = RichMarkdownOptions(rendersMermaid: false, rendersMath: false, rendersGitHubCallouts: false)
 let disabledRichResult = try renderer.render(
     RenderRequest(

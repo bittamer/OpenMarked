@@ -4,13 +4,32 @@ import Foundation
 import WebKit
 import OpenMarkedCore
 
-struct SnapshotCase: Codable, Sendable {
+struct SnapshotCase: Sendable {
     let id: String
     let fixturePath: String
     let themeID: String
     let appearance: String
     let width: Int
     let height: Int
+    let requiredDiagnosticKinds: [RenderDiagnosticKind]
+
+    init(
+        id: String,
+        fixturePath: String,
+        themeID: String,
+        appearance: String,
+        width: Int,
+        height: Int,
+        requiredDiagnosticKinds: [RenderDiagnosticKind] = []
+    ) {
+        self.id = id
+        self.fixturePath = fixturePath
+        self.themeID = themeID
+        self.appearance = appearance
+        self.width = width
+        self.height = height
+        self.requiredDiagnosticKinds = requiredDiagnosticKinds
+    }
 }
 
 struct SnapshotManifest: Codable, Sendable {
@@ -30,6 +49,8 @@ struct SnapshotManifestEntry: Codable, Sendable {
     let file: String
     let bytes: Int
     let sha256: String
+    let diagnosticCount: Int
+    let diagnosticKinds: [String]
 }
 
 enum SnapshotError: Error, LocalizedError {
@@ -38,6 +59,7 @@ enum SnapshotError: Error, LocalizedError {
     case blankSnapshot(String)
     case webNavigationFailed(String)
     case pdfExportFailed(String)
+    case expectedDiagnosticsMissing(String, [String])
 
     var errorDescription: String? {
         switch self {
@@ -51,6 +73,8 @@ enum SnapshotError: Error, LocalizedError {
             return "WebKit could not render snapshot HTML. \(reason)"
         case .pdfExportFailed(let id):
             return "Could not export PDF snapshot \(id)."
+        case .expectedDiagnosticsMissing(let id, let kinds):
+            return "Snapshot \(id) did not produce expected diagnostics: \(kinds.joined(separator: ", "))."
         }
     }
 }
@@ -102,7 +126,7 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
         }
 
         let manifest = SnapshotManifest(
-            schemaVersion: 1,
+            schemaVersion: 2,
             appVersion: AppInfo.version,
             appBuild: AppInfo.build,
             snapshots: entries
@@ -145,6 +169,8 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             SnapshotCase(id: "github-gfm-light", fixturePath: "Fixtures/Markdown/gfm.md", themeID: "github", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "minimal-prose-light", fixturePath: "Fixtures/Markdown/prose.md", themeID: "minimal", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "github-rich-markdown-light", fixturePath: "Fixtures/Markdown/rich-markdown.md", themeID: "github", appearance: "light", width: 960, height: 720),
+            SnapshotCase(id: "github-rich-markdown-dark", fixturePath: "Fixtures/Markdown/rich-markdown.md", themeID: "github", appearance: "dark", width: 960, height: 720),
+            SnapshotCase(id: "github-broken-links-light", fixturePath: "Fixtures/Markdown/broken-links.md", themeID: "github", appearance: "light", width: 960, height: 720, requiredDiagnosticKinds: [.missingHeadingFragment, .missingLocalLink, .unsupportedLinkScheme, .malformedLink]),
             SnapshotCase(id: "default-local-images-light", fixturePath: "Fixtures/Markdown/local-images.md", themeID: "default", appearance: "light", width: 960, height: 720),
             SnapshotCase(id: "github-long-document-dark", fixturePath: "Fixtures/Markdown/long-document.md", themeID: "github", appearance: "dark", width: 960, height: 720)
         ]
@@ -160,6 +186,14 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
         let document = try MarkdownDocumentLoader.load(url: documentURL, createBookmark: false)
         let theme = PreviewThemeStore.theme(id: snapshotCase.themeID)
         let result = try renderer.render(RenderRequest(document: document, theme: theme))
+        let diagnosticKinds = result.diagnostics.map(\.kind.rawValue).sorted()
+        let diagnosticKindSet = Set(diagnosticKinds)
+        let missingDiagnosticKinds = snapshotCase.requiredDiagnosticKinds
+            .map(\.rawValue)
+            .filter { !diagnosticKindSet.contains($0) }
+        if !missingDiagnosticKinds.isEmpty {
+            throw SnapshotError.expectedDiagnosticsMissing(snapshotCase.id, missingDiagnosticKinds)
+        }
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: snapshotCase.width, height: snapshotCase.height))
         webView.navigationDelegate = self
         webView.appearance = snapshotCase.appearance == "dark" ? NSAppearance(named: .darkAqua) : NSAppearance(named: .aqua)
@@ -229,7 +263,9 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             height: snapshotCase.height,
             file: fileName,
             bytes: pngData.count,
-            sha256: SHA256.hash(data: pngData).hexString
+            sha256: SHA256.hash(data: pngData).hexString,
+            diagnosticCount: result.diagnostics.count,
+            diagnosticKinds: Array(Set(diagnosticKinds)).sorted()
         )
     }
 

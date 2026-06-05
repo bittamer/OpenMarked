@@ -49,6 +49,31 @@ install -d "$APP_DIR/Contents/Resources"
 install -m 755 "$BIN_DIR/OpenMarked" "$APP_DIR/Contents/MacOS/OpenMarked"
 cp -R "$RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
 
+PACKAGED_RESOURCE_BUNDLE="$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
+
+require_packaged_resource() {
+  local resource_name="$1"
+  if ! find "$PACKAGED_RESOURCE_BUNDLE" -type f -name "$resource_name" -print -quit | grep -q .; then
+    echo "Packaged rich content resource is missing: $resource_name" >&2
+    exit 1
+  fi
+}
+
+require_packaged_resource "rich-content-runtime.js"
+require_packaged_resource "rich-content.css"
+require_packaged_resource "mermaid.min.js"
+require_packaged_resource "Mermaid-LICENSE"
+require_packaged_resource "katex.min.js"
+require_packaged_resource "katex.min.css"
+require_packaged_resource "KaTeX-LICENSE"
+require_packaged_resource "KaTeX_Main-Regular.woff2"
+
+katex_woff2_count="$(find "$PACKAGED_RESOURCE_BUNDLE" -type f -name 'KaTeX_*.woff2' | wc -l | tr -d ' ')"
+if [[ "$katex_woff2_count" -lt 10 ]]; then
+  echo "Expected packaged KaTeX WOFF2 fonts, found $katex_woff2_count." >&2
+  exit 1
+fi
+
 sed \
   -e "s|{{VERSION}}|$VERSION|g" \
   -e "s|{{BUILD}}|$BUILD|g" \

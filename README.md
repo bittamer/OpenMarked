@@ -45,6 +45,10 @@ Signing credentials, notarization, Homebrew Cask, and strict hash-based visual r
 
 ![GitHub theme with GFM](Docs/Screenshots/visual-qa/github-gfm-light.png)
 
+![GitHub rich Markdown light](Docs/Screenshots/visual-qa/github-rich-markdown-light.png)
+
+![GitHub rich Markdown dark](Docs/Screenshots/visual-qa/github-rich-markdown-dark.png)
+
 ![Minimal prose theme](Docs/Screenshots/visual-qa/minimal-prose-light.png)
 
 ## Platform
@@ -83,7 +87,7 @@ Create a local developer artifact with:
 Scripts/package_release.sh
 ```
 
-The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.2.0/OpenMarked.app`, copies SwiftPM resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.2.0-macOS.zip` plus `dist/OpenMarked-0.2.0-macOS.dmg`.
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.2.0/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.2.0-macOS.zip` plus `dist/OpenMarked-0.2.0-macOS.dmg`.
 
 By default the app is ad hoc signed. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID certificate. Set `OPENMARKED_NOTARIZE=1` with `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD` to submit the DMG for notarization.
 

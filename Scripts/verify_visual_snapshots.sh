@@ -27,8 +27,14 @@ strict_hashes = sys.argv[3] == "1"
 
 work = json.loads(work_manifest.read_text())
 entries = work.get("snapshots", [])
-if len(entries) < 5:
-    raise SystemExit("Expected at least five visual snapshots")
+if len(entries) < 8:
+    raise SystemExit("Expected at least eight visual snapshots")
+
+required_ids = {"github-rich-markdown-light", "github-rich-markdown-dark", "github-broken-links-light"}
+work_ids = {entry["id"] for entry in entries}
+missing_required_ids = sorted(required_ids - work_ids)
+if missing_required_ids:
+    raise SystemExit(f"Missing required rich Markdown visual snapshots: {', '.join(missing_required_ids)}")
 
 for entry in entries:
     image_path = work_manifest.parent / entry["file"]
@@ -37,10 +43,16 @@ for entry in entries:
     if image_path.stat().st_size < 10_000:
         raise SystemExit(f"Snapshot looks too small to be useful: {image_path}")
 
+broken_links_entry = next(entry for entry in entries if entry["id"] == "github-broken-links-light")
+broken_link_kinds = set(broken_links_entry.get("diagnosticKinds", []))
+required_broken_link_kinds = {"missingHeadingFragment", "missingLocalLink", "unsupportedLinkScheme", "malformedLink"}
+missing_broken_link_kinds = sorted(required_broken_link_kinds - broken_link_kinds)
+if missing_broken_link_kinds:
+    raise SystemExit(f"Broken link snapshot did not record diagnostics: {', '.join(missing_broken_link_kinds)}")
+
 if baseline_manifest.exists():
     baseline = json.loads(baseline_manifest.read_text())
     baseline_ids = {entry["id"] for entry in baseline.get("snapshots", [])}
-    work_ids = {entry["id"] for entry in entries}
     if baseline_ids != work_ids:
         raise SystemExit(f"Snapshot case mismatch. baseline={sorted(baseline_ids)} work={sorted(work_ids)}")
 

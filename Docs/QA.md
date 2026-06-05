@@ -149,11 +149,13 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
    Expected result: the file writes successfully and opens in a browser.
 2. Export `local-images.md` as HTML.
    Expected result: local images are embedded when the setting is enabled.
-3. Copy rendered HTML.
+3. Export `rich-markdown.md` as standalone HTML and open it offline.
+   Expected result: callouts, Mermaid diagrams, and KaTeX math render without CDN access; user-authored scripts remain inert or removed.
+4. Copy rendered HTML.
    Expected result: pasteboard includes rendered HTML and plain text.
-4. Export PDF.
+5. Export PDF.
    Expected result: a PDF is created, print CSS keeps the document readable, and rich content has rendered before capture.
-5. Print.
+6. Print.
    Expected result: the native print panel opens and preview output is readable, including diagrams and equations.
 
 ## Release Gate

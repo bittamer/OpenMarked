@@ -1,11 +1,15 @@
 {
   "appBuild" : "2",
   "appVersion" : "0.2.0",
-  "schemaVersion" : 1,
+  "schemaVersion" : 2,
   "snapshots" : [
     {
       "appearance" : "light",
       "bytes" : 152373,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
       "file" : "default-readme-light.png",
       "fixturePath" : "Fixtures\/Markdown\/README.md",
       "height" : 720,
@@ -17,6 +21,10 @@
     {
       "appearance" : "light",
       "bytes" : 168266,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
       "file" : "github-gfm-light.png",
       "fixturePath" : "Fixtures\/Markdown\/gfm.md",
       "height" : 720,
@@ -28,6 +36,10 @@
     {
       "appearance" : "light",
       "bytes" : 169662,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
       "file" : "minimal-prose-light.png",
       "fixturePath" : "Fixtures\/Markdown\/prose.md",
       "height" : 720,
@@ -39,6 +51,10 @@
     {
       "appearance" : "light",
       "bytes" : 181129,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
       "file" : "github-rich-markdown-light.png",
       "fixturePath" : "Fixtures\/Markdown\/rich-markdown.md",
       "height" : 720,
@@ -48,8 +64,46 @@
       "width" : 960
     },
     {
+      "appearance" : "dark",
+      "bytes" : 180351,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "github-rich-markdown-dark.png",
+      "fixturePath" : "Fixtures\/Markdown\/rich-markdown.md",
+      "height" : 720,
+      "id" : "github-rich-markdown-dark",
+      "sha256" : "82b5a677b6d540f31bf9d8d68eee29df1bb9d7808b7006e9a9c173f2ad1dbd02",
+      "themeID" : "github",
+      "width" : 960
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 129159,
+      "diagnosticCount" : 6,
+      "diagnosticKinds" : [
+        "malformedLink",
+        "missingHeadingFragment",
+        "missingLocalImage",
+        "missingLocalLink",
+        "unsupportedLinkScheme"
+      ],
+      "file" : "github-broken-links-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/broken-links.md",
+      "height" : 720,
+      "id" : "github-broken-links-light",
+      "sha256" : "19faeeccd21af1e625fc45acff4d25efd6a0b7fa81714af9e6ecd97e5095aaf1",
+      "themeID" : "github",
+      "width" : 960
+    },
+    {
       "appearance" : "light",
       "bytes" : 84881,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
       "file" : "default-local-images-light.png",
       "fixturePath" : "Fixtures\/Markdown\/local-images.md",
       "height" : 720,
@@ -61,6 +115,10 @@
     {
       "appearance" : "dark",
       "bytes" : 184298,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
       "file" : "github-long-document-dark.png",
       "fixturePath" : "Fixtures\/Markdown\/long-document.md",
       "height" : 720,

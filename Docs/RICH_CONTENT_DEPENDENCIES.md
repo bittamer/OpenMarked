@@ -21,6 +21,7 @@ These pins were checked against the npm registry on 2026-06-05.
 - Updates must be deliberate commits, not floating version ranges.
 - Release ASCII checks intentionally exclude the upstream minified Mermaid/KaTeX payloads so those assets remain byte-for-byte vendored from npm.
 - KaTeX CSS font references are rewritten through `RichContentAssetStore` so packaged builds load fonts from bundled local files.
+- `Scripts/package_release.sh` verifies the packaged app bundle contains OpenMarked rich CSS/runtime, Mermaid runtime/license, KaTeX runtime/CSS/license, and KaTeX WOFF2 fonts.
 
 ## Vendored Resource Layout
 

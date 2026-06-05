@@ -11,6 +11,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     private let stateStore = DocumentWindowStateStore.shared
     private let renderer: MarkdownRenderer = CMarkGFMRenderer()
+    private var sourceWatcher: FileSystemWatcher?
+    private var assetWatchers: [URL: FileSystemWatcher] = [:]
 
     weak var window: NSWindow? {
         didSet {
@@ -26,6 +28,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func open(url: URL) {
+        stopLivePreview()
         state.beginOpening(url: url)
         updateWindowTitle()
 
@@ -37,6 +40,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                 state.applyRestoredLayout(restoredState.layout)
             }
             render(markdownDocument)
+            startSourceWatcher(for: markdownDocument)
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
             persistCurrentWindowState()
         } catch let error as DocumentOpenError {
@@ -54,7 +58,13 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         updateWindowTitle()
     }
 
+    func close() {
+        persistCurrentWindowState()
+        stopLivePreview()
+    }
+
     func showNoSupportedFilesError() {
+        stopLivePreview()
         state.failOpening(
             DocumentOpenError(
                 kind: .noSupportedFiles,
@@ -74,8 +84,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             let openedDocument = OpenedDocument(markdownDocument: reloadedDocument)
             state.finishOpening(document: openedDocument)
             render(reloadedDocument)
+            startSourceWatcher(for: reloadedDocument)
             persistCurrentWindowState()
         } catch let error as DocumentOpenError {
+            stopLivePreview()
             state.failOpening(error)
         } catch {
             state.failRendering(error)
@@ -196,8 +208,103 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                 )
             )
             state.finishRendering(result)
+            updateAssetWatchers(from: result, document: markdownDocument)
         } catch {
             state.failRendering(error)
+        }
+    }
+
+    private func startSourceWatcher(for markdownDocument: MarkdownDocument, markWatching: Bool = true) {
+        sourceWatcher?.stop()
+        let watcher = FileSystemWatcher(url: markdownDocument.sourceURL) { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.handleSourceFileEvent(event)
+            }
+        }
+        watcher.start()
+        sourceWatcher = watcher
+        if markWatching {
+            state.noteLivePreviewWatching()
+        }
+    }
+
+    private func updateAssetWatchers(from renderResult: RenderResult, document: MarkdownDocument) {
+        let sourcePath = document.sourceURL.standardizedFileURL.path
+        let assetURLs = Set(
+            LocalAssetReferenceExtractor
+                .imageURLs(from: renderResult.bodyHTML, document: document)
+                .map(\.standardizedFileURL)
+                .filter { $0.path != sourcePath }
+        )
+
+        for watchedURL in Set(assetWatchers.keys).subtracting(assetURLs) {
+            assetWatchers[watchedURL]?.stop()
+            assetWatchers.removeValue(forKey: watchedURL)
+        }
+
+        for assetURL in assetURLs.subtracting(Set(assetWatchers.keys)) {
+            let watcher = FileSystemWatcher(url: assetURL) { [weak self] event in
+                Task { @MainActor [weak self] in
+                    self?.handleAssetFileEvent(event)
+                }
+            }
+            watcher.start()
+            assetWatchers[assetURL] = watcher
+        }
+    }
+
+    private func stopLivePreview() {
+        sourceWatcher?.stop()
+        sourceWatcher = nil
+
+        for watcher in assetWatchers.values {
+            watcher.stop()
+        }
+        assetWatchers.removeAll()
+    }
+
+    private func handleSourceFileEvent(_ event: FileWatchEvent) {
+        guard let markdownDocument = state.currentMarkdownDocument,
+              markdownDocument.sourceURL.standardizedFileURL.path == event.url.standardizedFileURL.path else {
+            return
+        }
+
+        reloadForLivePreview(forceRender: false)
+    }
+
+    private func handleAssetFileEvent(_ event: FileWatchEvent) {
+        guard assetWatchers[event.url.standardizedFileURL] != nil else {
+            return
+        }
+
+        reloadForLivePreview(forceRender: true)
+    }
+
+    private func reloadForLivePreview(forceRender: Bool) {
+        guard let currentDocument = state.currentDocument,
+              let currentMarkdownDocument = currentDocument.markdownDocument else {
+            return
+        }
+
+        state.beginLivePreviewUpdate()
+
+        do {
+            let reloadedDocument = try MarkdownDocumentLoader.load(url: currentMarkdownDocument.sourceURL)
+            let sourceTextChanged = reloadedDocument.sourceText != currentMarkdownDocument.sourceText
+            guard forceRender || sourceTextChanged else {
+                state.noteLivePreviewWatching()
+                return
+            }
+
+            state.finishOpening(document: OpenedDocument(markdownDocument: reloadedDocument, openedAt: currentDocument.openedAt))
+            render(reloadedDocument)
+            state.finishLivePreviewUpdate()
+            startSourceWatcher(for: reloadedDocument, markWatching: false)
+            persistCurrentWindowState()
+        } catch let error as DocumentOpenError {
+            state.failLivePreviewUpdate(error)
+        } catch {
+            state.failLivePreviewUpdate(error)
         }
     }
 }

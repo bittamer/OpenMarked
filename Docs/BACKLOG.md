@@ -63,7 +63,12 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 6: Live Preview
 
-- [ ] MVP-601 through MVP-606.
+- [x] MVP-601: Implement File Watcher Abstraction.
+- [x] MVP-602: Connect Watcher to Render Pipeline.
+- [x] MVP-603: Debounce and Coalesce Updates.
+- [x] MVP-604: Handle File Missing, Moved, or Permission Lost.
+- [x] MVP-605: Watch Local Image Assets.
+- [x] MVP-606: Add Update Feedback.
 
 ## Phase 7: Navigation and Document Tools
 

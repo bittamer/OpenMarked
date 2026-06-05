@@ -51,7 +51,7 @@ struct ContentView: View {
             controller.updateWindowTitle()
         }
         .onDisappear {
-            controller.persistCurrentWindowState()
+            controller.close()
         }
         .dropDestination(for: URL.self) { urls, _ in
             appController.openDroppedURLs(urls, into: controller)
@@ -398,6 +398,10 @@ private struct StatusBar: View {
             if let diagnostics = controller.state.currentRenderResult?.diagnostics, !diagnostics.isEmpty {
                 Text("\(diagnostics.count) warning\(diagnostics.count == 1 ? "" : "s")")
             }
+            if let livePreviewStatusTitle {
+                Label(livePreviewStatusTitle, systemImage: livePreviewStatusIcon)
+                    .labelStyle(.titleAndIcon)
+            }
             Text(PreviewThemeStore.theme(id: controller.state.layout.selectedThemeID).name)
             Text("Zoom \(Int((controller.state.layout.fontScale * 100).rounded()))%")
         }
@@ -431,6 +435,34 @@ private struct StatusBar: View {
             return "checkmark.circle"
         case .error:
             return "exclamationmark.circle"
+        }
+    }
+
+    private var livePreviewStatusTitle: String? {
+        switch controller.state.livePreview {
+        case .inactive:
+            return nil
+        case .watching:
+            return "Watching"
+        case .updating:
+            return "Updating"
+        case .updated:
+            return "Updated just now"
+        case .failed:
+            return "Update failed"
+        }
+    }
+
+    private var livePreviewStatusIcon: String {
+        switch controller.state.livePreview {
+        case .inactive, .watching:
+            return "eye"
+        case .updating:
+            return "arrow.triangle.2.circlepath"
+        case .updated:
+            return "bolt"
+        case .failed:
+            return "exclamationmark.triangle"
         }
     }
 }

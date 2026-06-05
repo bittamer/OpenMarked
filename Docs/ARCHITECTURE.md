@@ -73,6 +73,18 @@ Built-in themes:
 
 The renderer injects screen CSS, code CSS, print CSS, `--om-font-scale`, and `--om-content-max-width` into the assembled HTML. Code blocks are pre-highlighted in Swift for common MVP languages so preview and future exports work offline without remote scripts.
 
+## Live Preview Direction
+
+Phase 6 uses `FileSystemWatcher` in `OpenMarkedCore` for debounced file-system events.
+
+Live preview behavior:
+
+- The source Markdown file is watched with a direct file descriptor plus a parent-directory watcher so normal saves and atomic replacement saves are both detected.
+- Source changes reload the document, skip duplicate source text, render once, preserve scroll through the existing WebView reload path, and do not activate or steal focus from other apps.
+- Local image references are extracted from rendered HTML and watched separately, including missing images whose parent directory exists.
+- Missing, moved, or unreadable source files leave the window open and show preview/update failure feedback instead of crashing or replacing the whole window state.
+- Watchers are restarted when documents reload and stopped when windows close.
+
 ## Sandboxing Direction
 
 OpenMarked should be designed for sandboxed file access:

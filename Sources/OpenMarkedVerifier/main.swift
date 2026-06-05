@@ -1,10 +1,29 @@
 import Foundation
+import Dispatch
 import OpenMarkedCore
 
 func verify(_ condition: @autoclosure () -> Bool, _ message: String) {
     if !condition() {
         FileHandle.standardError.write(Data("Verification failed: \(message)\n".utf8))
         exit(1)
+    }
+}
+
+final class WatchEventBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var event: FileWatchEvent?
+
+    func store(_ event: FileWatchEvent) {
+        lock.lock()
+        self.event = event
+        lock.unlock()
+    }
+
+    func load() -> FileWatchEvent? {
+        lock.lock()
+        let event = self.event
+        lock.unlock()
+        return event
     }
 }
 
@@ -40,6 +59,12 @@ state.zoomIn()
 verify(state.layout.fontScale > 1.0, "zoomIn should increase font scale")
 state.resetZoom()
 verify(state.layout.fontScale == 1.0, "resetZoom should restore default font scale")
+state.noteLivePreviewWatching()
+verify(state.livePreview == .watching, "live preview should enter watching state")
+state.beginLivePreviewUpdate()
+verify(state.livePreview == .updating, "live preview should enter updating state")
+state.finishLivePreviewUpdate(updatedAt: Date(timeIntervalSince1970: 1))
+verify(state.livePreview == .updated(Date(timeIntervalSince1970: 1)), "live preview should record update feedback")
 
 do {
     _ = try DocumentOpenValidator.validate(url: URL(fileURLWithPath: "Package.swift"))
@@ -94,6 +119,8 @@ let localImageURL = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").st
 let localImageDocument = try MarkdownDocumentLoader.load(url: localImageURL, createBookmark: false)
 let localImageResult = try renderer.render(RenderRequest(document: localImageDocument))
 verify(localImageResult.diagnostics.isEmpty, "existing local image fixture should not warn")
+let localImageAssetURLs = LocalAssetReferenceExtractor.imageURLs(from: localImageResult.bodyHTML, document: localImageDocument)
+verify(localImageAssetURLs.contains { $0.lastPathComponent == "sample-mark.svg" }, "local image assets should be extractable for live watching")
 
 let missingURL = URL(fileURLWithPath: "Fixtures/Markdown/missing-image-temp.md").standardizedFileURL
 try "# Missing\n\n![Nope](missing.png)\n".write(to: missingURL, atomically: true, encoding: .utf8)
@@ -118,4 +145,53 @@ let sanitizedHTML = PreviewHTMLSecurityPolicy.sanitize(unsafeHTML)
 verify(!sanitizedHTML.contains("<script"), "preview sanitizer should remove script tags")
 verify(!sanitizedHTML.contains("onclick"), "preview sanitizer should remove event handler attributes")
 
-print("OpenMarked Phase 5 verifier passed.")
+let watcherDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("OpenMarkedWatcherVerifier-\(UUID().uuidString)", isDirectory: true)
+try FileManager.default.createDirectory(at: watcherDirectory, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: watcherDirectory) }
+
+func waitForWatchEvent(
+    url: URL,
+    debounceInterval: TimeInterval = 0.05,
+    timeout: DispatchTimeInterval = .seconds(3),
+    change: (URL) throws -> Void
+) throws -> FileWatchEvent {
+    let semaphore = DispatchSemaphore(value: 0)
+    let eventBox = WatchEventBox()
+    let watcher = FileSystemWatcher(url: url, debounceInterval: debounceInterval, callbackQueue: .global()) { event in
+        eventBox.store(event)
+        semaphore.signal()
+    }
+
+    watcher.start()
+    Thread.sleep(forTimeInterval: 0.12)
+    try change(url)
+    let result = semaphore.wait(timeout: .now() + timeout)
+    watcher.stop()
+
+    verify(result == .success, "watcher should emit an event for \(url.lastPathComponent)")
+    return eventBox.load() ?? FileWatchEvent(url: url, kind: .changed)
+}
+
+let watchedFileURL = watcherDirectory.appendingPathComponent("live.md")
+try "# Live\n".write(to: watchedFileURL, atomically: true, encoding: .utf8)
+let writeEvent = try waitForWatchEvent(url: watchedFileURL) { url in
+    try "# Live\n\nUpdated.\n".write(to: url, atomically: false, encoding: .utf8)
+}
+verify(writeEvent.kind == .changed || writeEvent.kind == .replaced, "normal writes should be detected")
+
+let replacementEvent = try waitForWatchEvent(url: watchedFileURL) { url in
+    let replacementURL = watcherDirectory.appendingPathComponent("live-replacement.md")
+    try "# Live\n\nAtomic replacement.\n".write(to: replacementURL, atomically: true, encoding: .utf8)
+    try FileManager.default.removeItem(at: url)
+    try FileManager.default.moveItem(at: replacementURL, to: url)
+}
+verify(replacementEvent.kind == .deleted || replacementEvent.kind == .replaced || replacementEvent.kind == .changed, "atomic replacement should be detected")
+
+let missingWatchedURL = watcherDirectory.appendingPathComponent("later-image.png")
+let creationEvent = try waitForWatchEvent(url: missingWatchedURL) { url in
+    try Data([0x89, 0x50, 0x4E, 0x47]).write(to: url)
+}
+verify(creationEvent.kind == .replaced || creationEvent.kind == .changed, "creation of a missing watched file should be detected")
+
+print("OpenMarked Phase 6 verifier passed.")

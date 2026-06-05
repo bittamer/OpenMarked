@@ -160,21 +160,32 @@ public struct WindowLayoutState: Equatable {
 
 extension WindowLayoutState: Codable, Sendable {}
 
+public enum LivePreviewStatus: Equatable, Sendable {
+    case inactive
+    case watching
+    case updating
+    case updated(Date)
+    case failed(String)
+}
+
 public struct DocumentWindowState: Equatable {
     public var content: WindowContentState
     public var preview: PreviewShellState
     public var layout: WindowLayoutState
+    public var livePreview: LivePreviewStatus
     public var statusMessage: String
 
     public init(
         content: WindowContentState = .empty,
         preview: PreviewShellState = .idle,
         layout: WindowLayoutState = WindowLayoutState(),
+        livePreview: LivePreviewStatus = .inactive,
         statusMessage: String = "No document"
     ) {
         self.content = content
         self.preview = preview
         self.layout = layout
+        self.livePreview = livePreview
         self.statusMessage = statusMessage
     }
 
@@ -224,6 +235,7 @@ public struct DocumentWindowState: Equatable {
     public mutating func beginOpening(url: URL) {
         content = .loading(PendingDocument(url: url))
         preview = .loading
+        livePreview = .inactive
         statusMessage = "Opening \(url.lastPathComponent)"
     }
 
@@ -261,12 +273,14 @@ public struct DocumentWindowState: Equatable {
     public mutating func failOpening(_ error: DocumentOpenError) {
         content = .error(error)
         preview = .error(PreviewError(documentOpenError: error))
+        livePreview = .inactive
         statusMessage = error.message
     }
 
     public mutating func resetToEmpty() {
         content = .empty
         preview = .idle
+        livePreview = .inactive
         statusMessage = "No document"
     }
 
@@ -297,5 +311,30 @@ public struct DocumentWindowState: Equatable {
 
     public mutating func notePlaceholderAction(_ message: String) {
         statusMessage = message
+    }
+
+    public mutating func noteLivePreviewWatching() {
+        livePreview = .watching
+    }
+
+    public mutating func beginLivePreviewUpdate() {
+        livePreview = .updating
+    }
+
+    public mutating func finishLivePreviewUpdate(updatedAt: Date = Date()) {
+        livePreview = .updated(updatedAt)
+    }
+
+    public mutating func failLivePreviewUpdate(_ error: DocumentOpenError) {
+        preview = .error(PreviewError(documentOpenError: error))
+        livePreview = .failed(error.message)
+        statusMessage = error.message
+    }
+
+    public mutating func failLivePreviewUpdate(_ error: Error) {
+        let previewError = PreviewError(error: error)
+        preview = .error(previewError)
+        livePreview = .failed(previewError.message)
+        statusMessage = previewError.message
     }
 }

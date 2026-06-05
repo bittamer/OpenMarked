@@ -415,6 +415,37 @@ public enum RenderDiagnosticsCollector {
     }
 
     private static func collectMissingLocalImages(from html: String, document: MarkdownDocument) -> [RenderDiagnostic] {
+        let imageURLsBySource = LocalAssetReferenceExtractor.localImageSources(from: html, document: document)
+        return imageURLsBySource.compactMap { source, imageURL in
+            guard !FileManager.default.fileExists(atPath: imageURL.path) else {
+                return nil
+            }
+
+            return RenderDiagnostic(
+                severity: .warning,
+                kind: .missingLocalImage,
+                message: "Local image '\(source)' could not be found.",
+                source: source
+            )
+        }
+    }
+}
+
+public enum LocalAssetReferenceExtractor {
+    public static func imageURLs(from html: String, document: MarkdownDocument) -> [URL] {
+        let urls = localImageSources(from: html, document: document).map(\.url)
+        var seen = Set<String>()
+        return urls.filter { url in
+            let key = url.standardizedFileURL.path
+            guard !seen.contains(key) else {
+                return false
+            }
+            seen.insert(key)
+            return true
+        }
+    }
+
+    public static func localImageSources(from html: String, document: MarkdownDocument) -> [(source: String, url: URL)] {
         let pattern = #"<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return []
@@ -433,17 +464,11 @@ public enum RenderDiagnosticsCollector {
                 return nil
             }
 
-            let imageURL = URL(fileURLWithPath: source, relativeTo: document.sourceURL.deletingLastPathComponent()).standardizedFileURL
-            guard !FileManager.default.fileExists(atPath: imageURL.path) else {
+            guard let imageURL = localFileURL(for: source, relativeTo: document.sourceURL.deletingLastPathComponent()) else {
                 return nil
             }
 
-            return RenderDiagnostic(
-                severity: .warning,
-                kind: .missingLocalImage,
-                message: "Local image '\(source)' could not be found.",
-                source: source
-            )
+            return (source, imageURL)
         }
     }
 
@@ -461,6 +486,21 @@ public enum RenderDiagnosticsCollector {
         }
 
         return true
+    }
+
+    private static func localFileURL(for source: String, relativeTo baseURL: URL) -> URL? {
+        if let components = URLComponents(string: source), let scheme = components.scheme {
+            guard scheme == "file" else {
+                return nil
+            }
+            return URL(string: source)?.standardizedFileURL
+        }
+
+        if let components = URLComponents(string: source), !components.path.isEmpty {
+            return URL(fileURLWithPath: components.path, relativeTo: baseURL).standardizedFileURL
+        }
+
+        return URL(fileURLWithPath: source, relativeTo: baseURL).standardizedFileURL
     }
 }
 

@@ -1,4 +1,5 @@
 @testable import OpenMarkedCore
+import Foundation
 
 #if canImport(XCTest)
 import XCTest
@@ -36,6 +37,18 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(state.windowTitle, "readme.md")
         XCTAssertTrue(state.canReloadPreview)
         XCTAssertTrue(state.canExport)
+    }
+
+    func testLivePreviewStateTransitions() {
+        var state = DocumentWindowState()
+
+        XCTAssertEqual(state.livePreview, .inactive)
+        state.noteLivePreviewWatching()
+        XCTAssertEqual(state.livePreview, .watching)
+        state.beginLivePreviewUpdate()
+        XCTAssertEqual(state.livePreview, .updating)
+        state.finishLivePreviewUpdate(updatedAt: Date(timeIntervalSince1970: 1))
+        XCTAssertEqual(state.livePreview, .updated(Date(timeIntervalSince1970: 1)))
     }
 
     func testMarkdownDocumentLoadsSourceAndStats() throws {
@@ -146,6 +159,15 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingLocalImage })
     }
 
+    func testLocalAssetReferenceExtractorFindsImages() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let imageURLs = LocalAssetReferenceExtractor.imageURLs(from: result.bodyHTML, document: document)
+
+        XCTAssertTrue(imageURLs.contains { $0.lastPathComponent == "sample-mark.svg" })
+    }
+
     func testFootnotesRenderWhenEnabled() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/footnotes.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -218,6 +240,19 @@ struct AppInfoTests {
         #expect(state.canExport)
     }
 
+    @Test("Live preview state transitions are tracked separately")
+    func livePreviewStateTransitions() {
+        var state = DocumentWindowState()
+
+        #expect(state.livePreview == .inactive)
+        state.noteLivePreviewWatching()
+        #expect(state.livePreview == .watching)
+        state.beginLivePreviewUpdate()
+        #expect(state.livePreview == .updating)
+        state.finishLivePreviewUpdate(updatedAt: Date(timeIntervalSince1970: 1))
+        #expect(state.livePreview == .updated(Date(timeIntervalSince1970: 1)))
+    }
+
     @Test("Markdown document loads source and statistics")
     func markdownDocumentLoadsSourceAndStats() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
@@ -287,6 +322,16 @@ struct AppInfoTests {
         #expect(result.bodyHTML.contains("<del>scope creep</del>"))
         #expect(result.bodyHTML.contains(#"type="checkbox""#))
         #expect(result.bodyHTML.contains("<table>"))
+    }
+
+    @Test("Local asset extractor finds image references")
+    func localAssetReferenceExtractorFindsImages() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let imageURLs = LocalAssetReferenceExtractor.imageURLs(from: result.bodyHTML, document: document)
+
+        #expect(imageURLs.contains { $0.lastPathComponent == "sample-mark.svg" })
     }
 
     @Test("Preview state can hold render result")

@@ -747,7 +747,10 @@ final class AppInfoTests: XCTestCase {
         let theme = PreviewThemeStore.theme(id: "github")
         let result = try CMarkGFMRenderer().render(RenderRequest(document: document, theme: theme, fontScale: 1.3))
 
-        XCTAssertEqual(PreviewThemeStore.allBuiltInThemes.map(\.id), ["default", "github", "minimal"])
+        XCTAssertEqual(
+            PreviewThemeStore.allBuiltInThemes.map(\.id),
+            ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
+        )
         XCTAssertEqual(PreviewThemeStore.theme(id: "missing").id, "default")
         XCTAssertTrue(result.fullHTML.contains("--om-font-scale: 1.300"))
         XCTAssertTrue(result.fullHTML.contains("Segoe UI"))
@@ -1648,7 +1651,10 @@ struct AppInfoTests {
         let theme = PreviewThemeStore.theme(id: "github")
         let result = try CMarkGFMRenderer().render(RenderRequest(document: document, theme: theme, fontScale: 1.3))
 
-        #expect(PreviewThemeStore.allBuiltInThemes.map(\.id) == ["default", "github", "minimal"])
+        #expect(
+            PreviewThemeStore.allBuiltInThemes.map(\.id)
+                == ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
+        )
         #expect(PreviewThemeStore.theme(id: "missing").id == "default")
         #expect(result.fullHTML.contains("--om-font-scale: 1.300"))
         #expect(result.fullHTML.contains("Segoe UI"))

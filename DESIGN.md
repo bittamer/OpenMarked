@@ -357,11 +357,22 @@ OpenMarked should be beautiful because the preview is beautiful, not because the
 
 ### Preview Themes
 
-The current MVP ships three built-in themes:
+OpenMarked ships ten built-in themes. The three foundational themes are:
 
 - **Default**: editorial reading style with light and dark variants.
 - **GitHub**: README-oriented rendering for common repository documents.
 - **Minimal**: restrained, print-friendly rendering.
+
+A set of popular developer colour palettes is also included, each with faithful
+light and dark variants driven by the system appearance:
+
+- **Catppuccin** (Latte / Mocha)
+- **Tokyo Night** (Day / Night)
+- **Everforest** (light / dark)
+- **Nord** (Snow Storm / Polar Night)
+- **Rosé Pine** (Dawn / Moon)
+- **Dracula** (Alucard / Dracula)
+- **Gruvbox** (light / dark)
 
 Future themes can cover additional needs:
 

@@ -1,0 +1,55 @@
+@page {
+  margin: 0.8in;
+}
+
+body {
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.om-document {
+  max-width: none;
+  padding: 0;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #000000;
+}
+
+a {
+  color: #000000;
+}
+
+pre,
+blockquote,
+.om-callout,
+table,
+img {
+  break-inside: avoid;
+}
+
+pre {
+  background: #f6f6f6;
+  border: 1px solid #d0d0d0;
+}
+
+code {
+  background: #f0f0f0;
+}
+
+.om-callout {
+  background: #f4f4f4;
+  color: #1a1a1a;
+  border-left: 3pt solid #444444;
+}
+
+.om-callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+th, td {
+  border: 1px solid #bbbbbb;
+}

@@ -1,0 +1,48 @@
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: #e5e9f0;
+  border-radius: 4px;
+  padding: 0.08em 0.28em;
+}
+
+pre {
+  overflow: auto;
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: #e8ecf2;
+  border: 1px solid #d8dee9;
+}
+
+pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  font-size: 0.9em;
+  line-height: 1.55;
+}
+
+.om-code-keyword { color: #5e81ac; font-weight: 650; }
+.om-code-string { color: #7a8c4e; }
+.om-code-number { color: #8a6a96; }
+.om-code-comment { color: #7b88a1; font-style: italic; }
+.om-code-property { color: #5e81ac; }
+.om-code-tag { color: #bf616a; }
+
+@media (prefers-color-scheme: dark) {
+  code {
+    background: #3b4252;
+  }
+
+  pre {
+    background: #292e39;
+    border-color: #434c5e;
+  }
+
+  .om-code-keyword { color: #81a1c1; }
+  .om-code-string { color: #a3be8c; }
+  .om-code-number { color: #b48ead; }
+  .om-code-comment { color: #616e88; }
+  .om-code-property { color: #88c0d0; }
+  .om-code-tag { color: #bf616a; }
+}

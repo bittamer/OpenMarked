@@ -35,7 +35,14 @@ public enum PreviewThemeStore {
         [
             builtInTheme(id: "default"),
             builtInTheme(id: "github"),
-            builtInTheme(id: "minimal")
+            builtInTheme(id: "minimal"),
+            builtInTheme(id: "catppuccin"),
+            builtInTheme(id: "tokyo-night"),
+            builtInTheme(id: "everforest"),
+            builtInTheme(id: "nord"),
+            builtInTheme(id: "rose-pine"),
+            builtInTheme(id: "dracula"),
+            builtInTheme(id: "gruvbox")
         ]
     }
 
@@ -49,6 +56,20 @@ public enum PreviewThemeStore {
             return loadTheme(id: "github", name: "GitHub", supportsDarkMode: true, defaultMaxWidth: 980)
         case "minimal":
             return loadTheme(id: "minimal", name: "Minimal", supportsDarkMode: true, defaultMaxWidth: 760)
+        case "catppuccin":
+            return loadTheme(id: "catppuccin", name: "Catppuccin", supportsDarkMode: true, defaultMaxWidth: 880)
+        case "tokyo-night":
+            return loadTheme(id: "tokyo-night", name: "Tokyo Night", supportsDarkMode: true, defaultMaxWidth: 880)
+        case "everforest":
+            return loadTheme(id: "everforest", name: "Everforest", supportsDarkMode: true, defaultMaxWidth: 880)
+        case "nord":
+            return loadTheme(id: "nord", name: "Nord", supportsDarkMode: true, defaultMaxWidth: 880)
+        case "rose-pine":
+            return loadTheme(id: "rose-pine", name: "Rosé Pine", supportsDarkMode: true, defaultMaxWidth: 880)
+        case "dracula":
+            return loadTheme(id: "dracula", name: "Dracula", supportsDarkMode: true, defaultMaxWidth: 880)
+        case "gruvbox":
+            return loadTheme(id: "gruvbox", name: "Gruvbox", supportsDarkMode: true, defaultMaxWidth: 880)
         default:
             return loadTheme(id: "default", name: "Default", supportsDarkMode: true, defaultMaxWidth: 820)
         }

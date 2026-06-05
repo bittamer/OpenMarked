@@ -26,7 +26,7 @@ This repository currently contains:
 - Local link, heading-fragment, cross-document heading, malformed URL, and unsupported-scheme diagnostics.
 - Offline Mermaid diagram and KaTeX math rendering using bundled local assets rather than CDN dependencies.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
-- Built-in preview themes, print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
+- Ten built-in preview themes — Default, GitHub, Minimal, plus popular palettes (Catppuccin, Tokyo Night, Everforest, Nord, Rosé Pine, Dracula, Gruvbox), each with light and dark variants — alongside print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
 - Outline filtering, rendered-preview search, richer status statistics, diagnostics popover, and source file actions.
 - Standalone HTML export, copy rendered HTML, PDF export, print, and export error handling.

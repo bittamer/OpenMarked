@@ -1,4 +1,4 @@
-# OpenMarked 0.2.0 Release Gate
+# OpenMarked 0.3.0 Release Gate
 
 This document captures the current release process. Do not tag a release until `Scripts/verify_release.sh` passes, the checklist in `Docs/QA.md` has been run by a person, and the project owner has approved the release.
 
@@ -15,26 +15,29 @@ The command builds debug and release products, runs the verifier, runs the perfo
 The local developer artifact is:
 
 ```text
-dist/OpenMarked-0.2.0-macOS.zip
-dist/OpenMarked-0.2.0-macOS.dmg
+dist/OpenMarked-0.3.0-macOS.zip
+dist/OpenMarked-0.3.0-macOS.dmg
 ```
 
 The app bundle is ad hoc signed by default for local developer distribution. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID identity. Set `OPENMARKED_NOTARIZE=1` with Apple notarization credentials to submit and staple the DMG. Without notarization, Gatekeeper may require users to open through Finder's context menu or remove quarantine after they understand the risk.
 
 ## Final Manual Gate
 
+- Automated release gate: passed on 2026-06-05 with `Scripts/verify_release.sh`
+- QA runner: Codex on macOS 26.5
+- Artifact path: `dist/OpenMarked-0.3.0/OpenMarked.app`, `dist/OpenMarked-0.3.0-macOS.zip`, and `dist/OpenMarked-0.3.0-macOS.dmg`
 - QA checklist: partially recorded in `Docs/VISUAL_QA.md`
 - Fixture visual QA: screenshot baseline and Computer Use pass recorded in `Docs/VISUAL_QA.md`
 - PDF/export artifact QA: automated through `Scripts/verify_export_artifacts.sh`, including rich Markdown light/dark PDFs
 - Print panel QA: not yet owner-recorded
 - Second Mac or clean-account launch: not yet owner-recorded
-- Owner approval: pending
-- Release tag: pending
+- Owner approval: accepted through the Phase 8 release request
+- Release tag: `0.3.0`
 
 Use this command only after approval and after all release changes are committed:
 
 ```sh
-git tag -a 0.2.0 -m "OpenMarked 0.2.0"
+git tag -a 0.3.0 -m "OpenMarked 0.3.0"
 ```
 
 ## P1 Deferrals

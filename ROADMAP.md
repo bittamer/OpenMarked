@@ -4,7 +4,7 @@
 
 The MVP is a native macOS Markdown previewer that can open local Markdown files, render them beautifully, follow edits from external editors, navigate long documents, and export HTML/PDF.
 
-Current state: 0.1.0 is tagged. 0.2.0 adds distribution and QA hardening on top of the MVP.
+Current state: 0.1.0 and 0.2.0 are tagged. 0.3.0 adds the Markdown Power Pack on top of the hardened MVP.
 
 ### 0.1.0-alpha.1: Foundation
 
@@ -58,7 +58,7 @@ Make the MVP easier to trust, install, test, and visually validate.
 - Add crash/log collection guidance for issue reports without sending user data anywhere.
 - Add a small screenshots/gallery section to README.
 
-## Recommended Next Milestone: 0.3.0 Markdown Power Pack
+## 0.3.0 Markdown Power Pack
 
 Add the highest-value Markdown extensions that make the app more useful for developers and technical writers.
 

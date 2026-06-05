@@ -1,11 +1,11 @@
 # OpenMarked Visual QA
 
 Date: 2026-06-05
-Version: 0.2.0
-Build: 2
-Artifact: `dist/OpenMarked-0.2.0/OpenMarked.app`
+Version: 0.3.0
+Build: 3
+Artifact: `dist/OpenMarked-0.3.0/OpenMarked.app`
 
-This record covers the tagged 0.2.0 app baseline and the current 0.3.0 development snapshot fixtures.
+This record covers the 0.3.0 release snapshot fixtures.
 
 ## Automated Snapshot Coverage
 
@@ -41,7 +41,7 @@ The export verifier renders the same visual fixture matrix and writes PDF artifa
 
 ## 0.3.0 Rich Markdown Pass
 
-For Phase 7, `swift run OpenMarkedSnapshotter --output .build/openmarked-visual-snapshots --pdf-output .build/openmarked-visual-pdfs` captured the rich Markdown fixture in light and dark appearances and exported PDFs. `github-rich-markdown-dark.png` was inspected visually and showed GitHub callouts, a Mermaid SVG diagram, inline KaTeX math, display KaTeX math, and links without blank placeholders or layout overlap.
+For Phase 8, `swift run OpenMarkedSnapshotter --output .build/openmarked-visual-snapshots --pdf-output .build/openmarked-visual-pdfs` captured the rich Markdown fixture in light and dark appearances and exported PDFs. `github-rich-markdown-dark.png` was inspected visually and showed GitHub callouts, a Mermaid SVG diagram, inline KaTeX math, display KaTeX math, and links without blank placeholders or layout overlap.
 
 ## Computer Use Pass
 

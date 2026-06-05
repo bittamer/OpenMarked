@@ -1,36 +1,62 @@
-# OpenMarked 0.2.0
+# OpenMarked 0.3.0
 
-OpenMarked 0.2.0 hardens the MVP release with visual QA, export verification, screenshots, and improved packaging.
+OpenMarked 0.3.0 adds the Markdown Power Pack: GitHub callouts, Mermaid diagrams, KaTeX math, and local link diagnostics in a native macOS Markdown viewer.
 
 ## Highlights
 
-- Native macOS app shell with a regular app menu bar, standard app/window commands, file open, drag/drop, Dock file opening, recent documents, toolbar controls, Markdown-specific menus, and keyboard shortcuts.
-- CommonMark and GitHub Flavored Markdown rendering through `cmark-gfm`, including tables, strikethrough, task lists, autolinks, and footnotes.
-- Heading IDs, outline navigation, outline filtering, rendered-preview search, document statistics, and diagnostics.
-- Built-in Default, GitHub, and Minimal themes with print CSS and offline code highlighting.
-- WKWebView preview with document-relative assets, external link handling, scroll preservation, and script/event-handler sanitization.
-- Live preview for source edits, atomic replacement saves, and local image asset changes.
-- Standalone HTML export, copy rendered HTML, PDF export, and native Print.
-- Settings for preview defaults, content policy, export defaults, live updates, scroll preservation, and optional session restoration.
-- Accessibility labels for primary controls and states, plus reduced-motion-aware preview navigation.
-- WebKit screenshot baselines for built-in themes, GFM tables/code, local images, and dark mode.
-- Automated PDF/export artifact verification.
-- ZIP and DMG developer artifacts.
-- Optional Developer ID signing and notarization hooks in `Scripts/package_release.sh`.
+- GitHub alert/callout rendering for `NOTE`, `TIP`, `IMPORTANT`, `WARNING`, and `CAUTION` blockquotes.
+- Offline Mermaid diagram rendering for fenced `mermaid` blocks.
+- Offline KaTeX math rendering for inline `$...$` and display `$$...$$` delimiters.
+- Local link diagnostics for missing files, missing heading fragments, unsupported schemes, and malformed URLs.
+- Cross-document Markdown heading checks for readable local Markdown files.
+- Render profile groundwork, including an OpenMarked profile and a GitHub README compatibility profile for heading slug behavior.
+- Settings controls for Mermaid, KaTeX, GitHub callouts, local/heading link diagnostics, and remote link reporting.
+- Rich-content status feedback in the status bar with detailed diagnostics in the diagnostics popover.
+- Standalone HTML export that can embed local images, theme CSS, and the trusted bundled rich-content runtime.
+- PDF export, Print, and visual snapshots wait for Mermaid and KaTeX rendering before capture.
+- Visual QA now covers rich Markdown in light and dark appearances plus link-diagnostic fixtures.
+- Packaging verifies that Mermaid, KaTeX, OpenMarked rich runtime/CSS, licenses, and KaTeX fonts are present in the app bundle.
 
-## Supported Files
+## Supported Rich Markdown
 
-OpenMarked supports Markdown and text files with these extensions: `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
+The focused user guide is `Docs/RICH_MARKDOWN.md`.
+
+At a high level:
+
+- Callouts use GitHub-style blockquote markers such as `> [!NOTE]`.
+- Mermaid diagrams use fenced code blocks with the `mermaid` language.
+- Math uses inline `$...$` and display `$$...$$` delimiters.
+- Link validation is local-first and runs during rendering.
+
+## Privacy And Network Behavior
+
+OpenMarked remains local-first:
+
+- Document contents are not sent to a service.
+- Mermaid `11.15.0` and KaTeX `0.17.0` are bundled local assets, not CDN dependencies.
+- Remote scripts and inline event handlers are stripped from preview/export HTML.
+- Remote HTTP(S) links are parsed but not crawled during normal rendering.
+- Optional remote link reporting produces an informational skipped-check diagnostic instead of contacting the network.
+- Remote images load only when the remote image setting is enabled.
+
+## Dependency Attributions
+
+Bundled rich-content dependency details are recorded in `Docs/RICH_CONTENT_DEPENDENCIES.md`.
+
+- Mermaid `11.15.0`, MIT license.
+- KaTeX `0.17.0`, MIT license.
+
+License and version metadata are bundled with the app resources.
 
 ## Installation
 
-The developer artifacts are created by:
+Developer artifacts are created by:
 
 ```sh
 Scripts/package_release.sh
 ```
 
-The resulting files are `dist/OpenMarked-0.2.0-macOS.zip` and `dist/OpenMarked-0.2.0-macOS.dmg`.
+The resulting files are `dist/OpenMarked-0.3.0-macOS.zip` and `dist/OpenMarked-0.3.0-macOS.dmg`.
 
 These developer artifacts are ad hoc signed by default but not notarized unless Apple signing credentials are supplied. On macOS, Gatekeeper may require opening them from Finder's context menu. Only run local developer artifacts from sources you trust.
 
@@ -38,8 +64,11 @@ These developer artifacts are ad hoc signed by default but not notarized unless 
 
 - The app is not notarized by default and does not yet ship as a Homebrew Cask.
 - Native print panel behavior should be checked manually before publishing public release artifacts.
+- Mermaid and KaTeX coverage follows the bundled upstream runtimes, but OpenMarked does not yet expose advanced per-document runtime configuration.
+- Remote link checking does not crawl the network automatically.
+- GitHub README compatibility is profile groundwork, not a complete clone of every GitHub rendering edge case.
 - Custom themes, plugin processors, DOCX/EPUB export, RTF/RTFD import, Scrivener project rendering, browser integrations, grammar tools, and AI features are deferred.
-- Automated visual regression coverage is not yet implemented.
+- Exact visual hash regression checks are optional because OS font and WebKit rendering can vary by environment.
 
 ## Reporting Issues
 

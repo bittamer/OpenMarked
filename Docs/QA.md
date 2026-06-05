@@ -1,4 +1,4 @@
-# OpenMarked MVP QA Checklist
+# OpenMarked 0.3.0 QA Checklist
 
 Use this checklist for release manual QA. Run it on macOS 13 or newer from a clean checkout after `Scripts/verify_release.sh` passes.
 
@@ -6,11 +6,11 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 
 1. Run `Scripts/verify_release.sh`.
    Expected result: debug build, release build, verifier, performance smoke, visual snapshots, PDF/export artifacts, tests, package description, diff hygiene, ASCII scan, app bundle creation, signing, ZIP creation, and DMG creation all complete.
-2. Confirm `dist/OpenMarked-0.2.0/OpenMarked.app` exists.
+2. Confirm `dist/OpenMarked-0.3.0/OpenMarked.app` exists.
    Expected result: the app bundle launches.
-3. Confirm `dist/OpenMarked-0.2.0-macOS.zip` exists.
+3. Confirm `dist/OpenMarked-0.3.0-macOS.zip` exists.
    Expected result: the ZIP expands to `OpenMarked.app`.
-4. Confirm `dist/OpenMarked-0.2.0-macOS.dmg` exists.
+4. Confirm `dist/OpenMarked-0.3.0-macOS.dmg` exists.
    Expected result: the DMG mounts and contains `OpenMarked.app`.
 5. Open About OpenMarked.
    Expected result: the About panel shows OpenMarked, current version/build, license, and project URL.

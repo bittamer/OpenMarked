@@ -2,7 +2,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently at `0.2.0`: the MVP is tagged, and the app now has repeatable visual QA, PDF/export artifact checks, README screenshots, ZIP/DMG packaging, and optional Developer ID/notarization hooks.
+The project is currently at `0.3.0`: OpenMarked now includes the Markdown Power Pack with GitHub callouts, Mermaid diagrams, KaTeX math, local link diagnostics, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks.
 
 ## Current Status
 
@@ -12,6 +12,7 @@ This repository currently contains:
 - MVP implementation plan: `Docs/MVP_IMPLEMENTATION_PLAN.md`.
 - 0.3.0 Markdown Power Pack plan: `Docs/0.3.0_IMPLEMENTATION_PLAN.md`.
 - 0.3.0 backlog tracker: `Docs/0.3.0_BACKLOG.md`.
+- Rich Markdown guide: `Docs/RICH_MARKDOWN.md`.
 - Rich content dependency policy: `Docs/RICH_CONTENT_DEPENDENCIES.md`.
 - Link validation behavior: `Docs/LINK_VALIDATION.md`.
 - Roadmap: `ROADMAP.md`.
@@ -21,9 +22,9 @@ This repository currently contains:
 - Native macOS menu bar, standard app/window commands such as Quit, document commands, keyboard shortcuts, and a compact toolbar.
 - Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
 - Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
-- GitHub alert/callout rendering for note, tip, important, warning, and caution blockquotes in the 0.3.0 development line.
-- Local link, heading-fragment, cross-document heading, malformed URL, and unsupported-scheme diagnostics in the 0.3.0 development line.
-- Offline Mermaid diagram and KaTeX math rendering in the 0.3.0 development line, using bundled local assets rather than CDN dependencies.
+- GitHub alert/callout rendering for note, tip, important, warning, and caution blockquotes.
+- Local link, heading-fragment, cross-document heading, malformed URL, and unsupported-scheme diagnostics.
+- Offline Mermaid diagram and KaTeX math rendering using bundled local assets rather than CDN dependencies.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
 - Built-in preview themes, print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
@@ -37,7 +38,7 @@ This repository currently contains:
 - Markdown fixture corpus.
 - CI workflow for Swift build, verifier, visual snapshots, export artifacts, and tests.
 
-Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.2.0`. The packaging script supports Developer ID signing and notarization when credentials are available.
+Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.3.0`. The packaging script supports Developer ID signing and notarization when credentials are available.
 
 ## Screenshots
 
@@ -87,7 +88,7 @@ Create a local developer artifact with:
 Scripts/package_release.sh
 ```
 
-The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.2.0/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.2.0-macOS.zip` plus `dist/OpenMarked-0.2.0-macOS.dmg`.
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.3.0/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.3.0-macOS.zip` plus `dist/OpenMarked-0.3.0-macOS.dmg`.
 
 By default the app is ad hoc signed. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID certificate. Set `OPENMARKED_NOTARIZE=1` with `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD` to submit the DMG for notarization.
 
@@ -99,7 +100,7 @@ Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdo
 
 OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, GitHub alert/callout blockquotes, Mermaid diagrams, and KaTeX math through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
-In the `0.3.0` development line, OpenMarked bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources. Mermaid and KaTeX render offline in preview, PDF/print, snapshots, and standalone HTML export. Supported math delimiters are inline `$...$` and display `$$...$$`; escaped dollars, common currency text, code spans/fences, and link text are kept literal.
+OpenMarked bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources. Mermaid and KaTeX render offline in preview, PDF/print, snapshots, and standalone HTML export. Supported math delimiters are inline `$...$` and display `$$...$$`; escaped dollars, common currency text, code spans/fences, and link text are kept literal. See `Docs/RICH_MARKDOWN.md` for supported syntax and troubleshooting.
 
 Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 
@@ -113,7 +114,7 @@ OpenMarked is designed as a local-first viewer. It does not send document conten
 
 ## Known Limitations
 
-The `0.2.0` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Print panel behavior still needs a human check before publishing public artifacts. Custom themes, plugin processors, DOCX/EPUB export, grammar tools, and browser integrations are intentionally deferred.
+The `0.3.0` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Print panel behavior still needs a human check before publishing public artifacts. Custom themes, plugin processors, DOCX/EPUB export, grammar tools, and browser integrations are intentionally deferred.
 
 ## Feedback
 

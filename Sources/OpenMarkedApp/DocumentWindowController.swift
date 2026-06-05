@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import OpenMarkedCore
+import UniformTypeIdentifiers
 
 @MainActor
 final class DocumentWindowController: ObservableObject, Identifiable {
@@ -14,6 +15,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     private let renderer: MarkdownRenderer = CMarkGFMRenderer()
     private var sourceWatcher: FileSystemWatcher?
     private var assetWatchers: [URL: FileSystemWatcher] = [:]
+    private var activePrintExporter: WebKitPrintExporter?
 
     weak var window: NSWindow? {
         didSet {
@@ -135,25 +137,112 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         persistCurrentWindowState()
     }
 
-    func exportHTMLPlaceholder() {
-        guard state.canExport else {
+    func exportHTML() {
+        guard let context = currentExportContext() else {
+            presentExportError(.missingRenderedDocument)
             return
         }
-        state.notePlaceholderAction("HTML export lands in Phase 8")
+
+        let panel = NSSavePanel()
+        panel.title = "Export HTML"
+        panel.prompt = "Export"
+        panel.allowedContentTypes = [.html]
+        panel.nameFieldStringValue = suggestedExportFilename(for: context.document, extension: "html")
+
+        guard panel.runModal() == .OK, let destinationURL = panel.url else {
+            return
+        }
+
+        do {
+            let html = HTMLExportDocumentBuilder.standaloneHTML(
+                renderResult: context.renderResult,
+                document: context.document
+            )
+            try HTMLExportWriter.write(html: html, to: destinationURL)
+            state.notePlaceholderAction("Exported HTML to \(destinationURL.lastPathComponent)")
+        } catch let error as ExportError {
+            presentExportError(error)
+        } catch {
+            presentExportError(.writeFailed(path: destinationURL.path, reason: error.localizedDescription))
+        }
     }
 
-    func exportPDFPlaceholder() {
-        guard state.canExport else {
+    func copyRenderedHTML() {
+        guard let renderResult = state.currentRenderResult else {
+            presentExportError(.missingRenderedDocument)
             return
         }
-        state.notePlaceholderAction("PDF export lands in Phase 8")
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(renderResult.bodyHTML, forType: .html)
+        NSPasteboard.general.setString(renderResult.bodyHTML, forType: .string)
+        state.notePlaceholderAction("Copied rendered HTML")
     }
 
-    func printPlaceholder() {
-        guard state.canExport else {
+    func exportPDF() {
+        guard let context = currentExportContext() else {
+            presentExportError(.missingRenderedDocument)
             return
         }
-        state.notePlaceholderAction("Print support lands in Phase 8")
+
+        let panel = NSSavePanel()
+        panel.title = "Export PDF"
+        panel.prompt = "Export"
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = suggestedExportFilename(for: context.document, extension: "pdf")
+
+        guard panel.runModal() == .OK, let destinationURL = panel.url else {
+            return
+        }
+
+        let html = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: context.renderResult,
+            document: context.document
+        )
+        let exporter = WebKitPrintExporter()
+        activePrintExporter = exporter
+        state.notePlaceholderAction("Exporting PDF")
+        exporter.exportPDF(html: html, baseURL: context.document.sourceURL.deletingLastPathComponent(), destinationURL: destinationURL) { [weak self] result in
+            guard let self else {
+                return
+            }
+
+            self.activePrintExporter = nil
+            switch result {
+            case .success:
+                self.state.notePlaceholderAction("Exported PDF to \(destinationURL.lastPathComponent)")
+            case .failure(let error):
+                self.presentExportError(error)
+            }
+        }
+    }
+
+    func printDocument() {
+        guard let context = currentExportContext() else {
+            presentExportError(.missingRenderedDocument)
+            return
+        }
+
+        let html = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: context.renderResult,
+            document: context.document
+        )
+        let exporter = WebKitPrintExporter()
+        activePrintExporter = exporter
+        state.notePlaceholderAction("Preparing print")
+        exporter.print(html: html, baseURL: context.document.sourceURL.deletingLastPathComponent()) { [weak self] result in
+            guard let self else {
+                return
+            }
+
+            self.activePrintExporter = nil
+            switch result {
+            case .success:
+                self.state.notePlaceholderAction("Print complete")
+            case .failure:
+                self.state.notePlaceholderAction("Print cancelled")
+            }
+        }
     }
 
     func showSearch() {
@@ -400,5 +489,39 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     private var currentSourceURL: URL? {
         state.currentMarkdownDocument?.sourceURL.standardizedFileURL
+    }
+
+    private func currentExportContext() -> (document: MarkdownDocument, renderResult: RenderResult)? {
+        guard let document = state.currentMarkdownDocument,
+              let renderResult = state.currentRenderResult else {
+            return nil
+        }
+
+        return (document, renderResult)
+    }
+
+    private func suggestedExportFilename(for document: MarkdownDocument, extension fileExtension: String) -> String {
+        let baseName = document.displayTitle
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeBaseName = baseName.isEmpty ? "OpenMarked Export" : baseName
+        return "\(safeBaseName).\(fileExtension)"
+    }
+
+    private func presentExportError(_ error: ExportError) {
+        state.notePlaceholderAction(error.localizedDescription)
+
+        let alert = NSAlert()
+        alert.messageText = "Export Failed"
+        alert.informativeText = error.localizedDescription
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+
+        if let window {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
     }
 }

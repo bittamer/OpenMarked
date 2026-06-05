@@ -194,6 +194,25 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(imageURLs.contains { $0.lastPathComponent == "sample-mark.svg" })
     }
 
+    func testStandaloneHTMLExportEmbedsLocalImagesAndWritesFile() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let html = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+
+        XCTAssertTrue(html.contains("<!doctype html>"))
+        XCTAssertTrue(html.contains("data:image/svg+xml;base64,"))
+
+        let destinationURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-export-test-\(UUID().uuidString).html")
+        defer { try? FileManager.default.removeItem(at: destinationURL) }
+
+        try HTMLExportWriter.write(html: html, to: destinationURL)
+        let exportedHTML = try String(contentsOf: destinationURL, encoding: .utf8)
+
+        XCTAssertTrue(exportedHTML.contains("data:image/svg+xml;base64,"))
+    }
+
     func testFootnotesRenderWhenEnabled() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/footnotes.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -386,6 +405,26 @@ struct AppInfoTests {
         let imageURLs = LocalAssetReferenceExtractor.imageURLs(from: result.bodyHTML, document: document)
 
         #expect(imageURLs.contains { $0.lastPathComponent == "sample-mark.svg" })
+    }
+
+    @Test("Standalone HTML export embeds local images and writes files")
+    func standaloneHTMLExportEmbedsLocalImagesAndWritesFile() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let html = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+
+        #expect(html.contains("<!doctype html>"))
+        #expect(html.contains("data:image/svg+xml;base64,"))
+
+        let destinationURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-export-test-\(UUID().uuidString).html")
+        defer { try? FileManager.default.removeItem(at: destinationURL) }
+
+        try HTMLExportWriter.write(html: html, to: destinationURL)
+        let exportedHTML = try String(contentsOf: destinationURL, encoding: .utf8)
+
+        #expect(exportedHTML.contains("data:image/svg+xml;base64,"))
     }
 
     @Test("Preview state can hold render result")

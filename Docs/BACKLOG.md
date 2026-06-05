@@ -82,7 +82,12 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 8: Export and Print
 
-- [ ] MVP-801 through MVP-806.
+- [x] MVP-801: Implement Standalone HTML Export.
+- [x] MVP-802: Implement Copy Rendered HTML.
+- [x] MVP-803: Implement Print.
+- [x] MVP-804: Implement PDF Export.
+- [x] MVP-805: Add Export Error Handling.
+- [x] MVP-806: Add Export Smoke Tests.
 
 ## Phase 9: Settings, Accessibility, and Polish
 

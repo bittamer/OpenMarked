@@ -113,15 +113,19 @@ final class AppController: ObservableObject {
     }
 
     func exportHTML() {
-        activeWindowController?.exportHTMLPlaceholder()
+        activeWindowController?.exportHTML()
+    }
+
+    func copyRenderedHTML() {
+        activeWindowController?.copyRenderedHTML()
     }
 
     func exportPDF() {
-        activeWindowController?.exportPDFPlaceholder()
+        activeWindowController?.exportPDF()
     }
 
     func printDocument() {
-        activeWindowController?.printPlaceholder()
+        activeWindowController?.printDocument()
     }
 
     func showSearchPlaceholder() {

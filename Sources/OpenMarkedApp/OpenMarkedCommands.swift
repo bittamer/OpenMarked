@@ -19,6 +19,12 @@ struct OpenMarkedCommands: Commands {
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(!appController.activeCanExport)
 
+            Button("Copy Rendered HTML") {
+                appController.copyRenderedHTML()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(!appController.activeCanExport)
+
             Button("Export PDF...") {
                 appController.exportPDF()
             }

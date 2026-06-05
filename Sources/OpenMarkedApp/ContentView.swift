@@ -139,8 +139,20 @@ private struct AppToolbar: View {
             .accessibilityLabel("Source file actions")
             .disabled(!controller.state.hasDocument)
 
-            Button {
-                controller.exportHTMLPlaceholder()
+            Menu {
+                Button("Export HTML...") {
+                    controller.exportHTML()
+                }
+                Button("Export PDF...") {
+                    controller.exportPDF()
+                }
+                Button("Copy Rendered HTML") {
+                    controller.copyRenderedHTML()
+                }
+                Divider()
+                Button("Print...") {
+                    controller.printDocument()
+                }
             } label: {
                 Label("Export", systemImage: "square.and.arrow.up")
             }

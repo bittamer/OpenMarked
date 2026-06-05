@@ -485,7 +485,7 @@ public enum LocalAssetReferenceExtractor {
         }
     }
 
-    private static func isLocalImagePath(_ source: String) -> Bool {
+    public static func isLocalImagePath(_ source: String) -> Bool {
         guard !source.isEmpty else {
             return false
         }
@@ -501,7 +501,7 @@ public enum LocalAssetReferenceExtractor {
         return true
     }
 
-    private static func localFileURL(for source: String, relativeTo baseURL: URL) -> URL? {
+    public static func localFileURL(for source: String, relativeTo baseURL: URL) -> URL? {
         if let components = URLComponents(string: source), let scheme = components.scheme {
             guard scheme == "file" else {
                 return nil
@@ -510,7 +510,8 @@ public enum LocalAssetReferenceExtractor {
         }
 
         if let components = URLComponents(string: source), !components.path.isEmpty {
-            return URL(fileURLWithPath: components.path, relativeTo: baseURL).standardizedFileURL
+            let path = components.path.removingPercentEncoding ?? components.path
+            return URL(fileURLWithPath: path, relativeTo: baseURL).standardizedFileURL
         }
 
         return URL(fileURLWithPath: source, relativeTo: baseURL).standardizedFileURL

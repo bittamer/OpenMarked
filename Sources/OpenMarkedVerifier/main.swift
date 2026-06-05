@@ -132,6 +132,15 @@ let localImageResult = try renderer.render(RenderRequest(document: localImageDoc
 verify(localImageResult.diagnostics.isEmpty, "existing local image fixture should not warn")
 let localImageAssetURLs = LocalAssetReferenceExtractor.imageURLs(from: localImageResult.bodyHTML, document: localImageDocument)
 verify(localImageAssetURLs.contains { $0.lastPathComponent == "sample-mark.svg" }, "local image assets should be extractable for live watching")
+let exportedLocalImageHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: localImageResult, document: localImageDocument)
+verify(exportedLocalImageHTML.contains("<!doctype html>"), "standalone HTML export should include document structure")
+verify(exportedLocalImageHTML.contains("data:image/svg+xml;base64,"), "standalone HTML export should embed local image assets")
+
+let htmlExportURL = FileManager.default.temporaryDirectory.appendingPathComponent("openmarked-export-\(UUID().uuidString).html")
+try HTMLExportWriter.write(html: exportedLocalImageHTML, to: htmlExportURL)
+defer { try? FileManager.default.removeItem(at: htmlExportURL) }
+let exportedHTMLFromDisk = try String(contentsOf: htmlExportURL, encoding: .utf8)
+verify(exportedHTMLFromDisk.contains("data:image/svg+xml;base64,"), "HTML export writer should persist exported HTML")
 
 let missingURL = URL(fileURLWithPath: "Fixtures/Markdown/missing-image-temp.md").standardizedFileURL
 try "# Missing\n\n![Nope](missing.png)\n".write(to: missingURL, atomically: true, encoding: .utf8)
@@ -205,4 +214,4 @@ let creationEvent = try waitForWatchEvent(url: missingWatchedURL) { url in
 }
 verify(creationEvent.kind == .replaced || creationEvent.kind == .changed, "creation of a missing watched file should be detected")
 
-print("OpenMarked Phase 7 verifier passed.")
+print("OpenMarked Phase 8 verifier passed.")

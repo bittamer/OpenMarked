@@ -97,6 +97,18 @@ Navigation behavior:
 - Render diagnostics are exposed through a status-bar popover. Missing-image warnings are descriptive even when no exact preview location is available.
 - Status statistics stay compact in the bar, with character and line counts available through tooltips.
 
+## Export Direction
+
+Phase 8 keeps export document assembly in `OpenMarkedCore` and platform workflows in `OpenMarkedApp`.
+
+Export behavior:
+
+- Standalone HTML export uses `HTMLExportDocumentBuilder`, sanitizes the same scripts/event handlers as preview, preserves the current theme CSS, and embeds local images as data URLs by default.
+- Copy Rendered HTML copies the rendered body fragment to both HTML and plain-text pasteboard flavors.
+- PDF export and Print use an offscreen `WKWebView` loaded with the current standalone HTML and AppKit print operations, so print CSS applies through the native print pipeline.
+- Save-panel cancellation is treated as a no-op. Write/PDF failures use `ExportError` and show a short native alert plus status-bar feedback.
+- Automated smoke coverage validates standalone HTML structure, image embedding, and export writing. PDF remains covered by build/smoke launch and manual visual inspection because robust PDF visual assertions are out of scope for the MVP.
+
 ## Sandboxing Direction
 
 OpenMarked should be designed for sandboxed file access:

@@ -109,8 +109,41 @@ public enum WindowContentState: Equatable {
 public enum PreviewShellState: Equatable {
     case idle
     case loading
+    case rendered(RenderResult)
     case placeholder
-    case error(DocumentOpenError)
+    case error(PreviewError)
+}
+
+public enum PreviewErrorKind: String, Equatable, Sendable {
+    case documentOpen
+    case render
+}
+
+public struct PreviewError: Error, Equatable, LocalizedError, Sendable {
+    public let kind: PreviewErrorKind
+    public let message: String
+
+    public init(kind: PreviewErrorKind, message: String) {
+        self.kind = kind
+        self.message = message
+    }
+
+    public init(documentOpenError: DocumentOpenError) {
+        self.init(kind: .documentOpen, message: documentOpenError.message)
+    }
+
+    public init(error: Error) {
+        if let localizedError = error as? LocalizedError,
+           let description = localizedError.errorDescription {
+            self.init(kind: .render, message: description)
+        } else {
+            self.init(kind: .render, message: "OpenMarked could not render the document.")
+        }
+    }
+
+    public var errorDescription: String? {
+        message
+    }
 }
 
 public struct WindowLayoutState: Equatable {
@@ -181,6 +214,13 @@ public struct DocumentWindowState: Equatable {
         currentDocument?.markdownDocument
     }
 
+    public var currentRenderResult: RenderResult? {
+        if case let .rendered(result) = preview {
+            return result
+        }
+        return nil
+    }
+
     public mutating func beginOpening(url: URL) {
         content = .loading(PendingDocument(url: url))
         preview = .loading
@@ -193,13 +233,34 @@ public struct DocumentWindowState: Equatable {
         statusMessage = "Opened \(document.displayName)"
     }
 
+    public mutating func beginRendering(documentName: String) {
+        preview = .loading
+        statusMessage = "Rendering \(documentName)"
+    }
+
+    public mutating func finishRendering(_ result: RenderResult) {
+        preview = .rendered(result)
+        let warningCount = result.diagnostics.filter { $0.severity == .warning }.count
+        if warningCount > 0 {
+            statusMessage = "Rendered with \(warningCount) warning\(warningCount == 1 ? "" : "s")"
+        } else {
+            statusMessage = "Rendered"
+        }
+    }
+
+    public mutating func failRendering(_ error: Error) {
+        let previewError = PreviewError(error: error)
+        preview = .error(previewError)
+        statusMessage = previewError.message
+    }
+
     public mutating func applyRestoredLayout(_ layout: WindowLayoutState) {
         self.layout = layout
     }
 
     public mutating func failOpening(_ error: DocumentOpenError) {
         content = .error(error)
-        preview = .error(error)
+        preview = .error(PreviewError(documentOpenError: error))
         statusMessage = error.message
     }
 

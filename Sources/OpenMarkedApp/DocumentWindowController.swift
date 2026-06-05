@@ -7,7 +7,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     let id = UUID()
 
     @Published private(set) var state = DocumentWindowState()
+    @Published private(set) var previewNavigationRequest: PreviewNavigationRequest?
+
     private let stateStore = DocumentWindowStateStore.shared
+    private let renderer: MarkdownRenderer = CMarkGFMRenderer()
 
     weak var window: NSWindow? {
         didSet {
@@ -33,6 +36,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             if let restoredState = stateStore.restore(forDocumentID: markdownDocument.id) {
                 state.applyRestoredLayout(restoredState.layout)
             }
+            render(markdownDocument)
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
             persistCurrentWindowState()
         } catch let error as DocumentOpenError {
@@ -60,11 +64,22 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         updateWindowTitle()
     }
 
-    func reloadPreviewPlaceholder() {
-        guard state.canReloadPreview else {
+    func reloadPreview() {
+        guard let markdownDocument = state.currentMarkdownDocument else {
             return
         }
-        state.notePlaceholderAction("Preview reload is ready for the renderer phase")
+
+        do {
+            let reloadedDocument = try MarkdownDocumentLoader.load(url: markdownDocument.sourceURL)
+            let openedDocument = OpenedDocument(markdownDocument: reloadedDocument)
+            state.finishOpening(document: openedDocument)
+            render(reloadedDocument)
+            persistCurrentWindowState()
+        } catch let error as DocumentOpenError {
+            state.failOpening(error)
+        } catch {
+            state.failRendering(error)
+        }
     }
 
     func toggleOutline() {
@@ -128,6 +143,15 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         window?.title = state.windowTitle
     }
 
+    func scrollToOutlineItem(_ item: OutlineItem) {
+        previewNavigationRequest = PreviewNavigationRequest(elementID: item.id)
+        state.notePlaceholderAction("Jumped to \(item.title)")
+    }
+
+    func updatePreviewStatus(_ message: String) {
+        state.notePlaceholderAction(message)
+    }
+
     func persistCurrentWindowState() {
         guard let markdownDocument = state.currentMarkdownDocument else {
             return
@@ -145,5 +169,16 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                 )
             }
         )
+    }
+
+    private func render(_ markdownDocument: MarkdownDocument) {
+        state.beginRendering(documentName: markdownDocument.displayName)
+
+        do {
+            let result = try renderer.render(RenderRequest(document: markdownDocument))
+            state.finishRendering(result)
+        } catch {
+            state.failRendering(error)
+        }
     }
 }

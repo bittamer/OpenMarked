@@ -85,7 +85,7 @@ final class AppController: ObservableObject {
     }
 
     func reloadPreview() {
-        activeWindowController?.reloadPreviewPlaceholder()
+        activeWindowController?.reloadPreview()
     }
 
     func toggleOutline() {

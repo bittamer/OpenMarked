@@ -49,6 +49,18 @@ Phase 3 renderer:
 
 The renderer is wrapped behind a Swift protocol so future engines can be evaluated without rewriting the app shell.
 
+## Preview Direction
+
+Phase 4 uses a SwiftUI `NSViewRepresentable` wrapper around `WKWebView`.
+
+Preview behavior:
+
+- Rendered HTML is loaded with the source document directory as the base URL so relative assets can resolve.
+- The native outline sends heading IDs to the preview through a small JavaScript bridge.
+- The WebView captures approximate scroll ratio before reload and restores it after the new HTML finishes loading.
+- Link clicks are intercepted: external and local file URLs open through `NSWorkspace` instead of replacing the preview.
+- Script tags and inline event handler attributes are stripped before loading preview HTML. Bundled JavaScript needed for preview mechanics is injected through `evaluateJavaScript`, which keeps user document scripts blocked by default.
+
 ## Sandboxing Direction
 
 OpenMarked should be designed for sandboxed file access:

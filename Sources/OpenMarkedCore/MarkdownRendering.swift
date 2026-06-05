@@ -484,3 +484,24 @@ public enum HTMLUtilities {
         return decoded
     }
 }
+
+public enum PreviewHTMLSecurityPolicy {
+    public static func sanitize(_ html: String) -> String {
+        html
+            .replacingOccurrences(
+                of: #"(?is)<script\b[^>]*>.*?</script>"#,
+                with: "",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"(?i)\s+on[a-z]+\s*=\s*"[^"]*""#,
+                with: "",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"(?i)\s+on[a-z]+\s*=\s*'[^']*'"#,
+                with: "",
+                options: .regularExpression
+            )
+    }
+}

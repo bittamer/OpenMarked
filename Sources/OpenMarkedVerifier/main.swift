@@ -98,4 +98,15 @@ let footnoteDocument = try MarkdownDocumentLoader.load(url: footnoteURL, createB
 let footnoteResult = try renderer.render(RenderRequest(document: footnoteDocument))
 verify(footnoteResult.bodyHTML.contains("footnote"), "footnotes should render when cmark-gfm footnotes are enabled")
 
-print("OpenMarked Phase 3 verifier passed.")
+var renderState = DocumentWindowState()
+renderState.finishOpening(document: OpenedDocument(markdownDocument: markdownDocument))
+renderState.beginRendering(documentName: markdownDocument.displayName)
+renderState.finishRendering(renderResult)
+verify(renderState.currentRenderResult?.bodyHTML == renderResult.bodyHTML, "window state should retain render result for preview")
+
+let unsafeHTML = #"<h1 onclick="alert(1)">Title</h1><script src="https://example.com/x.js"></script>"#
+let sanitizedHTML = PreviewHTMLSecurityPolicy.sanitize(unsafeHTML)
+verify(!sanitizedHTML.contains("<script"), "preview sanitizer should remove script tags")
+verify(!sanitizedHTML.contains("onclick"), "preview sanitizer should remove event handler attributes")
+
+print("OpenMarked Phase 4 verifier passed.")

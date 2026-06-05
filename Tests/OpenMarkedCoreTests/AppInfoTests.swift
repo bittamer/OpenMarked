@@ -130,6 +130,27 @@ final class AppInfoTests: XCTestCase {
 
         XCTAssertTrue(result.bodyHTML.contains("footnote"))
     }
+
+    func testPreviewStateCanHoldRenderResult() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        var state = DocumentWindowState()
+        state.finishOpening(document: OpenedDocument(markdownDocument: document))
+        state.beginRendering(documentName: document.displayName)
+        state.finishRendering(result)
+
+        XCTAssertEqual(state.currentRenderResult?.bodyHTML, result.bodyHTML)
+    }
+
+    func testPreviewHTMLSecurityPolicyRemovesScriptsAndEventHandlers() {
+        let unsafeHTML = #"<h1 onclick="alert(1)">Title</h1><script src="https://example.com/x.js"></script>"#
+        let sanitizedHTML = PreviewHTMLSecurityPolicy.sanitize(unsafeHTML)
+
+        XCTAssertFalse(sanitizedHTML.contains("<script"))
+        XCTAssertFalse(sanitizedHTML.contains("onclick"))
+    }
 }
 #elseif canImport(Testing)
 import Testing
@@ -218,6 +239,20 @@ struct AppInfoTests {
         #expect(result.bodyHTML.contains("<del>scope creep</del>"))
         #expect(result.bodyHTML.contains(#"type="checkbox""#))
         #expect(result.bodyHTML.contains("<table>"))
+    }
+
+    @Test("Preview state can hold render result")
+    func previewStateCanHoldRenderResult() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        var state = DocumentWindowState()
+        state.finishOpening(document: OpenedDocument(markdownDocument: document))
+        state.beginRendering(documentName: document.displayName)
+        state.finishRendering(result)
+
+        #expect(state.currentRenderResult?.bodyHTML == result.bodyHTML)
     }
 }
 #else

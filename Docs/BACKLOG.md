@@ -44,7 +44,12 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 4: Preview WebView
 
-- [ ] MVP-401 through MVP-406.
+- [x] MVP-401: Create WKWebView Preview Component.
+- [x] MVP-402: Resolve Local Assets.
+- [x] MVP-403: Implement Preview Reload Flow.
+- [x] MVP-404: Add Preview Navigation Bridge.
+- [x] MVP-405: Preserve Scroll Position on Reload.
+- [x] MVP-406: Add Preview Security Policy.
 
 ## Phase 5: Theme System and Visual Design
 

@@ -78,7 +78,7 @@ private struct AppToolbar: View {
             .accessibilityLabel("Open Markdown file")
 
             Button {
-                controller.reloadPreviewPlaceholder()
+                controller.reloadPreview()
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
@@ -148,9 +148,30 @@ private struct OutlineSidebar: View {
 
             switch controller.state.content {
             case .loaded:
-                Text("Headings will appear here once Markdown rendering lands.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                if let outline = controller.state.currentRenderResult?.outline, !outline.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(outline) { item in
+                                Button {
+                                    controller.scrollToOutlineItem(item)
+                                } label: {
+                                    Text(item.title)
+                                        .font(.callout)
+                                        .lineLimit(2)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.leading, CGFloat(max(0, item.level - 1)) * 12)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.vertical, 3)
+                                .help("Jump to \(item.title)")
+                            }
+                        }
+                    }
+                } else {
+                    Text("This document has no headings.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             case .loading:
                 ProgressView()
                     .controlSize(.small)
@@ -205,7 +226,27 @@ private struct PreviewShell: View {
                     .foregroundStyle(.secondary)
             }
         case .loaded(let document):
-            LoadedDocumentPlaceholder(document: document)
+            switch controller.state.preview {
+            case .loading:
+                VStack(spacing: 14) {
+                    ProgressView()
+                    Text("Rendering \(document.displayName)")
+                        .foregroundStyle(.secondary)
+                }
+            case .rendered(let result):
+                PreviewWebView(
+                    renderResult: result,
+                    baseURL: document.url.deletingLastPathComponent(),
+                    navigationRequest: controller.previewNavigationRequest,
+                    onStatusUpdate: { message in
+                        controller.updatePreviewStatus(message)
+                    }
+                )
+            case .error(let error):
+                PreviewErrorView(error: error)
+            case .idle, .placeholder:
+                LoadedDocumentPlaceholder(document: document)
+            }
         case .error(let error):
             ErrorDocumentView(error: error) {
                 appController.presentOpenPanel()
@@ -255,7 +296,7 @@ private struct LoadedDocumentPlaceholder: View {
             VStack(spacing: 6) {
                 Text(document.displayName)
                     .font(.title.weight(.semibold))
-                Text("Markdown rendering lands in Phase 3.")
+                Text("Preview is ready.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
@@ -274,6 +315,30 @@ private struct LoadedDocumentPlaceholder: View {
             .font(.callout)
             .foregroundStyle(.secondary)
             .padding(.top, 4)
+        }
+        .padding(32)
+    }
+}
+
+private struct PreviewErrorView: View {
+    let error: PreviewError
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 52, weight: .regular))
+                .foregroundStyle(.orange)
+
+            VStack(spacing: 8) {
+                Text("Could Not Render Preview")
+                    .font(.title.weight(.semibold))
+
+                Text(error.message)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 520)
+            }
         }
         .padding(32)
     }
@@ -327,6 +392,9 @@ private struct StatusBar: View {
             if let statistics = controller.state.currentMarkdownDocument?.statistics {
                 Text("\(statistics.wordCount) words")
                 Text("\(statistics.readingTimeMinutes) min read")
+            }
+            if let diagnostics = controller.state.currentRenderResult?.diagnostics, !diagnostics.isEmpty {
+                Text("\(diagnostics.count) warning\(diagnostics.count == 1 ? "" : "s")")
             }
             Text("Zoom \(Int((controller.state.layout.fontScale * 100).rounded()))%")
         }

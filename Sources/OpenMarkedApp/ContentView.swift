@@ -14,24 +14,25 @@ struct ContentView: View {
         VStack(spacing: 0) {
             AppToolbar(controller: controller)
 
-            Divider()
+            ChromeDivider()
 
             HStack(spacing: 0) {
                 if controller.state.layout.isOutlineVisible {
                     OutlineSidebar(controller: controller)
                         .frame(minWidth: 220, idealWidth: 260, maxWidth: 320)
 
-                    Divider()
+                    ChromeDivider(.vertical)
                 }
 
                 PreviewShell(controller: controller, isDropTargeted: isDropTargeted)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
+            ChromeDivider()
 
             StatusBar(controller: controller)
         }
+        .appChromeTheme(appController.settings.appChromeThemeID)
         .background(
             WindowAccessor { window in
                 controller.window = window
@@ -64,6 +65,7 @@ struct ContentView: View {
 
 private struct AppToolbar: View {
     @EnvironmentObject private var appController: AppController
+    @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
 
     var body: some View {
@@ -176,7 +178,7 @@ private struct AppToolbar: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(.bar)
+        .background(chrome.toolbarBackground)
     }
 
     private var themeBinding: Binding<String> {
@@ -188,6 +190,8 @@ private struct AppToolbar: View {
 }
 
 private struct ToolbarIconButton: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let systemImage: String
     let help: String
     let accessibilityLabel: String
@@ -202,7 +206,7 @@ private struct ToolbarIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 28, height: 24)
-                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+                .foregroundStyle(isActive ? chrome.accent : chrome.text)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(backgroundFill)
@@ -211,6 +215,7 @@ private struct ToolbarIconButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
+        .opacity(isDisabled ? 0.45 : 1)
         .onHover { isHovering = $0 }
         .help(help)
         .accessibilityLabel(accessibilityLabel)
@@ -218,25 +223,52 @@ private struct ToolbarIconButton: View {
 
     private var backgroundFill: Color {
         if isActive {
-            return Color.accentColor.opacity(0.16)
+            return chrome.accent.opacity(0.16)
         }
         if isHovering && !isDisabled {
-            return Color.primary.opacity(0.08)
+            return chrome.text.opacity(0.08)
         }
         return .clear
     }
 }
 
-private struct ToolbarSeparator: View {
+private enum ChromeDividerOrientation {
+    case horizontal
+    case vertical
+}
+
+private struct ChromeDivider: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    let orientation: ChromeDividerOrientation
+
+    init(_ orientation: ChromeDividerOrientation = .horizontal) {
+        self.orientation = orientation
+    }
+
     var body: some View {
         Rectangle()
-            .fill(Color.primary.opacity(0.12))
+            .fill(chrome.separator)
+            .frame(
+                width: orientation == .vertical ? 1 : nil,
+                height: orientation == .horizontal ? 1 : nil
+            )
+    }
+}
+
+private struct ToolbarSeparator: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    var body: some View {
+        Rectangle()
+            .fill(chrome.separator)
             .frame(width: 1, height: 18)
             .padding(.horizontal, 2)
     }
 }
 
 private struct ZoomControl: View {
+    @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
 
     var body: some View {
@@ -257,7 +289,7 @@ private struct ZoomControl: View {
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .frame(width: 40)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
             }
             .buttonStyle(.plain)
             .disabled(!controller.state.hasDocument)
@@ -277,6 +309,7 @@ private struct ZoomControl: View {
 }
 
 private struct OutlineSidebar: View {
+    @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
     @State private var outlineFilter = ""
     @State private var selectedItemID: OutlineItem.ID?
@@ -293,15 +326,15 @@ private struct OutlineSidebar: View {
                     Text("\(count)")
                         .font(.system(size: 11, weight: .medium))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(chrome.secondaryText)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
                         .background(
-                            Capsule().fill(Color.primary.opacity(0.08))
+                            Capsule().fill(chrome.controlBackground.opacity(0.75))
                         )
                 }
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(chrome.secondaryText)
             .padding(.horizontal, 14)
             .padding(.top, 14)
             .padding(.bottom, 10)
@@ -309,17 +342,18 @@ private struct OutlineSidebar: View {
             HStack(spacing: 6) {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(chrome.tertiaryText)
                 TextField("Filter headings", text: $outlineFilter)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                    .foregroundStyle(chrome.text)
                 if !outlineFilter.isEmpty {
                     Button {
                         outlineFilter = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(chrome.tertiaryText)
                     }
                     .buttonStyle(.plain)
                 }
@@ -328,11 +362,11 @@ private struct OutlineSidebar: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(chrome.controlBackground.opacity(0.65))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                    .stroke(chrome.separator, lineWidth: 1)
             )
             .padding(.horizontal, 12)
             .padding(.bottom, 10)
@@ -342,7 +376,7 @@ private struct OutlineSidebar: View {
             Spacer(minLength: 0)
         }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(.regularMaterial)
+        .background(chrome.sidebarBackground)
     }
 
     private var headingCount: Int? {
@@ -418,6 +452,8 @@ private struct OutlineSidebar: View {
 }
 
 private struct OutlineRow: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let item: OutlineItem
     let isSelected: Bool
     let leadingPadding: CGFloat
@@ -430,7 +466,7 @@ private struct OutlineRow: View {
             HStack(spacing: 0) {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.accentColor)
+                        .fill(chrome.accent)
                         .frame(width: 3, height: 14)
                         .padding(.trailing, leadingPadding + 6)
                 } else {
@@ -444,7 +480,7 @@ private struct OutlineRow: View {
 
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+            .foregroundStyle(isSelected ? chrome.accent : chrome.text)
             .padding(.vertical, 5)
             .padding(.horizontal, 6)
             .background(
@@ -460,16 +496,18 @@ private struct OutlineRow: View {
 
     private var backgroundFill: Color {
         if isSelected {
-            return Color.accentColor.opacity(0.12)
+            return chrome.accent.opacity(0.12)
         }
         if isHovering {
-            return Color.primary.opacity(0.07)
+            return chrome.text.opacity(0.07)
         }
         return .clear
     }
 }
 
 private struct OutlinePlaceholder: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let systemImage: String
     let message: String
 
@@ -477,10 +515,10 @@ private struct OutlinePlaceholder: View {
         VStack(spacing: 8) {
             Image(systemName: systemImage)
                 .font(.system(size: 22, weight: .light))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(chrome.tertiaryText)
             Text(message)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -492,6 +530,7 @@ private struct OutlinePlaceholder: View {
 private struct PreviewShell: View {
     @EnvironmentObject private var appController: AppController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
     let isDropTargeted: Bool
 
@@ -503,9 +542,9 @@ private struct PreviewShell: View {
             if isDropTargeted {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.08))
+                        .fill(chrome.accent.opacity(0.08))
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, dash: [9, 7]))
+                        .stroke(chrome.accent, style: StrokeStyle(lineWidth: 2.5, dash: [9, 7]))
 
                     VStack(spacing: 12) {
                         Image(systemName: "arrow.down.doc.fill")
@@ -513,7 +552,7 @@ private struct PreviewShell: View {
                         Text("Drop Markdown to open")
                             .font(.title3.weight(.semibold))
                     }
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(chrome.accent)
                 }
                 .padding(16)
                 .allowsHitTesting(false)
@@ -521,7 +560,7 @@ private struct PreviewShell: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: isDropTargeted)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(chrome.contentBackground)
     }
 
     @ViewBuilder
@@ -535,7 +574,7 @@ private struct PreviewShell: View {
             VStack(spacing: 14) {
                 ProgressView()
                 Text("Opening \(pending.displayName)")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
             }
         case .loaded(let document):
             switch controller.state.preview {
@@ -543,13 +582,13 @@ private struct PreviewShell: View {
                 VStack(spacing: 14) {
                     ProgressView()
                     Text("Rendering \(document.displayName)")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(chrome.secondaryText)
                 }
             case .rendered(let result):
                 VStack(spacing: 0) {
                     if controller.state.search.isVisible {
                         FindBar(controller: controller)
-                        Divider()
+                        ChromeDivider()
                     }
 
                     PreviewWebView(
@@ -590,23 +629,25 @@ private struct PreviewShell: View {
 }
 
 private struct FindBar: View {
+    @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
     @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
 
             TextField("Find in preview", text: searchQueryBinding)
                 .textFieldStyle(.roundedBorder)
+                .foregroundStyle(chrome.text)
                 .focused($isFocused)
                 .onSubmit {
                     controller.findNext()
                 }
 
             Text(controller.state.search.resultSummary)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
                 .frame(minWidth: 76, alignment: .trailing)
 
             Button {
@@ -637,7 +678,7 @@ private struct FindBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(chrome.toolbarBackground)
         .onAppear {
             isFocused = true
         }
@@ -655,17 +696,19 @@ private struct FindBar: View {
 }
 
 private struct EmptyDocumentView: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let openAction: () -> Void
 
     var body: some View {
         VStack(spacing: 22) {
             ZStack {
                 Circle()
-                    .fill(Color.accentColor.opacity(0.10))
+                    .fill(chrome.accent.opacity(0.10))
                     .frame(width: 112, height: 112)
                 Image(systemName: "doc.text.magnifyingglass")
                     .font(.system(size: 46, weight: .regular))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(chrome.accent)
             }
 
             VStack(spacing: 8) {
@@ -674,7 +717,7 @@ private struct EmptyDocumentView: View {
 
                 Text(AppInfo.summary)
                     .font(.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
                     .multilineTextAlignment(.center)
             }
 
@@ -699,6 +742,8 @@ private struct EmptyDocumentView: View {
 }
 
 private struct EmptyStateHint: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let systemImage: String
     let text: String
 
@@ -706,37 +751,39 @@ private struct EmptyStateHint: View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
             Text(text)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(
-            Capsule().fill(Color.primary.opacity(0.05))
+            Capsule().fill(chrome.elevatedBackground.opacity(0.72))
         )
         .overlay(
-            Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            Capsule().stroke(chrome.separator, lineWidth: 1)
         )
     }
 }
 
 private struct LoadedDocumentPlaceholder: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let document: OpenedDocument
 
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "doc.richtext")
                 .font(.system(size: 52, weight: .regular))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
 
             VStack(spacing: 6) {
                 Text(document.displayName)
                     .font(.title.weight(.semibold))
                 Text("Preview is ready.")
                     .font(.title3)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -751,7 +798,7 @@ private struct LoadedDocumentPlaceholder: View {
                 }
             }
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(chrome.secondaryText)
             .padding(.top, 4)
         }
         .padding(32)
@@ -761,13 +808,15 @@ private struct LoadedDocumentPlaceholder: View {
 }
 
 private struct PreviewErrorView: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let error: PreviewError
 
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 52, weight: .regular))
-                .foregroundStyle(.orange)
+                .foregroundStyle(chrome.warning)
 
             VStack(spacing: 8) {
                 Text("Could Not Render Preview")
@@ -775,7 +824,7 @@ private struct PreviewErrorView: View {
 
                 Text(error.message)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
             }
@@ -787,6 +836,8 @@ private struct PreviewErrorView: View {
 }
 
 private struct ErrorDocumentView: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let error: DocumentOpenError
     let openAction: () -> Void
 
@@ -794,7 +845,7 @@ private struct ErrorDocumentView: View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 52, weight: .regular))
-                .foregroundStyle(.orange)
+                .foregroundStyle(chrome.warning)
 
             VStack(spacing: 8) {
                 Text("Could Not Open Document")
@@ -802,7 +853,7 @@ private struct ErrorDocumentView: View {
 
                 Text(error.message)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 520)
             }
@@ -820,13 +871,14 @@ private struct ErrorDocumentView: View {
 }
 
 private struct StatusBar: View {
+    @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
     @State private var isDiagnosticsPopoverPresented = false
 
     var body: some View {
         HStack(spacing: 16) {
             Label(statusTitle, systemImage: statusIcon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(chrome.secondaryText)
 
             Text(controller.state.statusMessage)
                 .lineLimit(1)
@@ -862,7 +914,7 @@ private struct StatusBar: View {
                 StatusPill(
                     title: livePreviewStatusTitle,
                     systemImage: livePreviewStatusIcon,
-                    tint: .secondary
+                    tint: chrome.secondaryText
                 )
             }
             Label(PreviewThemeStore.theme(id: controller.state.layout.selectedThemeID).name, systemImage: "paintpalette")
@@ -871,10 +923,10 @@ private struct StatusBar: View {
                 .monospacedDigit()
         }
         .font(.caption)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(chrome.secondaryText)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(.bar)
+        .background(chrome.toolbarBackground)
     }
 
     private var statusTitle: String {
@@ -960,9 +1012,9 @@ private struct StatusBar: View {
     private var richContentStatusColor: Color {
         switch controller.state.richContentPreview {
         case .failed:
-            return .orange
+            return chrome.warning
         default:
-            return .secondary
+            return chrome.secondaryText
         }
     }
 }
@@ -986,6 +1038,8 @@ private struct StatusPill: View {
 }
 
 private struct DiagnosticsPopover: View {
+    @Environment(\.appChromeTheme) private var chrome
+
     let diagnostics: [RenderDiagnostic]
 
     var body: some View {
@@ -995,7 +1049,7 @@ private struct DiagnosticsPopover: View {
 
             if diagnostics.isEmpty {
                 Text("No warnings.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chrome.secondaryText)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
@@ -1003,7 +1057,7 @@ private struct DiagnosticsPopover: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(group.title)
                                     .font(.caption.weight(.bold))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(chrome.secondaryText)
 
                                 ForEach(group.diagnostics) { diagnostic in
                                     VStack(alignment: .leading, spacing: 4) {
@@ -1015,7 +1069,7 @@ private struct DiagnosticsPopover: View {
                                         if let source = diagnostic.source {
                                             Text(source)
                                                 .font(.caption.monospaced())
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(chrome.secondaryText)
                                                 .lineLimit(3)
                                                 .truncationMode(.middle)
                                         }
@@ -1082,9 +1136,9 @@ private struct DiagnosticsPopover: View {
     private func color(for diagnostic: RenderDiagnostic) -> Color {
         switch diagnostic.severity {
         case .info:
-            return .secondary
+            return chrome.secondaryText
         case .warning:
-            return .orange
+            return chrome.warning
         case .error:
             return .red
         }
@@ -1122,9 +1176,21 @@ private struct DiagnosticsPopover: View {
 
 struct SettingsView: View {
     @EnvironmentObject private var appController: AppController
+    @Environment(\.appChromeTheme) private var chrome
 
     var body: some View {
         Form {
+            Section("App Appearance") {
+                Picker("App Theme", selection: settingBinding(\.appChromeThemeID)) {
+                    ForEach(AppChromeThemeStore.allBuiltInThemes) { theme in
+                        Text(theme.name).tag(theme.id)
+                    }
+                }
+                .accessibilityLabel("App theme")
+
+                AppChromeThemeGrid(selection: settingBinding(\.appChromeThemeID))
+            }
+
             Section("Preview Defaults") {
                 Picker("Render Profile", selection: renderProfileBinding) {
                     ForEach(MarkdownRenderProfile.allCases) { profile in
@@ -1179,7 +1245,8 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 500)
+        .frame(width: 560)
+        .background(chrome.windowBackground)
         .accessibilityLabel("OpenMarked settings")
     }
 
@@ -1225,6 +1292,98 @@ struct SettingsView: View {
                     settings.richMarkdownOptions[keyPath: keyPath] = newValue
                 }
             }
+        )
+    }
+}
+
+private struct AppChromeThemeGrid: View {
+    @Binding var selection: String
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 148), spacing: 8)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            ForEach(AppChromeThemeStore.allBuiltInThemes) { theme in
+                AppChromeThemeButton(
+                    theme: theme,
+                    isSelected: selection == theme.id
+                ) {
+                    selection = theme.id
+                }
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
+private struct AppChromeThemeButton: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    let theme: AppChromeTheme
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 4) {
+                    AppChromePaletteStrip(palette: theme.lightPalette)
+                    AppChromePaletteStrip(palette: theme.darkPalette)
+                }
+
+                HStack(spacing: 6) {
+                    Text(theme.name)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isSelected ? chrome.accent : chrome.tertiaryText)
+                }
+
+                Text("\(theme.lightVariantName) / \(theme.darkVariantName)")
+                    .font(.caption2)
+                    .foregroundStyle(chrome.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, minHeight: 78, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? chrome.accent.opacity(0.12) : chrome.elevatedBackground.opacity(0.72))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? chrome.accent : chrome.separator, lineWidth: isSelected ? 1.5 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(theme.name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private struct AppChromePaletteStrip: View {
+    let palette: AppChromePalette
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Color(omHexRGB: palette.toolbarBackgroundHex)
+            Color(omHexRGB: palette.contentBackgroundHex)
+            Color(omHexRGB: palette.accentHex)
+        }
+        .frame(height: 18)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .stroke(Color(omHexRGB: palette.separatorHex), lineWidth: 1)
         )
     }
 }

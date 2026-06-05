@@ -119,6 +119,7 @@ final class AppInfoTests: XCTestCase {
         store.save(
             ApplicationSettings(
                 defaultThemeID: "missing",
+                appChromeThemeID: "tokyo-night",
                 defaultFontScale: 4.0,
                 isLivePreviewEnabled: false,
                 renderProfile: .gitHubReadme,
@@ -128,6 +129,7 @@ final class AppInfoTests: XCTestCase {
 
         let restored = store.load()
         XCTAssertEqual(restored.defaultThemeID, "default")
+        XCTAssertEqual(restored.appChromeThemeID, "tokyo-night")
         XCTAssertEqual(restored.defaultFontScale, 2.0)
         XCTAssertFalse(restored.isLivePreviewEnabled)
         XCTAssertEqual(restored.renderProfile, .gitHubReadme)
@@ -153,6 +155,7 @@ final class AppInfoTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ApplicationSettings.self, from: data).normalized()
 
         XCTAssertEqual(decoded.defaultThemeID, "default")
+        XCTAssertEqual(decoded.appChromeThemeID, "default")
         XCTAssertEqual(decoded.defaultFontScale, 2.0)
         XCTAssertFalse(decoded.isLivePreviewEnabled)
         XCTAssertEqual(decoded.renderProfile, .openMarked)
@@ -748,6 +751,11 @@ final class AppInfoTests: XCTestCase {
         let result = try CMarkGFMRenderer().render(RenderRequest(document: document, theme: theme, fontScale: 1.3))
 
         XCTAssertEqual(
+            AppChromeThemeStore.allBuiltInThemes.map(\.id),
+            ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
+        )
+        XCTAssertEqual(AppChromeThemeStore.theme(id: "missing").id, "default")
+        XCTAssertEqual(
             PreviewThemeStore.allBuiltInThemes.map(\.id),
             ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
         )
@@ -968,6 +976,7 @@ struct AppInfoTests {
         store.save(
             ApplicationSettings(
                 defaultThemeID: "missing",
+                appChromeThemeID: "tokyo-night",
                 defaultFontScale: 4.0,
                 isLivePreviewEnabled: false,
                 renderProfile: .gitHubReadme,
@@ -977,6 +986,7 @@ struct AppInfoTests {
 
         let restored = store.load()
         #expect(restored.defaultThemeID == "default")
+        #expect(restored.appChromeThemeID == "tokyo-night")
         #expect(restored.defaultFontScale == 2.0)
         #expect(!restored.isLivePreviewEnabled)
         #expect(restored.renderProfile == .gitHubReadme)
@@ -1003,6 +1013,7 @@ struct AppInfoTests {
         let decoded = try JSONDecoder().decode(ApplicationSettings.self, from: data).normalized()
 
         #expect(decoded.defaultThemeID == "default")
+        #expect(decoded.appChromeThemeID == "default")
         #expect(decoded.defaultFontScale == 2.0)
         #expect(!decoded.isLivePreviewEnabled)
         #expect(decoded.renderProfile == .openMarked)
@@ -1651,6 +1662,11 @@ struct AppInfoTests {
         let theme = PreviewThemeStore.theme(id: "github")
         let result = try CMarkGFMRenderer().render(RenderRequest(document: document, theme: theme, fontScale: 1.3))
 
+        #expect(
+            AppChromeThemeStore.allBuiltInThemes.map(\.id)
+                == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
+        )
+        #expect(AppChromeThemeStore.theme(id: "missing").id == "default")
         #expect(
             PreviewThemeStore.allBuiltInThemes.map(\.id)
                 == ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]

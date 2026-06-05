@@ -144,6 +144,7 @@ verify(restored?.frame?.width == 900, "window frame should persist")
 let settingsStore = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "VerifierSettings", lastDocumentPathsKey: "VerifierLastPaths")
 let savedSettings = ApplicationSettings(
     defaultThemeID: "missing",
+    appChromeThemeID: "tokyo-night",
     defaultFontScale: 4.0,
     isLivePreviewEnabled: false,
     renderProfile: .gitHubReadme
@@ -151,6 +152,7 @@ let savedSettings = ApplicationSettings(
 settingsStore.save(savedSettings)
 let restoredSettings = settingsStore.load()
 verify(restoredSettings.defaultThemeID == "default", "settings should normalize unknown theme ids")
+verify(restoredSettings.appChromeThemeID == "tokyo-night", "settings should persist app chrome theme ids")
 verify(restoredSettings.defaultFontScale == 2.0, "settings should clamp default font scale")
 verify(!restoredSettings.isLivePreviewEnabled, "settings should persist live preview preference")
 verify(restoredSettings.renderProfile == .gitHubReadme, "settings should persist render profile")
@@ -169,9 +171,15 @@ let oldSettingsPayload = Data(
     """.utf8
 )
 let decodedOldSettings = try JSONDecoder().decode(ApplicationSettings.self, from: oldSettingsPayload).normalized()
+verify(decodedOldSettings.appChromeThemeID == "default", "old settings payloads should decode with the default app chrome theme")
 verify(decodedOldSettings.richMarkdownOptions == .default, "old settings payloads should decode with rich Markdown defaults")
 verify(decodedOldSettings.renderProfile == .openMarked, "old settings payloads should decode with the OpenMarked render profile")
 
+verify(
+    AppChromeThemeStore.allBuiltInThemes.map(\.id) == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
+    "app chrome theme ids should include the palette themes"
+)
+verify(AppChromeThemeStore.theme(id: "missing").id == "default", "unknown app chrome themes should fall back to default")
 verify(MarkdownRenderProfile.openMarked.displayName == "OpenMarked", "OpenMarked render profile should be available")
 verify(MarkdownRenderProfile.gitHubReadme.headingSlugStyle == .gitHub, "GitHub README profile should select GitHub heading slugs")
 verify(MarkdownRenderProfile.gitHubReadme.supportsGitHubCallouts, "GitHub README profile should advertise callout support")

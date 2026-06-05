@@ -355,7 +355,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func applySettings(_ settings: ApplicationSettings, previousSettings: ApplicationSettings? = nil) {
-        if shouldApplyDefaultLayout(settings, previousSettings: previousSettings) {
+        let shouldApplyDefaultLayoutChanges = shouldApplyDefaultLayout(settings, previousSettings: previousSettings)
+        if shouldApplyDefaultLayoutChanges {
             var updatedLayout = state.layout
             updatedLayout.selectedThemeID = settings.defaultLayout.selectedThemeID
             updatedLayout.fontScale = settings.defaultLayout.fontScale
@@ -363,14 +364,26 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         }
 
         if let markdownDocument = state.currentMarkdownDocument {
-            render(markdownDocument)
-            if settings.isLivePreviewEnabled {
-                startSourceWatcher(for: markdownDocument)
-            } else {
-                stopLivePreview()
-                state.noteLivePreviewInactive()
+            let shouldRefreshPreview = shouldRefreshPreview(
+                settings,
+                previousSettings: previousSettings,
+                defaultLayoutChanged: shouldApplyDefaultLayoutChanges
+            )
+            let shouldUpdateLivePreview = shouldUpdateLivePreview(settings, previousSettings: previousSettings)
+
+            if shouldRefreshPreview {
+                render(markdownDocument)
             }
-            persistCurrentWindowState()
+
+            if shouldRefreshPreview || shouldUpdateLivePreview {
+                if settings.isLivePreviewEnabled {
+                    startSourceWatcher(for: markdownDocument)
+                } else {
+                    stopLivePreview()
+                    state.noteLivePreviewInactive()
+                }
+                persistCurrentWindowState()
+            }
         }
     }
 
@@ -457,6 +470,33 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
         return settings.defaultThemeID != previousSettings.defaultThemeID
             || settings.defaultFontScale != previousSettings.defaultFontScale
+    }
+
+    private func shouldRefreshPreview(
+        _ settings: ApplicationSettings,
+        previousSettings: ApplicationSettings?,
+        defaultLayoutChanged: Bool
+    ) -> Bool {
+        guard let previousSettings else {
+            return true
+        }
+
+        return defaultLayoutChanged
+            || settings.allowsRemoteImages != previousSettings.allowsRemoteImages
+            || settings.allowsRawHTML != previousSettings.allowsRawHTML
+            || settings.renderProfile != previousSettings.renderProfile
+            || settings.richMarkdownOptions != previousSettings.richMarkdownOptions
+    }
+
+    private func shouldUpdateLivePreview(
+        _ settings: ApplicationSettings,
+        previousSettings: ApplicationSettings?
+    ) -> Bool {
+        guard let previousSettings else {
+            return true
+        }
+
+        return settings.isLivePreviewEnabled != previousSettings.isLivePreviewEnabled
     }
 
     private func startSourceWatcher(for markdownDocument: MarkdownDocument, markWatching: Bool = true) {

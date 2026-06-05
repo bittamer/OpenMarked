@@ -2,6 +2,7 @@ import Foundation
 
 public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var defaultThemeID: String
+    public var appChromeThemeID: String
     public var defaultFontScale: Double
     public var isLivePreviewEnabled: Bool
     public var preservesScrollPosition: Bool
@@ -15,6 +16,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
 
     public init(
         defaultThemeID: String = PreviewThemeStore.defaultThemeID,
+        appChromeThemeID: String = AppChromeThemeStore.defaultThemeID,
         defaultFontScale: Double = 1.0,
         isLivePreviewEnabled: Bool = true,
         preservesScrollPosition: Bool = true,
@@ -27,6 +29,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         richMarkdownOptions: RichMarkdownOptions = .default
     ) {
         self.defaultThemeID = defaultThemeID
+        self.appChromeThemeID = appChromeThemeID
         self.defaultFontScale = defaultFontScale
         self.isLivePreviewEnabled = isLivePreviewEnabled
         self.preservesScrollPosition = preservesScrollPosition
@@ -44,6 +47,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public func normalized() -> ApplicationSettings {
         var settings = self
         settings.defaultThemeID = PreviewThemeStore.theme(id: defaultThemeID).id
+        settings.appChromeThemeID = AppChromeThemeStore.theme(id: appChromeThemeID).id
         settings.defaultFontScale = min(2.0, max(0.6, defaultFontScale))
         return settings
     }
@@ -58,6 +62,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case defaultThemeID
+        case appChromeThemeID
         case defaultFontScale
         case isLivePreviewEnabled
         case preservesScrollPosition
@@ -76,6 +81,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
 
         self.init(
             defaultThemeID: try container.decodeIfPresent(String.self, forKey: .defaultThemeID) ?? defaults.defaultThemeID,
+            appChromeThemeID: try container.decodeIfPresent(String.self, forKey: .appChromeThemeID) ?? defaults.appChromeThemeID,
             defaultFontScale: try container.decodeIfPresent(Double.self, forKey: .defaultFontScale) ?? defaults.defaultFontScale,
             isLivePreviewEnabled: try container.decodeIfPresent(Bool.self, forKey: .isLivePreviewEnabled) ?? defaults.isLivePreviewEnabled,
             preservesScrollPosition: try container.decodeIfPresent(Bool.self, forKey: .preservesScrollPosition) ?? defaults.preservesScrollPosition,

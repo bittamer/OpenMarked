@@ -19,6 +19,7 @@ struct OpenMarkedApplication: App {
         Settings {
             SettingsView()
                 .environmentObject(appController)
+                .appChromeTheme(appController.settings.appChromeThemeID)
         }
     }
 }

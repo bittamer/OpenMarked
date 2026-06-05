@@ -27,10 +27,11 @@ This repository currently contains:
 - Offline Mermaid diagram and KaTeX math rendering using bundled local assets rather than CDN dependencies.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
 - Ten built-in preview themes - Default, GitHub, Minimal, plus popular palettes (Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, Gruvbox), each with light and dark variants - alongside print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
+- Separate app chrome themes for the OpenMarked window shell, with palette choices for Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, and Gruvbox.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
 - Outline filtering, rendered-preview search, richer status statistics, diagnostics popover, and source file actions.
 - Standalone HTML export, copy rendered HTML, PDF export, print, and export error handling.
-- A native Settings window for preview defaults, render profile, rich Markdown controls, link validation, content loading, export defaults, live preview, scroll preservation, and session restoration.
+- A native Settings window for app appearance, preview defaults, render profile, rich Markdown controls, link validation, content loading, export defaults, live preview, scroll preservation, and session restoration.
 - Keyboard shortcuts for core document, preview, navigation, zoom, search, export, and print actions.
 - Accessibility labels for primary controls and states, plus reduced-motion handling for preview navigation/search scrolling.
 - Manual QA checklist, release notes, release gate notes, performance smoke coverage, WebKit screenshot baselines, PDF/export artifact checks, and a developer packaging script that creates `OpenMarked.app`, a ZIP artifact, and a DMG.

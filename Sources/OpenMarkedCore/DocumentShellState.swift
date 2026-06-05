@@ -6,13 +6,19 @@ public struct OpenedDocument: Equatable, Identifiable {
     public let displayName: String
     public let fileExtension: String
     public let openedAt: Date
+    public let markdownDocument: MarkdownDocument?
 
-    public init(url: URL, openedAt: Date = Date()) {
+    public init(url: URL, openedAt: Date = Date(), markdownDocument: MarkdownDocument? = nil) {
         self.url = url
-        self.displayName = url.lastPathComponent.isEmpty ? "Untitled" : url.lastPathComponent
+        self.displayName = markdownDocument?.displayTitle ?? (url.lastPathComponent.isEmpty ? "Untitled" : url.lastPathComponent)
         self.fileExtension = url.pathExtension.lowercased()
         self.openedAt = openedAt
-        self.id = url.standardizedFileURL.path
+        self.markdownDocument = markdownDocument
+        self.id = markdownDocument?.id ?? url.standardizedFileURL.path
+    }
+
+    public init(markdownDocument: MarkdownDocument, openedAt: Date = Date()) {
+        self.init(url: markdownDocument.sourceURL, openedAt: openedAt, markdownDocument: markdownDocument)
     }
 }
 
@@ -31,6 +37,9 @@ public enum DocumentOpenErrorKind: String, Equatable, Sendable {
     case missingFile
     case directory
     case unreadable
+    case encodingFailure
+    case bookmarkCreationFailure
+    case bookmarkResolutionFailure
     case noSupportedFiles
 }
 
@@ -116,6 +125,8 @@ public struct WindowLayoutState: Equatable {
     }
 }
 
+extension WindowLayoutState: Codable, Sendable {}
+
 public struct DocumentWindowState: Equatable {
     public var content: WindowContentState
     public var preview: PreviewShellState
@@ -166,6 +177,10 @@ public struct DocumentWindowState: Equatable {
         hasDocument
     }
 
+    public var currentMarkdownDocument: MarkdownDocument? {
+        currentDocument?.markdownDocument
+    }
+
     public mutating func beginOpening(url: URL) {
         content = .loading(PendingDocument(url: url))
         preview = .loading
@@ -176,6 +191,10 @@ public struct DocumentWindowState: Equatable {
         content = .loaded(document)
         preview = .placeholder
         statusMessage = "Opened \(document.displayName)"
+    }
+
+    public mutating func applyRestoredLayout(_ layout: WindowLayoutState) {
+        self.layout = layout
     }
 
     public mutating func failOpening(_ error: DocumentOpenError) {

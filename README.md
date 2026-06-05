@@ -2,7 +2,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently past Phase 1: native app shell. The first MVP is focused on a beautiful local Markdown preview experience, reliable CommonMark/GitHub Flavored Markdown rendering, file watching, document navigation, built-in themes, and HTML/PDF export.
+The project is currently past Phase 2: document model and file access. The first MVP is focused on a beautiful local Markdown preview experience, reliable CommonMark/GitHub Flavored Markdown rendering, file watching, document navigation, built-in themes, and HTML/PDF export.
 
 ## Current Status
 
@@ -15,6 +15,7 @@ This repository currently contains:
 - App/window state models for empty, loading, loaded, and error states.
 - File open panel, drag/drop file opening, Dock file opening, and recent-document registration.
 - Native menu commands and a toolbar mapped to Phase 1 shell actions.
+- Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
 - Core test target.
 - Markdown fixture corpus.
 - CI workflow for Swift build and tests.

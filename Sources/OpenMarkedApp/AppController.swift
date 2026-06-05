@@ -137,7 +137,8 @@ final class AppController: ObservableObject {
             defer: false
         )
 
-        let delegate = WindowLifecycleDelegate { [weak self] in
+        let delegate = WindowLifecycleDelegate { [weak self, weak controller] in
+            controller?.persistCurrentWindowState()
             self?.retainedWindows.removeValue(forKey: windowID)
             self?.retainedWindowDelegates.removeValue(forKey: windowID)
         }

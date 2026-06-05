@@ -7,6 +7,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     let id = UUID()
 
     @Published private(set) var state = DocumentWindowState()
+    private let stateStore = DocumentWindowStateStore.shared
+
     weak var window: NSWindow? {
         didSet {
             updateWindowTitle()
@@ -25,9 +27,14 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         updateWindowTitle()
 
         do {
-            let document = try DocumentOpenValidator.validate(url: url)
+            let markdownDocument = try MarkdownDocumentLoader.load(url: url)
+            let document = OpenedDocument(markdownDocument: markdownDocument)
             state.finishOpening(document: document)
+            if let restoredState = stateStore.restore(forDocumentID: markdownDocument.id) {
+                state.applyRestoredLayout(restoredState.layout)
+            }
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
+            persistCurrentWindowState()
         } catch let error as DocumentOpenError {
             state.failOpening(error)
         } catch {
@@ -62,22 +69,27 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func toggleOutline() {
         state.toggleOutline()
+        persistCurrentWindowState()
     }
 
     func setTheme(id: String) {
         state.setTheme(id: id)
+        persistCurrentWindowState()
     }
 
     func zoomIn() {
         state.zoomIn()
+        persistCurrentWindowState()
     }
 
     func zoomOut() {
         state.zoomOut()
+        persistCurrentWindowState()
     }
 
     func resetZoom() {
         state.resetZoom()
+        persistCurrentWindowState()
     }
 
     func exportHTMLPlaceholder() {
@@ -114,5 +126,24 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func updateWindowTitle() {
         window?.title = state.windowTitle
+    }
+
+    func persistCurrentWindowState() {
+        guard let markdownDocument = state.currentMarkdownDocument else {
+            return
+        }
+
+        stateStore.save(
+            document: markdownDocument,
+            layout: state.layout,
+            frame: window.map {
+                DocumentWindowFrame(
+                    x: Double($0.frame.origin.x),
+                    y: Double($0.frame.origin.y),
+                    width: Double($0.frame.size.width),
+                    height: Double($0.frame.size.height)
+                )
+            }
+        )
     }
 }

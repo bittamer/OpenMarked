@@ -50,6 +50,9 @@ struct ContentView: View {
         .onChange(of: controller.state.windowTitle) { _ in
             controller.updateWindowTitle()
         }
+        .onDisappear {
+            controller.persistCurrentWindowState()
+        }
         .dropDestination(for: URL.self) { urls, _ in
             appController.openDroppedURLs(urls, into: controller)
             return true
@@ -261,7 +264,12 @@ private struct LoadedDocumentPlaceholder: View {
                 Label(document.url.path, systemImage: "location")
                     .lineLimit(2)
                 Label(document.fileExtension.uppercased(), systemImage: "doc")
-                Label("Theme: Default", systemImage: "paintbrush")
+                if let statistics = document.markdownDocument?.statistics {
+                    Label("\(statistics.wordCount) words, \(statistics.lineCount) lines", systemImage: "text.word.spacing")
+                }
+                if let title = document.markdownDocument?.frontMatter?.title {
+                    Label("Title: \(title)", systemImage: "tag")
+                }
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -316,8 +324,11 @@ private struct StatusBar: View {
 
             Spacer()
 
+            if let statistics = controller.state.currentMarkdownDocument?.statistics {
+                Text("\(statistics.wordCount) words")
+                Text("\(statistics.readingTimeMinutes) min read")
+            }
             Text("Zoom \(Int((controller.state.layout.fontScale * 100).rounded()))%")
-            Text(controller.state.layout.selectedThemeID.capitalized)
         }
         .font(.caption)
         .foregroundStyle(.secondary)

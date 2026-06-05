@@ -24,12 +24,12 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 2: Document Model and File Access
 
-- [ ] MVP-201: Implement Document Model.
-- [ ] MVP-202: Implement Safe File Loading.
-- [ ] MVP-203: Implement Security-Scoped Bookmark Handling.
-- [ ] MVP-204: Parse Front Matter.
-- [ ] MVP-205: Compute Basic Source Statistics.
-- [ ] MVP-206: Persist Per-Document Window State.
+- [x] MVP-201: Implement Document Model.
+- [x] MVP-202: Implement Safe File Loading.
+- [x] MVP-203: Implement Security-Scoped Bookmark Handling.
+- [x] MVP-204: Parse Front Matter.
+- [x] MVP-205: Compute Basic Source Statistics.
+- [x] MVP-206: Persist Per-Document Window State.
 
 ## Phase 3: Markdown Rendering Core
 

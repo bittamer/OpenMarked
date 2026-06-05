@@ -11,20 +11,38 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
 
     private var webView: WKWebView?
     private var job: Job?
+    private var richMarkdownState: RichMarkdownRenderState = .empty
 
-    func exportPDF(html: String, baseURL: URL, destinationURL: URL, completion: @escaping (Result<Void, ExportError>) -> Void) {
-        load(html: html, baseURL: baseURL, job: .pdf(destinationURL: destinationURL, completion: completion))
+    func exportPDF(
+        html: String,
+        baseURL: URL,
+        richMarkdownState: RichMarkdownRenderState = .empty,
+        destinationURL: URL,
+        completion: @escaping (Result<Void, ExportError>) -> Void
+    ) {
+        load(
+            html: html,
+            baseURL: baseURL,
+            richMarkdownState: richMarkdownState,
+            job: .pdf(destinationURL: destinationURL, completion: completion)
+        )
     }
 
-    func print(html: String, baseURL: URL, completion: @escaping (Result<Void, ExportError>) -> Void) {
-        load(html: html, baseURL: baseURL, job: .print(completion: completion))
+    func print(
+        html: String,
+        baseURL: URL,
+        richMarkdownState: RichMarkdownRenderState = .empty,
+        completion: @escaping (Result<Void, ExportError>) -> Void
+    ) {
+        load(html: html, baseURL: baseURL, richMarkdownState: richMarkdownState, job: .print(completion: completion))
     }
 
-    private func load(html: String, baseURL: URL, job: Job) {
+    private func load(html: String, baseURL: URL, richMarkdownState: RichMarkdownRenderState, job: Job) {
         self.job = job
+        self.richMarkdownState = richMarkdownState
 
         let configuration = WKWebViewConfiguration()
-        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = richMarkdownState.requiresRichContentRuntime
 
         let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 612, height: 792), configuration: configuration)
         webView.navigationDelegate = self
@@ -33,6 +51,31 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard richMarkdownState.requiresRichContentRuntime else {
+            finishLoadedJob(webView)
+            return
+        }
+
+        Task { @MainActor [weak self, weak webView] in
+            guard let self, let webView else {
+                return
+            }
+
+            do {
+                let status = try await RichContentWebViewRuntime.installAndWait(for: self.richMarkdownState, in: webView)
+                if status.hasFailure {
+                    self.finishWithFailure(RichContentExportRuntimeError(message: status.userMessage))
+                    return
+                }
+
+                self.finishLoadedJob(webView)
+            } catch {
+                self.finishWithFailure(error)
+            }
+        }
+    }
+
+    private func finishLoadedJob(_ webView: WKWebView) {
         switch job {
         case .pdf(let destinationURL, let completion):
             runPDFExport(webView: webView, destinationURL: destinationURL, completion: completion)
@@ -115,5 +158,14 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
         webView?.navigationDelegate = nil
         webView = nil
         job = nil
+        richMarkdownState = .empty
+    }
+}
+
+private struct RichContentExportRuntimeError: Error, LocalizedError {
+    let message: String
+
+    var errorDescription: String? {
+        message
     }
 }

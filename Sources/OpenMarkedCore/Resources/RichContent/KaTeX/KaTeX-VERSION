@@ -1,0 +1,6 @@
+name: katex
+version: 0.17.0
+license: MIT
+source: https://github.com/KaTeX/KaTeX
+registry: https://registry.npmjs.org/katex/-/katex-0.17.0.tgz
+vendored: 2026-06-05

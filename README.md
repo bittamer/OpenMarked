@@ -94,6 +94,8 @@ Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdo
 
 OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, and GitHub alert/callout blockquotes through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
+In the `0.3.0` development line, OpenMarked also bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources and has the trusted WebKit runtime pipeline in place. Actual Mermaid diagram rendering and KaTeX math transforms are the next implementation phases.
+
 Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 
 Export supports standalone HTML, copying the rendered HTML fragment, PDF export, and native Print. HTML export can embed local images and theme CSS according to Settings.

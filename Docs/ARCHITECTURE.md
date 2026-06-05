@@ -124,6 +124,18 @@ Link validation behavior:
 - Remote HTTP(S) links are parsed but not crawled during normal rendering.
 - Unsupported schemes and malformed URLs produce diagnostics without interrupting preview.
 
+## Rich Content Resource Direction
+
+Phase 3 of 0.3.0 establishes the bundled resource and WebKit readiness pipeline for Mermaid and KaTeX.
+
+Rich content behavior:
+
+- Mermaid `11.15.0` and KaTeX `0.17.0` are vendored as SwiftPM resources with local license/version metadata.
+- `RichContentAssetStore` is the only code path that should resolve rich assets; it supports both source-tree paths and SwiftPM's flattened processed-resource layout.
+- `HTMLDocumentAssembler` conditionally adds OpenMarked rich CSS and KaTeX CSS/font references when the detected, enabled document features require them.
+- `PreviewWebView`, PDF/print export, and `OpenMarkedSnapshotter` call `RichContentWebViewRuntime.installAndWait` after sanitized HTML loads.
+- Phase 3 does not yet transform Mermaid fences or math delimiters into rendered output; Phase 4 and Phase 5 will add those DOM transforms behind the existing runtime completion signal.
+
 ## Export Direction
 
 Phase 8 keeps export document assembly in `OpenMarkedCore` and platform workflows in `OpenMarkedApp`.

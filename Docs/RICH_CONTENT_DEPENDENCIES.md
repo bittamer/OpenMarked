@@ -17,26 +17,32 @@ These pins were checked against the npm registry on 2026-06-05.
 - CI and normal app builds must not download Mermaid or KaTeX.
 - License files must be copied with the vendored assets.
 - Version files must record the package name, version, source URL, registry tarball URL, and date vendored.
+- Use package-prefixed metadata filenames because SwiftPM processed resources cannot contain duplicate leaf names.
 - Updates must be deliberate commits, not floating version ranges.
 
-## Planned Resource Layout
+## Vendored Resource Layout
 
 ```text
 Sources/OpenMarkedCore/Resources/RichContent/
   Mermaid/
     mermaid.min.js
-    LICENSE
-    VERSION
+    Mermaid-LICENSE
+    Mermaid-VERSION
   KaTeX/
     katex.min.js
     katex.min.css
     fonts/
-    LICENSE
-    VERSION
+      KaTeX_*.ttf
+      KaTeX_*.woff
+      KaTeX_*.woff2
+    KaTeX-LICENSE
+    KaTeX-VERSION
   OpenMarked/
     rich-content.css
     rich-content-runtime.js
 ```
+
+SwiftPM may flatten these files in the generated resource bundle. Runtime code must resolve them through `RichContentAssetStore`, which first checks the source-style relative path and then falls back to unique bundled filenames.
 
 ## Verification Commands
 
@@ -60,4 +66,3 @@ katex 0.17.0 MIT
 - KaTeX must render with `trust: false`.
 - User-authored `<script>` tags and inline event handlers must remain blocked by the existing preview sanitizer.
 - Remote link validation remains disabled by default and must be manual or opt-in if implemented.
-

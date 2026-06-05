@@ -254,7 +254,8 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
             bodyHTML: policyHTML,
             baseURL: request.document.sourceURL.deletingLastPathComponent(),
             theme: request.theme,
-            fontScale: request.fontScale
+            fontScale: request.fontScale,
+            richMarkdownState: richMarkdownState
         )
 
         return RenderResult(
@@ -476,7 +477,8 @@ public enum HTMLDocumentAssembler {
         bodyHTML: String,
         baseURL: URL? = nil,
         theme: PreviewTheme = PreviewThemeStore.defaultTheme,
-        fontScale: Double = 1.0
+        fontScale: Double = 1.0,
+        richMarkdownState: RichMarkdownRenderState = .empty
     ) -> String {
         let escapedTitle = HTMLUtilities.escapeText(title)
         let baseElement: String
@@ -487,6 +489,7 @@ public enum HTMLDocumentAssembler {
         }
         let boundedFontScale = min(2.0, max(0.6, fontScale))
         let maxWidth = max(560, theme.defaultMaxWidth)
+        let richContentStyles = RichContentHTMLAssets.styleBlock(for: richMarkdownState)
 
         return """
         <!doctype html>
@@ -506,7 +509,7 @@ public enum HTMLDocumentAssembler {
           @media print {
           \(theme.printCSS)
           }
-          </style>
+          </style>\(richContentStyles)
         </head>
         <body>
           <main class="om-document">

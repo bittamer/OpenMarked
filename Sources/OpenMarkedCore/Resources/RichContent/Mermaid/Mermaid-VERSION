@@ -1,0 +1,6 @@
+name: mermaid
+version: 11.15.0
+license: MIT
+source: https://github.com/mermaid-js/mermaid
+registry: https://registry.npmjs.org/mermaid/-/mermaid-11.15.0.tgz
+vendored: 2026-06-05

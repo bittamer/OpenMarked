@@ -313,6 +313,26 @@ public struct RichMarkdownRenderState: Equatable, Sendable {
         documentFeatures.containsRemoteLinks && options.validatesRemoteLinks
     }
 
+    public var requiresMermaidRuntime: Bool {
+        documentFeatures.containsMermaid && options.rendersMermaid
+    }
+
+    public var requiresMathRuntime: Bool {
+        documentFeatures.containsMath && options.rendersMath
+    }
+
+    public var requiresRichContentRuntime: Bool {
+        requiresMermaidRuntime || requiresMathRuntime
+    }
+
+    public var requiresRichContentStyles: Bool {
+        requiresMermaidRuntime || requiresMathRuntime
+    }
+
+    public var richContentRuntimeFeatures: Set<RichMarkdownFeature> {
+        enabledDocumentFeatures.intersection([.mermaid, .math])
+    }
+
     public var disabledFeatureDiagnostics: [RenderDiagnostic] {
         disabledDocumentFeatures
             .filter { feature in

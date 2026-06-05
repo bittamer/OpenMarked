@@ -214,6 +214,66 @@ final class AppInfoTests: XCTestCase {
         XCTAssertFalse(state.requiresRemoteValidation)
     }
 
+    func testRichContentAssetStoreLoadsBundledResources() throws {
+        let manifest = RichContentAssetStore.manifest()
+
+        XCTAssertEqual(manifest.mermaid.version, "11.15.0")
+        XCTAssertEqual(manifest.katex.version, "0.17.0")
+        XCTAssertTrue(manifest.hasMermaidRuntime)
+        XCTAssertTrue(manifest.hasKaTeXRuntime)
+        XCTAssertTrue(manifest.hasKaTeXCSS)
+        XCTAssertTrue(manifest.hasOpenMarkedRuntime)
+        XCTAssertTrue(manifest.hasOpenMarkedCSS)
+        XCTAssertGreaterThan(manifest.katexFontCount, 0)
+        XCTAssertTrue(try RichContentAssetStore.mermaidRuntimeJavaScript().contains("mermaid"))
+        XCTAssertTrue(try RichContentAssetStore.katexRuntimeJavaScript().contains("katex"))
+        XCTAssertTrue(try RichContentAssetStore.openMarkedRuntimeJavaScript().contains("openMarkedRichContent"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try RichContentAssetStore.requiredResourceURL("RichContent/Mermaid/Mermaid-LICENSE").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try RichContentAssetStore.requiredResourceURL("RichContent/KaTeX/KaTeX-LICENSE").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try RichContentAssetStore.requiredResourceURL("RichContent/KaTeX/fonts/KaTeX_Main-Regular.woff2").path))
+
+        let katexCSS = try RichContentAssetStore.katexCSSForHTML()
+        XCTAssertTrue(katexCSS.contains("file://"))
+        XCTAssertTrue(katexCSS.contains("KaTeX_Main-Regular.woff2"))
+    }
+
+    func testRichContentHTMLAssetsAreConditional() throws {
+        let plainHTML = HTMLDocumentAssembler.assemble(title: "Plain", bodyHTML: "<p>Plain</p>")
+        XCTAssertFalse(plainHTML.contains("om-rich-content-assets"))
+        XCTAssertFalse(plainHTML.contains("katex-version"))
+
+        let state = RichMarkdownRenderState(
+            documentFeatures: RichMarkdownDocumentFeatures(features: [.mermaid, .math])
+        )
+        let richHTML = HTMLDocumentAssembler.assemble(
+            title: "Rich",
+            bodyHTML: "<p>Rich</p>",
+            richMarkdownState: state
+        )
+
+        XCTAssertTrue(richHTML.contains(#"id="om-rich-content-assets""#))
+        XCTAssertTrue(richHTML.contains("data-openmarked-rich-content=\"math mermaid\""))
+        XCTAssertTrue(richHTML.contains("katex-version"))
+        XCTAssertTrue(try RichContentRuntimeAssembler.runtimeScripts(for: state).count == 3)
+        XCTAssertTrue(RichContentRuntimeAssembler.invocationScript(for: state).contains("mermaid: true"))
+        XCTAssertTrue(RichContentRuntimeAssembler.invocationScript(for: state).contains("katex: true"))
+    }
+
+    func testRichContentRuntimeStatusParsing() {
+        let status = RichContentWebViewRuntime.status(
+            from: [
+                "ready": false,
+                "timedOut": true,
+                "errors": ["Timed out"]
+            ],
+            requestedFeatures: [.mermaid]
+        )
+
+        XCTAssertTrue(status.hasFailure)
+        XCTAssertEqual(status.requestedFeatures, [.mermaid])
+        XCTAssertEqual(status.userMessage, "Rich content rendering timed out")
+    }
+
     func testRenderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {
         let expectedKinds: Set<RenderDiagnosticKind> = [
             .missingLocalImage,
@@ -816,6 +876,69 @@ struct AppInfoTests {
         #expect(state.disabledFeatureDiagnostics.count == 3)
         #expect(state.disabledFeatureDiagnostics.allSatisfy { $0.kind == .richContentDisabled })
         #expect(!state.requiresRemoteValidation)
+    }
+
+    @Test("Rich content asset store loads bundled resources")
+    func richContentAssetStoreLoadsBundledResources() throws {
+        let manifest = RichContentAssetStore.manifest()
+
+        #expect(manifest.mermaid.version == "11.15.0")
+        #expect(manifest.katex.version == "0.17.0")
+        #expect(manifest.hasMermaidRuntime)
+        #expect(manifest.hasKaTeXRuntime)
+        #expect(manifest.hasKaTeXCSS)
+        #expect(manifest.hasOpenMarkedRuntime)
+        #expect(manifest.hasOpenMarkedCSS)
+        #expect(manifest.katexFontCount > 0)
+        #expect(try RichContentAssetStore.mermaidRuntimeJavaScript().contains("mermaid"))
+        #expect(try RichContentAssetStore.katexRuntimeJavaScript().contains("katex"))
+        #expect(try RichContentAssetStore.openMarkedRuntimeJavaScript().contains("openMarkedRichContent"))
+        #expect(FileManager.default.fileExists(atPath: try RichContentAssetStore.requiredResourceURL("RichContent/Mermaid/Mermaid-LICENSE").path))
+        #expect(FileManager.default.fileExists(atPath: try RichContentAssetStore.requiredResourceURL("RichContent/KaTeX/KaTeX-LICENSE").path))
+        #expect(FileManager.default.fileExists(atPath: try RichContentAssetStore.requiredResourceURL("RichContent/KaTeX/fonts/KaTeX_Main-Regular.woff2").path))
+
+        let katexCSS = try RichContentAssetStore.katexCSSForHTML()
+        #expect(katexCSS.contains("file://"))
+        #expect(katexCSS.contains("KaTeX_Main-Regular.woff2"))
+    }
+
+    @Test("Rich content HTML assets are conditional")
+    func richContentHTMLAssetsAreConditional() throws {
+        let plainHTML = HTMLDocumentAssembler.assemble(title: "Plain", bodyHTML: "<p>Plain</p>")
+        #expect(!plainHTML.contains("om-rich-content-assets"))
+        #expect(!plainHTML.contains("katex-version"))
+
+        let state = RichMarkdownRenderState(
+            documentFeatures: RichMarkdownDocumentFeatures(features: [.mermaid, .math])
+        )
+        let richHTML = HTMLDocumentAssembler.assemble(
+            title: "Rich",
+            bodyHTML: "<p>Rich</p>",
+            richMarkdownState: state
+        )
+
+        #expect(richHTML.contains(#"id="om-rich-content-assets""#))
+        #expect(richHTML.contains("data-openmarked-rich-content=\"math mermaid\""))
+        #expect(richHTML.contains("katex-version"))
+        #expect(try RichContentRuntimeAssembler.runtimeScripts(for: state).count == 3)
+        #expect(RichContentRuntimeAssembler.invocationScript(for: state).contains("mermaid: true"))
+        #expect(RichContentRuntimeAssembler.invocationScript(for: state).contains("katex: true"))
+    }
+
+    @Test("Rich content runtime status parsing is deterministic")
+    func richContentRuntimeStatusParsing() {
+        let status = RichContentWebViewRuntime.status(
+            from: [
+                "ready": false,
+                "timedOut": true,
+                "errors": ["Timed out"]
+            ],
+            requestedFeatures: [.mermaid]
+        )
+
+        #expect(status.hasFailure)
+        #expect(status.requestedFeatures == [.mermaid])
+        #expect(status.userMessage == "Rich content rendering timed out")
     }
 
     @Test("Render diagnostic kinds include rich Markdown foundation kinds")

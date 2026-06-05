@@ -1,0 +1,35 @@
+.om-rich-content-status {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.om-mermaid,
+.om-math-inline,
+.om-math-display {
+  max-width: 100%;
+}
+
+.om-mermaid {
+  overflow-x: auto;
+}
+
+.om-math-display {
+  display: block;
+  overflow-x: auto;
+}
+
+.om-rich-content-error {
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 6px;
+  color: var(--om-muted-foreground, inherit);
+  font-size: 0.875em;
+  padding: 0.65em 0.75em;
+}

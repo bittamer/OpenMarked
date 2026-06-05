@@ -176,7 +176,18 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             webView.navigationDelegate = nil
         }
 
-        try await loadHTML(result.fullHTML, baseURL: document.sourceURL.deletingLastPathComponent(), in: webView)
+        try await loadHTML(
+            PreviewHTMLSecurityPolicy.sanitize(result.fullHTML),
+            baseURL: document.sourceURL.deletingLastPathComponent(),
+            in: webView
+        )
+        let richContentStatus = try await RichContentWebViewRuntime.installAndWait(
+            for: result.richMarkdownState,
+            in: webView
+        )
+        guard !richContentStatus.hasFailure else {
+            throw SnapshotError.webNavigationFailed(richContentStatus.userMessage)
+        }
         try await Task.sleep(nanoseconds: 250_000_000)
 
         let configuration = WKSnapshotConfiguration()

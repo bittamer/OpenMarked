@@ -208,7 +208,12 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         let exporter = WebKitPrintExporter()
         activePrintExporter = exporter
         state.notePlaceholderAction("Exporting PDF")
-        exporter.exportPDF(html: html, baseURL: context.document.sourceURL.deletingLastPathComponent(), destinationURL: destinationURL) { [weak self] result in
+        exporter.exportPDF(
+            html: html,
+            baseURL: context.document.sourceURL.deletingLastPathComponent(),
+            richMarkdownState: context.renderResult.richMarkdownState,
+            destinationURL: destinationURL
+        ) { [weak self] result in
             guard let self else {
                 return
             }
@@ -236,7 +241,11 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         let exporter = WebKitPrintExporter()
         activePrintExporter = exporter
         state.notePlaceholderAction("Preparing print")
-        exporter.print(html: html, baseURL: context.document.sourceURL.deletingLastPathComponent()) { [weak self] result in
+        exporter.print(
+            html: html,
+            baseURL: context.document.sourceURL.deletingLastPathComponent(),
+            richMarkdownState: context.renderResult.richMarkdownState
+        ) { [weak self] result in
             guard let self else {
                 return
             }

@@ -89,6 +89,7 @@ struct PreviewWebView: NSViewRepresentable {
         var onSearchResult: (PreviewSearchResult) -> Void
         var lastHTML: String?
         var lastBaseURL: URL?
+        var lastRichMarkdownState: RichMarkdownRenderState = .empty
         var lastNavigationRequestID: UUID?
         var lastSearchRequestID: UUID?
         var preservesScrollPosition = true
@@ -108,13 +109,15 @@ struct PreviewWebView: NSViewRepresentable {
 
         func load(renderResult: RenderResult, baseURL: URL) {
             let securedHTML = PreviewHTMLSecurityPolicy.sanitize(renderResult.fullHTML)
-            guard securedHTML != lastHTML || baseURL != lastBaseURL else {
+            let richMarkdownState = renderResult.richMarkdownState
+            guard securedHTML != lastHTML || baseURL != lastBaseURL || richMarkdownState != lastRichMarkdownState else {
                 return
             }
 
             let previousHTML = lastHTML
             lastHTML = securedHTML
             lastBaseURL = baseURL
+            lastRichMarkdownState = richMarkdownState
 
             guard let webView else {
                 return
@@ -239,18 +242,20 @@ struct PreviewWebView: NSViewRepresentable {
                     return
                 }
 
-                self.restoreScrollRatio()
+                self.installRichContentRuntime {
+                    self.restoreScrollRatio()
 
-                if let pendingNavigationID = self.pendingNavigationID {
-                    self.pendingNavigationID = nil
-                    self.scrollToElement(id: pendingNavigationID)
-                }
+                    if let pendingNavigationID = self.pendingNavigationID {
+                        self.pendingNavigationID = nil
+                        self.scrollToElement(id: pendingNavigationID)
+                    }
 
-                if let pendingSearchRequest = self.pendingSearchRequest {
-                    self.pendingSearchRequest = nil
-                    self.performSearchRequest(pendingSearchRequest)
-                } else if !self.activeSearchQuery.isEmpty {
-                    self.performSearchRequest(PreviewSearchRequest(action: .setQuery(self.activeSearchQuery)))
+                    if let pendingSearchRequest = self.pendingSearchRequest {
+                        self.pendingSearchRequest = nil
+                        self.performSearchRequest(pendingSearchRequest)
+                    } else if !self.activeSearchQuery.isEmpty {
+                        self.performSearchRequest(PreviewSearchRequest(action: .setQuery(self.activeSearchQuery)))
+                    }
                 }
             }
         }
@@ -378,6 +383,35 @@ struct PreviewWebView: NSViewRepresentable {
             })();
             """
             webView?.evaluateJavaScript(css) { _, _ in
+                completion()
+            }
+        }
+
+        private func installRichContentRuntime(completion: @escaping () -> Void = {}) {
+            let state = lastRichMarkdownState
+            guard state.requiresRichContentRuntime else {
+                completion()
+                return
+            }
+
+            guard let webView else {
+                completion()
+                return
+            }
+
+            Task { @MainActor [weak self, weak webView] in
+                guard let self, let webView else {
+                    completion()
+                    return
+                }
+
+                do {
+                    let status = try await RichContentWebViewRuntime.installAndWait(for: state, in: webView)
+                    self.onStatusUpdate(status.userMessage)
+                } catch {
+                    self.onStatusUpdate("Rich content runtime failed: \(error.localizedDescription)")
+                }
+
                 completion()
             }
         }

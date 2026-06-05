@@ -192,6 +192,50 @@ verify(
     "diagnostic kinds should include rich Markdown foundation cases"
 )
 
+let richContentManifest = RichContentAssetStore.manifest()
+verify(richContentManifest.mermaid.version == "11.15.0", "Mermaid asset manifest should expose pinned version")
+verify(richContentManifest.katex.version == "0.17.0", "KaTeX asset manifest should expose pinned version")
+verify(richContentManifest.hasMermaidRuntime, "Mermaid runtime should be bundled")
+verify(richContentManifest.hasKaTeXRuntime, "KaTeX runtime should be bundled")
+verify(richContentManifest.hasKaTeXCSS, "KaTeX CSS should be bundled")
+verify(richContentManifest.hasOpenMarkedRuntime, "OpenMarked rich runtime should be bundled")
+verify(richContentManifest.hasOpenMarkedCSS, "OpenMarked rich CSS should be bundled")
+verify(richContentManifest.katexFontCount > 0, "KaTeX fonts should be bundled")
+let mermaidRuntimeJavaScript = try RichContentAssetStore.mermaidRuntimeJavaScript()
+let katexRuntimeJavaScript = try RichContentAssetStore.katexRuntimeJavaScript()
+let openMarkedRuntimeJavaScript = try RichContentAssetStore.openMarkedRuntimeJavaScript()
+let katexHTMLCSS = try RichContentAssetStore.katexCSSForHTML()
+let mermaidLicenseURL = try RichContentAssetStore.requiredResourceURL("RichContent/Mermaid/Mermaid-LICENSE")
+let katexLicenseURL = try RichContentAssetStore.requiredResourceURL("RichContent/KaTeX/KaTeX-LICENSE")
+let katexMainFontURL = try RichContentAssetStore.requiredResourceURL("RichContent/KaTeX/fonts/KaTeX_Main-Regular.woff2")
+verify(mermaidRuntimeJavaScript.contains("mermaid"), "Mermaid runtime should load as JavaScript text")
+verify(katexRuntimeJavaScript.contains("katex"), "KaTeX runtime should load as JavaScript text")
+verify(openMarkedRuntimeJavaScript.contains("openMarkedRichContent"), "OpenMarked rich runtime should load as JavaScript text")
+verify(katexHTMLCSS.contains("KaTeX_Main-Regular.woff2"), "KaTeX CSS should resolve bundled font URLs")
+verify(FileManager.default.fileExists(atPath: mermaidLicenseURL.path), "Mermaid license metadata should be bundled")
+verify(FileManager.default.fileExists(atPath: katexLicenseURL.path), "KaTeX license metadata should be bundled")
+verify(FileManager.default.fileExists(atPath: katexMainFontURL.path), "KaTeX font resources should resolve through asset store")
+
+let richRuntimeState = RichMarkdownRenderState(
+    documentFeatures: RichMarkdownDocumentFeatures(features: [.mermaid, .math])
+)
+let plainAssembledHTML = HTMLDocumentAssembler.assemble(title: "Plain", bodyHTML: "<p>Plain</p>")
+let richAssembledHTML = HTMLDocumentAssembler.assemble(
+    title: "Rich",
+    bodyHTML: "<p>Rich</p>",
+    richMarkdownState: richRuntimeState
+)
+verify(!plainAssembledHTML.contains("om-rich-content-assets"), "plain HTML should not include rich content assets")
+verify(richAssembledHTML.contains("om-rich-content-assets"), "rich HTML should include the rich content style block")
+verify(richAssembledHTML.contains("katex-version"), "math HTML should include KaTeX CSS")
+let richRuntimeScripts = try RichContentRuntimeAssembler.runtimeScripts(for: richRuntimeState)
+verify(richRuntimeScripts.count == 3, "rich runtime should include OpenMarked, Mermaid, and KaTeX scripts")
+let runtimeStatus = RichContentWebViewRuntime.status(
+    from: ["ready": false, "timedOut": true, "errors": ["Timed out"]],
+    requestedFeatures: [.mermaid]
+)
+verify(runtimeStatus.hasFailure, "rich runtime status should report timeout failures")
+
 let renderer = CMarkGFMRenderer()
 let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
 verify(renderResult.rendererName == "cmark-gfm", "renderer name should identify cmark-gfm")

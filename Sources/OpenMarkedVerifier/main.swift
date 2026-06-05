@@ -74,6 +74,15 @@ verify(renderResult.bodyHTML.contains("<h1 id=\"openmarked-fixture-readme\">"), 
 verify(renderResult.bodyHTML.contains("<table>"), "GFM tables should render")
 verify(renderResult.outline.first?.title == "OpenMarked Fixture README", "outline should include h1")
 verify(renderResult.fullHTML.contains("<!doctype html>"), "full HTML document should be assembled")
+verify(renderResult.fullHTML.contains("--om-font-scale: 1.000"), "default font scale should be injected")
+verify(renderResult.fullHTML.contains("New York"), "default theme CSS should be injected")
+verify(renderResult.bodyHTML.contains("om-code-keyword"), "code highlighting should be applied")
+
+let githubTheme = PreviewThemeStore.theme(id: "github")
+let githubThemeResult = try renderer.render(RenderRequest(document: markdownDocument, theme: githubTheme, fontScale: 1.3))
+verify(githubThemeResult.fullHTML.contains("--om-font-scale: 1.300"), "custom font scale should be injected")
+verify(githubThemeResult.fullHTML.contains("Segoe UI"), "GitHub theme CSS should be injected")
+verify(PreviewThemeStore.theme(id: "missing").id == "default", "unknown themes should fall back to default")
 
 let gfmURL = URL(fileURLWithPath: "Fixtures/Markdown/gfm.md").standardizedFileURL
 let gfmDocument = try MarkdownDocumentLoader.load(url: gfmURL, createBookmark: false)
@@ -109,4 +118,4 @@ let sanitizedHTML = PreviewHTMLSecurityPolicy.sanitize(unsafeHTML)
 verify(!sanitizedHTML.contains("<script"), "preview sanitizer should remove script tags")
 verify(!sanitizedHTML.contains("onclick"), "preview sanitizer should remove event handler attributes")
 
-print("OpenMarked Phase 4 verifier passed.")
+print("OpenMarked Phase 5 verifier passed.")

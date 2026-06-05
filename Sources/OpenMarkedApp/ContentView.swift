@@ -99,7 +99,9 @@ private struct AppToolbar: View {
             Spacer()
 
             Picker("Theme", selection: themeBinding) {
-                Text("Default").tag("default")
+                ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
+                    Text(theme.name).tag(theme.id)
+                }
             }
             .pickerStyle(.menu)
             .frame(width: 150)
@@ -396,6 +398,7 @@ private struct StatusBar: View {
             if let diagnostics = controller.state.currentRenderResult?.diagnostics, !diagnostics.isEmpty {
                 Text("\(diagnostics.count) warning\(diagnostics.count == 1 ? "" : "s")")
             }
+            Text(PreviewThemeStore.theme(id: controller.state.layout.selectedThemeID).name)
             Text("Zoom \(Int((controller.state.layout.fontScale * 100).rounded()))%")
         }
         .font(.caption)
@@ -436,8 +439,10 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("MVP Defaults") {
-                Picker("Default Theme", selection: .constant("Default")) {
-                    Text("Default").tag("Default")
+                Picker("Default Theme", selection: .constant(PreviewThemeStore.defaultThemeID)) {
+                    ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
+                        Text(theme.name).tag(theme.id)
+                    }
                 }
 
                 Toggle("Live updates", isOn: .constant(true))

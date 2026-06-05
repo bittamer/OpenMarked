@@ -104,6 +104,10 @@ final class AppController: ObservableObject {
         activeWindowController?.resetZoom()
     }
 
+    func setTheme(id: String) {
+        activeWindowController?.setTheme(id: id)
+    }
+
     func exportHTML() {
         activeWindowController?.exportHTMLPlaceholder()
     }

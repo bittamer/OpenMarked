@@ -1,0 +1,26 @@
+@page {
+  margin: 0.8in;
+}
+
+body {
+  background: #ffffff;
+  color: #000000;
+}
+
+.om-document {
+  max-width: none;
+  padding: 0;
+  font-size: 11pt;
+  line-height: 1.48;
+}
+
+a {
+  color: #000000;
+}
+
+pre,
+blockquote,
+table {
+  break-inside: avoid;
+}
+

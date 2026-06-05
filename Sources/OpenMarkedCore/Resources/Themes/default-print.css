@@ -1,0 +1,32 @@
+@page {
+  margin: 0.75in;
+}
+
+html,
+body {
+  background: #ffffff;
+  color: #000000;
+}
+
+.om-document {
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  box-shadow: none;
+  background: #ffffff;
+  color: #000000;
+  font-size: 11pt;
+  line-height: 1.5;
+}
+
+a {
+  color: #000000;
+  text-decoration: underline;
+}
+
+pre,
+blockquote,
+table {
+  break-inside: avoid;
+}
+

@@ -9,10 +9,19 @@ public protocol MarkdownRenderer {
 public struct RenderRequest: Equatable, Sendable {
     public let document: MarkdownDocument
     public let options: RenderOptions
+    public let theme: PreviewTheme
+    public let fontScale: Double
 
-    public init(document: MarkdownDocument, options: RenderOptions = RenderOptions()) {
+    public init(
+        document: MarkdownDocument,
+        options: RenderOptions = RenderOptions(),
+        theme: PreviewTheme = PreviewThemeStore.defaultTheme,
+        fontScale: Double = 1.0
+    ) {
         self.document = document
         self.options = options
+        self.theme = theme
+        self.fontScale = fontScale
     }
 }
 
@@ -188,15 +197,18 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
 
         let renderedHTML = String(cString: htmlPointer)
         let processed = HeadingPostProcessor.process(renderedHTML)
-        diagnostics.append(contentsOf: RenderDiagnosticsCollector.collect(from: processed.html, document: request.document))
+        let highlightedHTML = CodeHighlighter.highlight(processed.html)
+        diagnostics.append(contentsOf: RenderDiagnosticsCollector.collect(from: highlightedHTML, document: request.document))
         let fullHTML = HTMLDocumentAssembler.assemble(
             title: request.document.displayTitle,
-            bodyHTML: processed.html,
-            baseURL: request.document.sourceURL.deletingLastPathComponent()
+            bodyHTML: highlightedHTML,
+            baseURL: request.document.sourceURL.deletingLastPathComponent(),
+            theme: request.theme,
+            fontScale: request.fontScale
         )
 
         return RenderResult(
-            bodyHTML: processed.html,
+            bodyHTML: highlightedHTML,
             fullHTML: fullHTML,
             outline: processed.outline,
             diagnostics: diagnostics,
@@ -251,7 +263,13 @@ public enum HTMLDocumentAssembler {
     public static let themeCSSPlaceholder = "/* OpenMarked: theme CSS */"
     public static let codeHighlightingPlaceholder = "/* OpenMarked: code highlighting CSS */"
 
-    public static func assemble(title: String, bodyHTML: String, baseURL: URL? = nil) -> String {
+    public static func assemble(
+        title: String,
+        bodyHTML: String,
+        baseURL: URL? = nil,
+        theme: PreviewTheme = PreviewThemeStore.defaultTheme,
+        fontScale: Double = 1.0
+    ) -> String {
         let escapedTitle = HTMLUtilities.escapeText(title)
         let baseElement: String
         if let baseURL {
@@ -259,6 +277,8 @@ public enum HTMLDocumentAssembler {
         } else {
             baseElement = ""
         }
+        let boundedFontScale = min(2.0, max(0.6, fontScale))
+        let maxWidth = max(560, theme.defaultMaxWidth)
 
         return """
         <!doctype html>
@@ -269,8 +289,15 @@ public enum HTMLDocumentAssembler {
           \(baseElement)
           <title>\(escapedTitle)</title>
           <style>
-          \(themeCSSPlaceholder)
-          \(codeHighlightingPlaceholder)
+          :root {
+            --om-font-scale: \(String(format: "%.3f", boundedFontScale));
+            --om-content-max-width: \(maxWidth)px;
+          }
+          \(theme.screenCSS)
+          \(theme.codeHighlightingCSS)
+          @media print {
+          \(theme.printCSS)
+          }
           </style>
         </head>
         <body>

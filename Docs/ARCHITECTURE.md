@@ -61,6 +61,18 @@ Preview behavior:
 - Link clicks are intercepted: external and local file URLs open through `NSWorkspace` instead of replacing the preview.
 - Script tags and inline event handler attributes are stripped before loading preview HTML. Bundled JavaScript needed for preview mechanics is injected through `evaluateJavaScript`, which keeps user document scripts blocked by default.
 
+## Theme Direction
+
+Phase 5 theme assets live under `Sources/OpenMarkedCore/Resources/Themes` and are loaded through `Bundle.module`.
+
+Built-in themes:
+
+- Default: editorial reading style with light and dark variants.
+- GitHub: README-oriented style approximating common repository documents without copying proprietary assets.
+- Minimal: restrained print-friendly style.
+
+The renderer injects screen CSS, code CSS, print CSS, `--om-font-scale`, and `--om-content-max-width` into the assembled HTML. Code blocks are pre-highlighted in Swift for common MVP languages so preview and future exports work offline without remote scripts.
+
 ## Sandboxing Direction
 
 OpenMarked should be designed for sandboxed file access:

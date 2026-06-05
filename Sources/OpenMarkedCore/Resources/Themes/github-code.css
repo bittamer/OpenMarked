@@ -1,0 +1,48 @@
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 85%;
+  background: rgba(175, 184, 193, 0.2);
+  border-radius: 6px;
+  padding: 0.2em 0.4em;
+}
+
+pre {
+  overflow: auto;
+  padding: 16px;
+  background: #f6f8fa;
+  border-radius: 6px;
+}
+
+pre code {
+  display: block;
+  padding: 0;
+  overflow: visible;
+  line-height: 1.45;
+  background: transparent;
+  border: 0;
+}
+
+.om-code-keyword { color: #cf222e; font-weight: 600; }
+.om-code-string { color: #0a3069; }
+.om-code-number { color: #0550ae; }
+.om-code-comment { color: #6e7781; font-style: italic; }
+.om-code-property { color: #8250df; }
+.om-code-tag { color: #116329; }
+
+@media (prefers-color-scheme: dark) {
+  code {
+    background: rgba(110, 118, 129, 0.4);
+  }
+
+  pre {
+    background: #161b22;
+  }
+
+  .om-code-keyword { color: #ff7b72; }
+  .om-code-string { color: #a5d6ff; }
+  .om-code-number { color: #79c0ff; }
+  .om-code-comment { color: #8b949e; }
+  .om-code-property { color: #d2a8ff; }
+  .om-code-tag { color: #7ee787; }
+}
+

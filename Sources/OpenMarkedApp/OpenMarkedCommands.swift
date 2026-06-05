@@ -1,4 +1,5 @@
 import SwiftUI
+import OpenMarkedCore
 
 struct OpenMarkedCommands: Commands {
     @ObservedObject var appController: AppController
@@ -58,6 +59,14 @@ struct OpenMarkedCommands: Commands {
             .keyboardShortcut("0", modifiers: [.command, .option])
         }
 
+        CommandMenu("Theme") {
+            ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
+                Button(theme.name) {
+                    appController.setTheme(id: theme.id)
+                }
+            }
+        }
+
         CommandGroup(after: .sidebar) {
             Button("Toggle Outline") {
                 appController.toggleOutline()
@@ -72,4 +81,3 @@ struct OpenMarkedCommands: Commands {
         }
     }
 }
-

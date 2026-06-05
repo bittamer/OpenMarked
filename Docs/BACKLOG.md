@@ -53,7 +53,13 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 5: Theme System and Visual Design
 
-- [ ] MVP-501 through MVP-507.
+- [x] MVP-501: Define Theme Model.
+- [x] MVP-502: Build Default Theme.
+- [x] MVP-503: Build GitHub-Like Theme.
+- [x] MVP-504: Build Minimal/Print Theme.
+- [x] MVP-505: Add Theme Picker.
+- [x] MVP-506: Add Code Highlighting.
+- [x] MVP-507: Add Font Scale Controls.
 
 ## Phase 6: Live Preview
 

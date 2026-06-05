@@ -91,6 +91,29 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.bodyHTML.contains("<table>"))
         XCTAssertEqual(result.outline.first?.title, "OpenMarked Fixture README")
         XCTAssertTrue(result.fullHTML.contains("<!doctype html>"))
+        XCTAssertTrue(result.fullHTML.contains("--om-font-scale: 1.000"))
+        XCTAssertTrue(result.fullHTML.contains("New York"))
+        XCTAssertTrue(result.bodyHTML.contains("om-code-keyword"))
+    }
+
+    func testThemeFallbackAndInjection() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let theme = PreviewThemeStore.theme(id: "github")
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document, theme: theme, fontScale: 1.3))
+
+        XCTAssertEqual(PreviewThemeStore.allBuiltInThemes.map(\.id), ["default", "github", "minimal"])
+        XCTAssertEqual(PreviewThemeStore.theme(id: "missing").id, "default")
+        XCTAssertTrue(result.fullHTML.contains("--om-font-scale: 1.300"))
+        XCTAssertTrue(result.fullHTML.contains("Segoe UI"))
+    }
+
+    func testCodeHighlighterLeavesUnknownLanguagesPlain() {
+        let html = #"<pre><code class="language-ruby">puts &quot;hello&quot;</code></pre>"#
+        let highlighted = CodeHighlighter.highlight(html)
+
+        XCTAssertTrue(highlighted.contains("om-code-block"))
+        XCTAssertFalse(highlighted.contains("om-code-keyword"))
     }
 
     func testGFMExtensionsRender() throws {
@@ -228,6 +251,31 @@ struct AppInfoTests {
         #expect(result.bodyHTML.contains("<table>"))
         #expect(result.outline.first?.title == "OpenMarked Fixture README")
         #expect(result.fullHTML.contains("<!doctype html>"))
+        #expect(result.fullHTML.contains("--om-font-scale: 1.000"))
+        #expect(result.fullHTML.contains("New York"))
+        #expect(result.bodyHTML.contains("om-code-keyword"))
+    }
+
+    @Test("Theme fallback and CSS injection work")
+    func themeFallbackAndInjection() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let theme = PreviewThemeStore.theme(id: "github")
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document, theme: theme, fontScale: 1.3))
+
+        #expect(PreviewThemeStore.allBuiltInThemes.map(\.id) == ["default", "github", "minimal"])
+        #expect(PreviewThemeStore.theme(id: "missing").id == "default")
+        #expect(result.fullHTML.contains("--om-font-scale: 1.300"))
+        #expect(result.fullHTML.contains("Segoe UI"))
+    }
+
+    @Test("Unknown code languages stay unhighlighted")
+    func codeHighlighterLeavesUnknownLanguagesPlain() {
+        let html = #"<pre><code class="language-ruby">puts &quot;hello&quot;</code></pre>"#
+        let highlighted = CodeHighlighter.highlight(html)
+
+        #expect(highlighted.contains("om-code-block"))
+        #expect(!highlighted.contains("om-code-keyword"))
     }
 
     @Test("GFM extensions render")

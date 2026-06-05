@@ -28,7 +28,10 @@ let package = Package(
         ),
         .target(
             name: "OpenMarkedCore",
-            dependencies: ["CMarkdownGFM"]
+            dependencies: ["CMarkdownGFM"],
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "CMarkdownGFM",

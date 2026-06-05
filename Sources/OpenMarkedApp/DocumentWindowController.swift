@@ -88,22 +88,35 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func setTheme(id: String) {
-        state.setTheme(id: id)
+        let theme = PreviewThemeStore.theme(id: id)
+        state.setTheme(id: theme.id)
+        if let markdownDocument = state.currentMarkdownDocument {
+            render(markdownDocument)
+        }
         persistCurrentWindowState()
     }
 
     func zoomIn() {
         state.zoomIn()
+        if let markdownDocument = state.currentMarkdownDocument {
+            render(markdownDocument)
+        }
         persistCurrentWindowState()
     }
 
     func zoomOut() {
         state.zoomOut()
+        if let markdownDocument = state.currentMarkdownDocument {
+            render(markdownDocument)
+        }
         persistCurrentWindowState()
     }
 
     func resetZoom() {
         state.resetZoom()
+        if let markdownDocument = state.currentMarkdownDocument {
+            render(markdownDocument)
+        }
         persistCurrentWindowState()
     }
 
@@ -175,7 +188,13 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         state.beginRendering(documentName: markdownDocument.displayName)
 
         do {
-            let result = try renderer.render(RenderRequest(document: markdownDocument))
+            let result = try renderer.render(
+                RenderRequest(
+                    document: markdownDocument,
+                    theme: PreviewThemeStore.theme(id: state.layout.selectedThemeID),
+                    fontScale: state.layout.fontScale
+                )
+            )
             state.finishRendering(result)
         } catch {
             state.failRendering(error)

@@ -1,0 +1,50 @@
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: #f2f2f4;
+  padding: 0.08em 0.24em;
+  border-radius: 4px;
+}
+
+pre {
+  padding: 14px 16px;
+  overflow: auto;
+  background: #f7f7f8;
+  border-radius: 4px;
+}
+
+pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  line-height: 1.52;
+}
+
+.om-code-keyword { font-weight: 650; }
+.om-code-string { color: #424245; }
+.om-code-number { color: #424245; }
+.om-code-comment { color: #77777d; font-style: italic; }
+.om-code-property { color: #1d1d1f; }
+.om-code-tag { color: #1d1d1f; }
+
+@media (prefers-color-scheme: dark) {
+  code {
+    background: #1c1c1e;
+  }
+
+  pre {
+    background: #111113;
+  }
+
+  .om-code-string,
+  .om-code-number,
+  .om-code-property,
+  .om-code-tag {
+    color: #f5f5f7;
+  }
+
+  .om-code-comment {
+    color: #98989d;
+  }
+}
+

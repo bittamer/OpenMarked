@@ -142,12 +142,18 @@ verify(restored?.layout == savedLayout, "window layout should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
 
 let settingsStore = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "VerifierSettings", lastDocumentPathsKey: "VerifierLastPaths")
-let savedSettings = ApplicationSettings(defaultThemeID: "missing", defaultFontScale: 4.0, isLivePreviewEnabled: false)
+let savedSettings = ApplicationSettings(
+    defaultThemeID: "missing",
+    defaultFontScale: 4.0,
+    isLivePreviewEnabled: false,
+    renderProfile: .gitHubReadme
+)
 settingsStore.save(savedSettings)
 let restoredSettings = settingsStore.load()
 verify(restoredSettings.defaultThemeID == "default", "settings should normalize unknown theme ids")
 verify(restoredSettings.defaultFontScale == 2.0, "settings should clamp default font scale")
 verify(!restoredSettings.isLivePreviewEnabled, "settings should persist live preview preference")
+verify(restoredSettings.renderProfile == .gitHubReadme, "settings should persist render profile")
 verify(restoredSettings.richMarkdownOptions == .default, "settings should default rich Markdown options")
 verify(!restoredSettings.richMarkdownOptions.validatesRemoteLinks, "remote link validation should default off")
 settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL])
@@ -164,6 +170,13 @@ let oldSettingsPayload = Data(
 )
 let decodedOldSettings = try JSONDecoder().decode(ApplicationSettings.self, from: oldSettingsPayload).normalized()
 verify(decodedOldSettings.richMarkdownOptions == .default, "old settings payloads should decode with rich Markdown defaults")
+verify(decodedOldSettings.renderProfile == .openMarked, "old settings payloads should decode with the OpenMarked render profile")
+
+verify(MarkdownRenderProfile.openMarked.displayName == "OpenMarked", "OpenMarked render profile should be available")
+verify(MarkdownRenderProfile.gitHubReadme.headingSlugStyle == .gitHub, "GitHub README profile should select GitHub heading slugs")
+verify(MarkdownRenderProfile.gitHubReadme.supportsGitHubCallouts, "GitHub README profile should advertise callout support")
+verify(HeadingPostProcessor.slug(for: "API_v2", style: .openMarked) == "api-v2", "OpenMarked slug style should preserve current underscore behavior")
+verify(HeadingPostProcessor.slug(for: "API_v2", style: .gitHub) == "api_v2", "GitHub slug style should preserve underscores")
 
 let richMarkdownSample = """
 > [!NOTE]
@@ -235,6 +248,29 @@ let runtimeStatus = RichContentWebViewRuntime.status(
     requestedFeatures: [.mermaid]
 )
 verify(runtimeStatus.hasFailure, "rich runtime status should report timeout failures")
+
+var richStatusState = DocumentWindowState()
+let richStatusRenderState = RichMarkdownRenderState(
+    documentFeatures: RichMarkdownDocumentFeatures(features: [.mermaid, .math])
+)
+let richStatusResult = RenderResult(
+    bodyHTML: "<p>Rich</p>",
+    fullHTML: "<!doctype html><p>Rich</p>",
+    outline: [],
+    diagnostics: [],
+    statistics: .empty,
+    rendererName: "test",
+    rendererVersion: nil,
+    richMarkdownState: richStatusRenderState
+)
+richStatusState.finishRendering(richStatusResult)
+verify(richStatusState.richContentPreview == .pending([.mermaid, .math]), "rich status should become pending after rendering rich placeholders")
+richStatusState.beginRichContentRendering(features: [.mermaid, .math])
+verify(richStatusState.richContentPreview == .rendering([.mermaid, .math]), "rich status should report active rendering")
+richStatusState.finishRichContentRendering(features: [.mermaid, .math])
+verify(richStatusState.richContentPreview == .ready([.mermaid, .math]), "rich status should report ready after WebKit completion")
+richStatusState.failRichContentRendering("Rich content rendering failed")
+verify(richStatusState.richContentPreview == .failed("Rich content rendering failed"), "rich status should preserve concise failure messages")
 
 let renderer = CMarkGFMRenderer()
 let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
@@ -444,6 +480,25 @@ verify(!sourceHeadingResult.diagnostics.contains { $0.kind == .missingLocalLink 
 verify(sourceHeadingResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "guide%20one.md#missing-heading" }, "cross-document missing headings should warn")
 verify(sourceHeadingResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "source.md#missing-current" }, "current-file relative heading links should warn")
 verify(!sourceHeadingResult.diagnostics.contains { $0.source == "guide%20one.md?download=1#target-heading" }, "valid cross-document heading links with queries should pass")
+
+let profileDirectory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("OpenMarkedProfileVerifier-\(UUID().uuidString)", isDirectory: true)
+try FileManager.default.createDirectory(at: profileDirectory, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: profileDirectory) }
+let profileTargetURL = profileDirectory.appendingPathComponent("target.md")
+let profileSourceURL = profileDirectory.appendingPathComponent("source.md")
+try "# API_v2\n\nBody.\n".write(to: profileTargetURL, atomically: true, encoding: .utf8)
+try "# Source\n\n[Target](target.md#api_v2)\n".write(to: profileSourceURL, atomically: true, encoding: .utf8)
+let profileSourceDocument = try MarkdownDocumentLoader.load(url: profileSourceURL, createBookmark: false)
+let openMarkedProfileResult = try renderer.render(RenderRequest(document: profileSourceDocument))
+let gitHubProfileResult = try renderer.render(
+    RenderRequest(
+        document: profileSourceDocument,
+        options: RenderOptions(renderProfile: .gitHubReadme)
+    )
+)
+verify(openMarkedProfileResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#api_v2" }, "OpenMarked profile should use OpenMarked heading slugs for cross-document links")
+verify(!gitHubProfileResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#api_v2" }, "GitHub README profile should use GitHub heading slugs for cross-document links")
 
 let remoteLinkURL = FileManager.default.temporaryDirectory
     .appendingPathComponent("openmarked-remote-link-\(UUID().uuidString).md")

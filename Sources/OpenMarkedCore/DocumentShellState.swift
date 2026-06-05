@@ -168,6 +168,14 @@ public enum LivePreviewStatus: Equatable, Sendable {
     case failed(String)
 }
 
+public enum RichContentPreviewStatus: Equatable, Sendable {
+    case inactive
+    case pending(Set<RichMarkdownFeature>)
+    case rendering(Set<RichMarkdownFeature>)
+    case ready(Set<RichMarkdownFeature>)
+    case failed(String)
+}
+
 public struct PreviewSearchState: Equatable, Sendable {
     public var isVisible: Bool
     public var query: String
@@ -204,6 +212,7 @@ public struct DocumentWindowState: Equatable {
     public var preview: PreviewShellState
     public var layout: WindowLayoutState
     public var livePreview: LivePreviewStatus
+    public var richContentPreview: RichContentPreviewStatus
     public var search: PreviewSearchState
     public var statusMessage: String
 
@@ -212,6 +221,7 @@ public struct DocumentWindowState: Equatable {
         preview: PreviewShellState = .idle,
         layout: WindowLayoutState = WindowLayoutState(),
         livePreview: LivePreviewStatus = .inactive,
+        richContentPreview: RichContentPreviewStatus = .inactive,
         search: PreviewSearchState = PreviewSearchState(),
         statusMessage: String = "No document"
     ) {
@@ -219,6 +229,7 @@ public struct DocumentWindowState: Equatable {
         self.preview = preview
         self.layout = layout
         self.livePreview = livePreview
+        self.richContentPreview = richContentPreview
         self.search = search
         self.statusMessage = statusMessage
     }
@@ -270,6 +281,7 @@ public struct DocumentWindowState: Equatable {
         content = .loading(PendingDocument(url: url))
         preview = .loading
         livePreview = .inactive
+        richContentPreview = .inactive
         search = PreviewSearchState()
         statusMessage = "Opening \(url.lastPathComponent)"
     }
@@ -277,16 +289,21 @@ public struct DocumentWindowState: Equatable {
     public mutating func finishOpening(document: OpenedDocument) {
         content = .loaded(document)
         preview = .placeholder
+        richContentPreview = .inactive
         statusMessage = "Opened \(document.displayName)"
     }
 
     public mutating func beginRendering(documentName: String) {
         preview = .loading
+        richContentPreview = .inactive
         statusMessage = "Rendering \(documentName)"
     }
 
     public mutating func finishRendering(_ result: RenderResult) {
         preview = .rendered(result)
+        richContentPreview = result.richMarkdownState.requiresRichContentRuntime
+            ? .pending(result.richMarkdownState.richContentRuntimeFeatures)
+            : .inactive
         let warningCount = result.diagnostics.filter { $0.severity == .warning }.count
         if warningCount > 0 {
             statusMessage = "Rendered with \(warningCount) warning\(warningCount == 1 ? "" : "s")"
@@ -298,6 +315,7 @@ public struct DocumentWindowState: Equatable {
     public mutating func failRendering(_ error: Error) {
         let previewError = PreviewError(error: error)
         preview = .error(previewError)
+        richContentPreview = .inactive
         statusMessage = previewError.message
     }
 
@@ -309,6 +327,7 @@ public struct DocumentWindowState: Equatable {
         content = .error(error)
         preview = .error(PreviewError(documentOpenError: error))
         livePreview = .inactive
+        richContentPreview = .inactive
         statusMessage = error.message
     }
 
@@ -316,6 +335,7 @@ public struct DocumentWindowState: Equatable {
         content = .empty
         preview = .idle
         livePreview = .inactive
+        richContentPreview = .inactive
         search = PreviewSearchState()
         statusMessage = "No document"
     }
@@ -349,6 +369,31 @@ public struct DocumentWindowState: Equatable {
         statusMessage = message
     }
 
+    public mutating func beginRichContentRendering(features: Set<RichMarkdownFeature>) {
+        guard !features.isEmpty else {
+            richContentPreview = .inactive
+            return
+        }
+
+        richContentPreview = .rendering(features)
+        statusMessage = "Rendering rich content"
+    }
+
+    public mutating func finishRichContentRendering(features: Set<RichMarkdownFeature>) {
+        guard !features.isEmpty else {
+            richContentPreview = .inactive
+            return
+        }
+
+        richContentPreview = .ready(features)
+        statusMessage = "Rich content ready"
+    }
+
+    public mutating func failRichContentRendering(_ message: String) {
+        richContentPreview = .failed(message)
+        statusMessage = message
+    }
+
     public mutating func noteLivePreviewWatching() {
         livePreview = .watching
     }
@@ -367,6 +412,7 @@ public struct DocumentWindowState: Equatable {
 
     public mutating func failLivePreviewUpdate(_ error: DocumentOpenError) {
         preview = .error(PreviewError(documentOpenError: error))
+        richContentPreview = .inactive
         livePreview = .failed(error.message)
         statusMessage = error.message
     }
@@ -374,6 +420,7 @@ public struct DocumentWindowState: Equatable {
     public mutating func failLivePreviewUpdate(_ error: Error) {
         let previewError = PreviewError(error: error)
         preview = .error(previewError)
+        richContentPreview = .inactive
         livePreview = .failed(previewError.message)
         statusMessage = previewError.message
     }

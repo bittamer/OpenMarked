@@ -306,6 +306,15 @@ private struct PreviewShell: View {
                         onStatusUpdate: { message in
                             controller.updatePreviewStatus(message)
                         },
+                        onRichContentRendering: { features in
+                            controller.beginRichContentRendering(features: features)
+                        },
+                        onRichContentReady: { features in
+                            controller.finishRichContentRendering(features: features)
+                        },
+                        onRichContentFailed: { message in
+                            controller.failRichContentRendering(message: message)
+                        },
                         onSearchResult: { result in
                             controller.updateSearchResult(result)
                         }
@@ -549,6 +558,11 @@ private struct StatusBar: View {
                     DiagnosticsPopover(diagnostics: diagnostics)
                 }
             }
+            if let richContentStatusTitle {
+                Label(richContentStatusTitle, systemImage: richContentStatusIcon)
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(richContentStatusColor)
+            }
             if let livePreviewStatusTitle {
                 Label(livePreviewStatusTitle, systemImage: livePreviewStatusIcon)
                     .labelStyle(.titleAndIcon)
@@ -614,6 +628,41 @@ private struct StatusBar: View {
             return "bolt"
         case .failed:
             return "exclamationmark.triangle"
+        }
+    }
+
+    private var richContentStatusTitle: String? {
+        switch controller.state.richContentPreview {
+        case .inactive:
+            return nil
+        case .pending, .rendering:
+            return "Rich rendering"
+        case .ready:
+            return "Rich ready"
+        case .failed:
+            return "Rich failed"
+        }
+    }
+
+    private var richContentStatusIcon: String {
+        switch controller.state.richContentPreview {
+        case .inactive, .pending:
+            return "sparkles"
+        case .rendering:
+            return "arrow.triangle.2.circlepath"
+        case .ready:
+            return "checkmark.seal"
+        case .failed:
+            return "exclamationmark.triangle"
+        }
+    }
+
+    private var richContentStatusColor: Color {
+        switch controller.state.richContentPreview {
+        case .failed:
+            return .orange
+        default:
+            return .secondary
         }
     }
 }
@@ -759,6 +808,13 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Preview Defaults") {
+                Picker("Render Profile", selection: renderProfileBinding) {
+                    ForEach(MarkdownRenderProfile.allCases) { profile in
+                        Text(profile.displayName).tag(profile)
+                    }
+                }
+                .accessibilityLabel("Markdown render profile")
+
                 Picker("Default Theme", selection: settingBinding(\.defaultThemeID)) {
                     ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
                         Text(theme.name).tag(theme.id)
@@ -785,6 +841,19 @@ struct SettingsView: View {
                 Toggle("Allow raw HTML", isOn: settingBinding(\.allowsRawHTML))
             }
 
+            Section("Rich Markdown") {
+                Toggle("Mermaid diagrams", isOn: richMarkdownBinding(\.rendersMermaid))
+                Toggle("KaTeX math", isOn: richMarkdownBinding(\.rendersMath))
+                Toggle("GitHub callouts", isOn: richMarkdownBinding(\.rendersGitHubCallouts))
+            }
+
+            Section("Link Validation") {
+                Toggle("Local links", isOn: richMarkdownBinding(\.validatesLocalLinks))
+                Toggle("Heading links", isOn: richMarkdownBinding(\.validatesHeadingFragments))
+                Toggle("Report remote links", isOn: richMarkdownBinding(\.validatesRemoteLinks))
+                    .help("Remote URLs are parsed for manual checks; preview rendering does not crawl remote servers.")
+            }
+
             Section("Export") {
                 Toggle("Embed CSS in HTML export", isOn: settingBinding(\.embedsCSSInHTMLExport))
                 Toggle("Embed local images in HTML export", isOn: settingBinding(\.embedsLocalImagesInHTMLExport))
@@ -792,7 +861,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 460)
+        .frame(width: 500)
         .accessibilityLabel("OpenMarked settings")
     }
 
@@ -813,6 +882,29 @@ struct SettingsView: View {
             set: { newValue in
                 appController.updateSettings { settings in
                     settings.defaultFontScale = newValue
+                }
+            }
+        )
+    }
+
+    private var renderProfileBinding: Binding<MarkdownRenderProfile> {
+        Binding(
+            get: { appController.settings.renderProfile },
+            set: { newValue in
+                appController.updateSettings { settings in
+                    settings.renderProfile = newValue
+                    settings.richMarkdownOptions = newValue.defaultRichMarkdownOptions
+                }
+            }
+        )
+    }
+
+    private func richMarkdownBinding(_ keyPath: WritableKeyPath<RichMarkdownOptions, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { appController.settings.richMarkdownOptions[keyPath: keyPath] },
+            set: { newValue in
+                appController.updateSettings { settings in
+                    settings.richMarkdownOptions[keyPath: keyPath] = newValue
                 }
             }
         )

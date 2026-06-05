@@ -10,6 +10,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var embedsCSSInHTMLExport: Bool
     public var embedsLocalImagesInHTMLExport: Bool
     public var restoresLastOpenedDocuments: Bool
+    public var renderProfile: MarkdownRenderProfile
     public var richMarkdownOptions: RichMarkdownOptions
 
     public init(
@@ -22,6 +23,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         embedsCSSInHTMLExport: Bool = true,
         embedsLocalImagesInHTMLExport: Bool = true,
         restoresLastOpenedDocuments: Bool = false,
+        renderProfile: MarkdownRenderProfile = .openMarked,
         richMarkdownOptions: RichMarkdownOptions = .default
     ) {
         self.defaultThemeID = defaultThemeID
@@ -33,6 +35,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         self.embedsCSSInHTMLExport = embedsCSSInHTMLExport
         self.embedsLocalImagesInHTMLExport = embedsLocalImagesInHTMLExport
         self.restoresLastOpenedDocuments = restoresLastOpenedDocuments
+        self.renderProfile = renderProfile
         self.richMarkdownOptions = richMarkdownOptions
     }
 
@@ -63,6 +66,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         case embedsCSSInHTMLExport
         case embedsLocalImagesInHTMLExport
         case restoresLastOpenedDocuments
+        case renderProfile
         case richMarkdownOptions
     }
 
@@ -80,6 +84,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
             embedsCSSInHTMLExport: try container.decodeIfPresent(Bool.self, forKey: .embedsCSSInHTMLExport) ?? defaults.embedsCSSInHTMLExport,
             embedsLocalImagesInHTMLExport: try container.decodeIfPresent(Bool.self, forKey: .embedsLocalImagesInHTMLExport) ?? defaults.embedsLocalImagesInHTMLExport,
             restoresLastOpenedDocuments: try container.decodeIfPresent(Bool.self, forKey: .restoresLastOpenedDocuments) ?? defaults.restoresLastOpenedDocuments,
+            renderProfile: try container.decodeIfPresent(MarkdownRenderProfile.self, forKey: .renderProfile) ?? defaults.renderProfile,
             richMarkdownOptions: try container.decodeIfPresent(RichMarkdownOptions.self, forKey: .richMarkdownOptions) ?? defaults.richMarkdownOptions
         )
     }

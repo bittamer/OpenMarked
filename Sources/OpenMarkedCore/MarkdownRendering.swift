@@ -34,6 +34,7 @@ public struct RenderOptions: Equatable, Sendable {
     public var validatesUTF8: Bool
     public var usesGitHubCodeBlockLanguageClass: Bool
     public var enabledExtensions: Set<GFMExtension>
+    public var renderProfile: MarkdownRenderProfile
     public var richMarkdownOptions: RichMarkdownOptions
 
     public init(
@@ -42,6 +43,7 @@ public struct RenderOptions: Equatable, Sendable {
         validatesUTF8: Bool = true,
         usesGitHubCodeBlockLanguageClass: Bool = true,
         enabledExtensions: Set<GFMExtension> = Set(GFMExtension.allCases),
+        renderProfile: MarkdownRenderProfile = .openMarked,
         richMarkdownOptions: RichMarkdownOptions = .default
     ) {
         self.allowsRawHTML = allowsRawHTML
@@ -49,6 +51,7 @@ public struct RenderOptions: Equatable, Sendable {
         self.validatesUTF8 = validatesUTF8
         self.usesGitHubCodeBlockLanguageClass = usesGitHubCodeBlockLanguageClass
         self.enabledExtensions = enabledExtensions
+        self.renderProfile = renderProfile
         self.richMarkdownOptions = richMarkdownOptions
     }
 
@@ -232,7 +235,10 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         defer { free(htmlPointer) }
 
         let renderedHTML = String(cString: htmlPointer)
-        let processed = HeadingPostProcessor.process(renderedHTML)
+        let processed = HeadingPostProcessor.process(
+            renderedHTML,
+            slugStyle: request.options.renderProfile.headingSlugStyle
+        )
         let calloutProcessed = GitHubCalloutPostProcessor.process(
             processed.html,
             sourceMarkdown: request.document.bodyText,
@@ -256,7 +262,8 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
                 from: policyHTML,
                 document: request.document,
                 outline: processed.outline,
-                options: request.options.richMarkdownOptions
+                options: request.options.richMarkdownOptions,
+                renderProfile: request.options.renderProfile
             )
         )
         let fullHTML = HTMLDocumentAssembler.assemble(
@@ -532,7 +539,10 @@ public enum HTMLDocumentAssembler {
 }
 
 public enum HeadingPostProcessor {
-    public static func process(_ html: String) -> (html: String, outline: [OutlineItem]) {
+    public static func process(
+        _ html: String,
+        slugStyle: HeadingSlugStyle = .openMarked
+    ) -> (html: String, outline: [OutlineItem]) {
         let pattern = #"<h([1-6])([^>]*)>(.*?)</h\1>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
             return (html, [])
@@ -564,7 +574,7 @@ public enum HeadingPostProcessor {
             let content = String(html[contentRange])
             let title = HTMLUtilities.plainText(fromHTMLFragment: content)
             let existingHeadingID = existingID(in: attributes)
-            let headingID = existingHeadingID ?? uniqueSlug(for: title, usedSlugs: &usedSlugs)
+            let headingID = existingHeadingID ?? uniqueSlug(for: title, slugStyle: slugStyle, usedSlugs: &usedSlugs)
             let updatedAttributes = existingHeadingID == nil ? "\(attributes) id=\"\(HTMLUtilities.escapeAttribute(headingID))\"" : attributes
             let replacement = "<h\(level)\(updatedAttributes)>\(content)</h\(level)>"
 
@@ -592,8 +602,12 @@ public enum HeadingPostProcessor {
         return String(attributes[range])
     }
 
-    private static func uniqueSlug(for title: String, usedSlugs: inout [String: Int]) -> String {
-        let base = slug(for: title)
+    private static func uniqueSlug(
+        for title: String,
+        slugStyle: HeadingSlugStyle,
+        usedSlugs: inout [String: Int]
+    ) -> String {
+        let base = slug(for: title, style: slugStyle)
         let priorCount = usedSlugs[base, default: 0]
         usedSlugs[base] = priorCount + 1
 
@@ -604,13 +618,16 @@ public enum HeadingPostProcessor {
         return "\(base)-\(priorCount)"
     }
 
-    public static func slug(for title: String) -> String {
+    public static func slug(for title: String, style: HeadingSlugStyle = .openMarked) -> String {
         let decoded = HTMLUtilities.decodeEntities(in: HTMLUtilities.plainText(fromHTMLFragment: title))
         var scalars: [UnicodeScalar] = []
         var previousWasSeparator = false
 
         for scalar in decoded.lowercased().unicodeScalars {
             if CharacterSet.alphanumerics.contains(scalar) {
+                scalars.append(scalar)
+                previousWasSeparator = false
+            } else if scalar == "_" && style == .gitHub {
                 scalars.append(scalar)
                 previousWasSeparator = false
             } else if scalar == " " || scalar == "-" || scalar == "_" {
@@ -664,7 +681,8 @@ public enum RenderDiagnosticsCollector {
         from html: String,
         document: MarkdownDocument,
         outline: [OutlineItem] = [],
-        options: RichMarkdownOptions = .default
+        options: RichMarkdownOptions = .default,
+        renderProfile: MarkdownRenderProfile = .openMarked
     ) -> [RenderDiagnostic] {
         deduplicated(
             collectMissingLocalImages(from: html, document: document)
@@ -672,7 +690,8 @@ public enum RenderDiagnosticsCollector {
                     from: html,
                     document: document,
                     outline: outline,
-                    options: options
+                    options: options,
+                    renderProfile: renderProfile
                 )
         )
     }

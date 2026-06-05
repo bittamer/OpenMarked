@@ -59,7 +59,8 @@ public enum LinkValidator {
         from html: String,
         document: MarkdownDocument,
         outline: [OutlineItem],
-        options: RichMarkdownOptions
+        options: RichMarkdownOptions,
+        renderProfile: MarkdownRenderProfile = .openMarked
     ) -> [RenderDiagnostic] {
         let references = LinkReferenceExtractor.linkReferences(from: html)
         guard !references.isEmpty else {
@@ -75,7 +76,8 @@ public enum LinkValidator {
                 for: reference,
                 document: document,
                 headingIDs: headingIDs,
-                options: options
+                options: options,
+                renderProfile: renderProfile
             ) {
                 guard seenDiagnosticIDs.insert(diagnostic.id).inserted else {
                     continue
@@ -92,7 +94,8 @@ public enum LinkValidator {
         for reference: LinkReference,
         document: MarkdownDocument,
         headingIDs: Set<String>,
-        options: RichMarkdownOptions
+        options: RichMarkdownOptions,
+        renderProfile: MarkdownRenderProfile
     ) -> [RenderDiagnostic] {
         let source = reference.source
         guard let components = URLComponents(string: source) else {
@@ -106,7 +109,8 @@ public enum LinkValidator {
                 components: components,
                 document: document,
                 headingIDs: headingIDs,
-                options: options
+                options: options,
+                renderProfile: renderProfile
             )
         }
 
@@ -160,7 +164,8 @@ public enum LinkValidator {
             source: source,
             targetURL: targetURL,
             fragment: components.fragment,
-            currentDocumentURL: document.sourceURL
+            currentDocumentURL: document.sourceURL,
+            renderProfile: renderProfile
         )
     }
 
@@ -170,7 +175,8 @@ public enum LinkValidator {
         components: URLComponents,
         document: MarkdownDocument,
         headingIDs: Set<String>,
-        options: RichMarkdownOptions
+        options: RichMarkdownOptions,
+        renderProfile: MarkdownRenderProfile
     ) -> [RenderDiagnostic] {
         switch scheme {
         case "http", "https":
@@ -238,7 +244,8 @@ public enum LinkValidator {
                 source: source,
                 targetURL: targetURL,
                 fragment: components.fragment,
-                currentDocumentURL: document.sourceURL
+                currentDocumentURL: document.sourceURL,
+                renderProfile: renderProfile
             )
         case "mailto", "tel":
             guard !components.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -298,7 +305,8 @@ public enum LinkValidator {
         source: String,
         targetURL: URL,
         fragment: String?,
-        currentDocumentURL: URL
+        currentDocumentURL: URL,
+        renderProfile: MarkdownRenderProfile
     ) -> [RenderDiagnostic] {
         guard let headingID = normalizedFragment(fragment), !headingID.isEmpty else {
             return []
@@ -337,6 +345,7 @@ public enum LinkValidator {
         do {
             let targetDocument = try MarkdownDocumentLoader.load(url: targetURL, createBookmark: false)
             let renderOptions = RenderOptions(
+                renderProfile: renderProfile,
                 richMarkdownOptions: RichMarkdownOptions(
                     rendersMermaid: false,
                     rendersMath: false,

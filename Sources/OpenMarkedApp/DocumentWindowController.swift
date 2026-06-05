@@ -354,8 +354,13 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         state.notePlaceholderAction("Copied source path")
     }
 
-    func applySettings(_ settings: ApplicationSettings) {
-        state.applyRestoredLayout(settings.defaultLayout)
+    func applySettings(_ settings: ApplicationSettings, previousSettings: ApplicationSettings? = nil) {
+        if shouldApplyDefaultLayout(settings, previousSettings: previousSettings) {
+            var updatedLayout = state.layout
+            updatedLayout.selectedThemeID = settings.defaultLayout.selectedThemeID
+            updatedLayout.fontScale = settings.defaultLayout.fontScale
+            state.applyRestoredLayout(updatedLayout)
+        }
 
         if let markdownDocument = state.currentMarkdownDocument {
             render(markdownDocument)
@@ -371,6 +376,18 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func helpPlaceholder() {
         state.notePlaceholderAction("Help documentation lands after the core MVP")
+    }
+
+    func beginRichContentRendering(features: Set<RichMarkdownFeature>) {
+        state.beginRichContentRendering(features: features)
+    }
+
+    func finishRichContentRendering(features: Set<RichMarkdownFeature>) {
+        state.finishRichContentRendering(features: features)
+    }
+
+    func failRichContentRendering(message: String) {
+        state.failRichContentRendering(message)
     }
 
     func updateWindowTitle() {
@@ -415,6 +432,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                     document: markdownDocument,
                     options: RenderOptions(
                         allowsRawHTML: settings.allowsRawHTML,
+                        renderProfile: settings.renderProfile,
                         richMarkdownOptions: settings.richMarkdownOptions
                     ),
                     theme: PreviewThemeStore.theme(id: state.layout.selectedThemeID),
@@ -427,6 +445,18 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         } catch {
             state.failRendering(error)
         }
+    }
+
+    private func shouldApplyDefaultLayout(
+        _ settings: ApplicationSettings,
+        previousSettings: ApplicationSettings?
+    ) -> Bool {
+        guard let previousSettings else {
+            return true
+        }
+
+        return settings.defaultThemeID != previousSettings.defaultThemeID
+            || settings.defaultFontScale != previousSettings.defaultFontScale
     }
 
     private func startSourceWatcher(for markdownDocument: MarkdownDocument, markWatching: Bool = true) {

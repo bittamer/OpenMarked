@@ -121,6 +121,7 @@ final class AppInfoTests: XCTestCase {
                 defaultThemeID: "missing",
                 defaultFontScale: 4.0,
                 isLivePreviewEnabled: false,
+                renderProfile: .gitHubReadme,
                 richMarkdownOptions: richOptions
             )
         )
@@ -129,6 +130,7 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(restored.defaultThemeID, "default")
         XCTAssertEqual(restored.defaultFontScale, 2.0)
         XCTAssertFalse(restored.isLivePreviewEnabled)
+        XCTAssertEqual(restored.renderProfile, .gitHubReadme)
         XCTAssertFalse(restored.richMarkdownOptions.rendersMermaid)
         XCTAssertTrue(restored.richMarkdownOptions.validatesRemoteLinks)
 
@@ -153,8 +155,40 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(decoded.defaultThemeID, "default")
         XCTAssertEqual(decoded.defaultFontScale, 2.0)
         XCTAssertFalse(decoded.isLivePreviewEnabled)
+        XCTAssertEqual(decoded.renderProfile, .openMarked)
         XCTAssertEqual(decoded.richMarkdownOptions, .default)
         XCTAssertFalse(decoded.richMarkdownOptions.validatesRemoteLinks)
+    }
+
+    func testRenderProfileGroundworkAffectsHeadingAndLinkBehavior() throws {
+        XCTAssertEqual(MarkdownRenderProfile.openMarked.displayName, "OpenMarked")
+        XCTAssertEqual(MarkdownRenderProfile.gitHubReadme.headingSlugStyle, .gitHub)
+        XCTAssertTrue(MarkdownRenderProfile.gitHubReadme.supportsGitHubCallouts)
+        XCTAssertTrue(MarkdownRenderProfile.gitHubReadme.validatesHeadingLinksByDefault)
+        XCTAssertEqual(HeadingPostProcessor.slug(for: "API_v2", style: .openMarked), "api-v2")
+        XCTAssertEqual(HeadingPostProcessor.slug(for: "API_v2", style: .gitHub), "api_v2")
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedProfile-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let targetURL = directory.appendingPathComponent("target.md")
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try "# API_v2\n\nBody.\n".write(to: targetURL, atomically: true, encoding: .utf8)
+        try "# Source\n\n[Target](target.md#api_v2)\n".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let openMarkedResult = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let gitHubResult = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(renderProfile: .gitHubReadme)
+            )
+        )
+
+        XCTAssertTrue(openMarkedResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#api_v2" })
+        XCTAssertFalse(gitHubResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#api_v2" })
     }
 
     func testRichMarkdownOptionsDefaultsKeepNetworkValidationOff() {
@@ -272,6 +306,33 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(status.hasFailure)
         XCTAssertEqual(status.requestedFeatures, [.mermaid])
         XCTAssertEqual(status.userMessage, "Rich content rendering timed out")
+    }
+
+    func testRichContentPreviewStatusTransitions() {
+        var state = DocumentWindowState()
+        let richState = RichMarkdownRenderState(
+            documentFeatures: RichMarkdownDocumentFeatures(features: [.mermaid, .math])
+        )
+        let result = RenderResult(
+            bodyHTML: "<p>Rich</p>",
+            fullHTML: "<!doctype html><p>Rich</p>",
+            outline: [],
+            diagnostics: [],
+            statistics: .empty,
+            rendererName: "test",
+            rendererVersion: nil,
+            richMarkdownState: richState
+        )
+
+        state.finishRendering(result)
+        XCTAssertEqual(state.richContentPreview, .pending([.mermaid, .math]))
+        state.beginRichContentRendering(features: [.mermaid, .math])
+        XCTAssertEqual(state.richContentPreview, .rendering([.mermaid, .math]))
+        XCTAssertEqual(state.statusMessage, "Rendering rich content")
+        state.finishRichContentRendering(features: [.mermaid, .math])
+        XCTAssertEqual(state.richContentPreview, .ready([.mermaid, .math]))
+        state.failRichContentRendering("Rich content rendering failed")
+        XCTAssertEqual(state.richContentPreview, .failed("Rich content rendering failed"))
     }
 
     func testMermaidPostProcessorBuildsPlaceholdersBeforeHighlighting() {
@@ -906,6 +967,7 @@ struct AppInfoTests {
                 defaultThemeID: "missing",
                 defaultFontScale: 4.0,
                 isLivePreviewEnabled: false,
+                renderProfile: .gitHubReadme,
                 richMarkdownOptions: richOptions
             )
         )
@@ -914,6 +976,7 @@ struct AppInfoTests {
         #expect(restored.defaultThemeID == "default")
         #expect(restored.defaultFontScale == 2.0)
         #expect(!restored.isLivePreviewEnabled)
+        #expect(restored.renderProfile == .gitHubReadme)
         #expect(!restored.richMarkdownOptions.rendersMermaid)
         #expect(restored.richMarkdownOptions.validatesRemoteLinks)
 
@@ -939,8 +1002,41 @@ struct AppInfoTests {
         #expect(decoded.defaultThemeID == "default")
         #expect(decoded.defaultFontScale == 2.0)
         #expect(!decoded.isLivePreviewEnabled)
+        #expect(decoded.renderProfile == .openMarked)
         #expect(decoded.richMarkdownOptions == .default)
         #expect(!decoded.richMarkdownOptions.validatesRemoteLinks)
+    }
+
+    @Test("Render profile groundwork affects heading and link behavior")
+    func renderProfileGroundworkAffectsHeadingAndLinkBehavior() throws {
+        #expect(MarkdownRenderProfile.openMarked.displayName == "OpenMarked")
+        #expect(MarkdownRenderProfile.gitHubReadme.headingSlugStyle == .gitHub)
+        #expect(MarkdownRenderProfile.gitHubReadme.supportsGitHubCallouts)
+        #expect(MarkdownRenderProfile.gitHubReadme.validatesHeadingLinksByDefault)
+        #expect(HeadingPostProcessor.slug(for: "API_v2", style: .openMarked) == "api-v2")
+        #expect(HeadingPostProcessor.slug(for: "API_v2", style: .gitHub) == "api_v2")
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedProfile-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let targetURL = directory.appendingPathComponent("target.md")
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try "# API_v2\n\nBody.\n".write(to: targetURL, atomically: true, encoding: .utf8)
+        try "# Source\n\n[Target](target.md#api_v2)\n".write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let openMarkedResult = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let gitHubResult = try CMarkGFMRenderer().render(
+            RenderRequest(
+                document: document,
+                options: RenderOptions(renderProfile: .gitHubReadme)
+            )
+        )
+
+        #expect(openMarkedResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#api_v2" })
+        #expect(!gitHubResult.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#api_v2" })
     }
 
     @Test("Rich Markdown defaults keep network validation off")
@@ -1064,6 +1160,34 @@ struct AppInfoTests {
         #expect(status.hasFailure)
         #expect(status.requestedFeatures == [.mermaid])
         #expect(status.userMessage == "Rich content rendering timed out")
+    }
+
+    @Test("Rich content preview status transitions are tracked")
+    func richContentPreviewStatusTransitions() {
+        var state = DocumentWindowState()
+        let richState = RichMarkdownRenderState(
+            documentFeatures: RichMarkdownDocumentFeatures(features: [.mermaid, .math])
+        )
+        let result = RenderResult(
+            bodyHTML: "<p>Rich</p>",
+            fullHTML: "<!doctype html><p>Rich</p>",
+            outline: [],
+            diagnostics: [],
+            statistics: .empty,
+            rendererName: "test",
+            rendererVersion: nil,
+            richMarkdownState: richState
+        )
+
+        state.finishRendering(result)
+        #expect(state.richContentPreview == .pending([.mermaid, .math]))
+        state.beginRichContentRendering(features: [.mermaid, .math])
+        #expect(state.richContentPreview == .rendering([.mermaid, .math]))
+        #expect(state.statusMessage == "Rendering rich content")
+        state.finishRichContentRendering(features: [.mermaid, .math])
+        #expect(state.richContentPreview == .ready([.mermaid, .math]))
+        state.failRichContentRendering("Rich content rendering failed")
+        #expect(state.richContentPreview == .failed("Rich content rendering failed"))
     }
 
     @Test("Mermaid postprocessor builds placeholders before highlighting")

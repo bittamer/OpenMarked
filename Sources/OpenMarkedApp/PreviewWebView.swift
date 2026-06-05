@@ -43,10 +43,19 @@ struct PreviewWebView: NSViewRepresentable {
     let preservesScrollPosition: Bool
     let usesReducedMotion: Bool
     let onStatusUpdate: (String) -> Void
+    let onRichContentRendering: (Set<RichMarkdownFeature>) -> Void
+    let onRichContentReady: (Set<RichMarkdownFeature>) -> Void
+    let onRichContentFailed: (String) -> Void
     let onSearchResult: (PreviewSearchResult) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onStatusUpdate: onStatusUpdate, onSearchResult: onSearchResult)
+        Coordinator(
+            onStatusUpdate: onStatusUpdate,
+            onRichContentRendering: onRichContentRendering,
+            onRichContentReady: onRichContentReady,
+            onRichContentFailed: onRichContentFailed,
+            onSearchResult: onSearchResult
+        )
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -63,6 +72,9 @@ struct PreviewWebView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.onStatusUpdate = onStatusUpdate
+        context.coordinator.onRichContentRendering = onRichContentRendering
+        context.coordinator.onRichContentReady = onRichContentReady
+        context.coordinator.onRichContentFailed = onRichContentFailed
         context.coordinator.onSearchResult = onSearchResult
         context.coordinator.preservesScrollPosition = preservesScrollPosition
         context.coordinator.usesReducedMotion = usesReducedMotion
@@ -86,6 +98,9 @@ struct PreviewWebView: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         weak var webView: WKWebView?
         var onStatusUpdate: (String) -> Void
+        var onRichContentRendering: (Set<RichMarkdownFeature>) -> Void
+        var onRichContentReady: (Set<RichMarkdownFeature>) -> Void
+        var onRichContentFailed: (String) -> Void
         var onSearchResult: (PreviewSearchResult) -> Void
         var lastHTML: String?
         var lastBaseURL: URL?
@@ -101,9 +116,15 @@ struct PreviewWebView: NSViewRepresentable {
 
         init(
             onStatusUpdate: @escaping (String) -> Void,
+            onRichContentRendering: @escaping (Set<RichMarkdownFeature>) -> Void,
+            onRichContentReady: @escaping (Set<RichMarkdownFeature>) -> Void,
+            onRichContentFailed: @escaping (String) -> Void,
             onSearchResult: @escaping (PreviewSearchResult) -> Void
         ) {
             self.onStatusUpdate = onStatusUpdate
+            self.onRichContentRendering = onRichContentRendering
+            self.onRichContentReady = onRichContentReady
+            self.onRichContentFailed = onRichContentFailed
             self.onSearchResult = onSearchResult
         }
 
@@ -406,10 +427,15 @@ struct PreviewWebView: NSViewRepresentable {
                 }
 
                 do {
+                    self.onRichContentRendering(state.richContentRuntimeFeatures)
                     let status = try await RichContentWebViewRuntime.installAndWait(for: state, in: webView)
-                    self.onStatusUpdate(status.userMessage)
+                    if status.hasFailure {
+                        self.onRichContentFailed(status.userMessage)
+                    } else {
+                        self.onRichContentReady(status.requestedFeatures)
+                    }
                 } catch {
-                    self.onStatusUpdate("Rich content runtime failed: \(error.localizedDescription)")
+                    self.onRichContentFailed("Rich content runtime failed: \(error.localizedDescription)")
                 }
 
                 completion()

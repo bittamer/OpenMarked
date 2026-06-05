@@ -53,7 +53,7 @@ Observed pass:
 - Toolbar controls, theme picker, search button, source menu, and export menu were visible.
 - The outline sidebar populated with document headings.
 - Code block syntax highlighting, table styling, and status bar metadata were visible and readable in dark appearance.
-- Settings opened through the OpenMarked menu and exposed preview, content, and export preferences with accessible labels.
+- Settings opened through the OpenMarked menu and exposed preview, render profile, rich Markdown, link validation, content, and export preferences with accessible labels.
 
 Remaining human checks before public release:
 

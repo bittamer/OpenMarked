@@ -133,7 +133,7 @@ final class AppController: ObservableObject {
                   let currentURL = activeWindowController?.state.currentDocument?.url {
             settingsStore.saveLastDocumentURLs([currentURL])
         }
-        activeWindowController?.applySettings(settings)
+        activeWindowController?.applySettings(settings, previousSettings: previousSettings)
     }
 
     func exportHTML() {

@@ -159,7 +159,10 @@ Settings behavior:
 
 - `ApplicationSettings` is a small codable value that stores preview defaults, content policy, export defaults, live preview behavior, scroll preservation, and optional session restoration.
 - `ApplicationSettingsStore` persists settings and last-opened document paths through `UserDefaults`, with normalization for unknown themes and out-of-range font scales.
-- Current documents re-render when content policy or preview defaults change, while newly opened documents use the normalized default layout unless a per-document layout was restored.
+- `MarkdownRenderProfile` is stored with settings and passed through `RenderOptions`; the default OpenMarked profile preserves current behavior, while the GitHub README profile switches heading slug generation and profile-aware heading-link validation.
+- Rich Markdown toggles for Mermaid, KaTeX, GitHub callouts, and link validation live in `RichMarkdownOptions` and re-render the active document when changed.
+- Current documents re-render when content policy, rich Markdown settings, render profile, or preview defaults change. Theme and zoom only update from defaults when those specific defaults changed.
+- `DocumentWindowState.richContentPreview` tracks pending, rendering, ready, and failed rich-content runtime states separately from live-preview file watching.
 - Reduced-motion preferences are read from SwiftUI environment and passed into `PreviewWebView`, which switches smooth scrolling helpers to immediate scrolling.
 - Remote images can be disabled before preview/export assembly by rewriting remote image sources to inert placeholders while retaining the original URL in a diagnostic attribute.
 - Accessibility polish is kept mostly in SwiftUI view declarations: primary toolbar controls, settings, empty/error states, and picker/search controls expose labels or native labels.

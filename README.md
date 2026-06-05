@@ -29,7 +29,7 @@ This repository currently contains:
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
 - Outline filtering, rendered-preview search, richer status statistics, diagnostics popover, and source file actions.
 - Standalone HTML export, copy rendered HTML, PDF export, print, and export error handling.
-- A native Settings window for preview defaults, content loading, export defaults, live preview, scroll preservation, and session restoration.
+- A native Settings window for preview defaults, render profile, rich Markdown controls, link validation, content loading, export defaults, live preview, scroll preservation, and session restoration.
 - Keyboard shortcuts for core document, preview, navigation, zoom, search, export, and print actions.
 - Accessibility labels for primary controls and states, plus reduced-motion handling for preview navigation/search scrolling.
 - Manual QA checklist, release notes, release gate notes, performance smoke coverage, WebKit screenshot baselines, PDF/export artifact checks, and a developer packaging script that creates `OpenMarked.app`, a ZIP artifact, and a DMG.
@@ -103,7 +103,7 @@ Export supports standalone HTML, copying the rendered HTML fragment, PDF export,
 
 ## Settings And Privacy
 
-Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover default theme, default font scale, live updates, scroll preservation, remote image loading, raw HTML rendering, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents.
+Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover render profile, default theme, default font scale, live updates, scroll preservation, remote image loading, raw HTML rendering, Mermaid, KaTeX, GitHub callouts, local/heading/remote link reporting, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents.
 
 OpenMarked is designed as a local-first viewer. It does not send document contents to a service. Remote images are loaded only when the setting is enabled; remote scripts and inline event handlers are blocked in preview HTML. Link validation does not crawl remote URLs during normal rendering. Last opened document paths are saved only when session restoration is enabled by the user.
 

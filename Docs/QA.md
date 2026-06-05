@@ -113,20 +113,35 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
 
 ## Settings
 
-1. Change default theme and font scale in Settings.
+1. Change render profile in Settings.
+   Expected result: the active document re-renders, heading/link behavior follows the selected profile, and the setting persists after relaunch.
+2. Change default theme and font scale in Settings.
    Expected result: current and new document windows use the updated defaults where appropriate.
-2. Disable live updates.
+3. Disable Mermaid, KaTeX, and GitHub callouts.
+   Expected result: the active rich fixture re-renders with readable fallback Markdown and disabled-feature diagnostics.
+4. Disable local link and heading link validation.
+   Expected result: link diagnostics for local files/headings disappear while image diagnostics remain independent.
+5. Enable remote link reporting.
+   Expected result: remote links produce informational skipped-check diagnostics without crawling the network.
+6. Disable live updates.
    Expected result: file changes no longer trigger preview reloads until manual reload.
-3. Disable preserve scroll position.
+7. Disable preserve scroll position.
    Expected result: reloading returns the preview to the top.
-4. Disable remote images.
+8. Disable remote images.
    Expected result: remote image sources are blocked in preview HTML.
-5. Disable raw HTML.
+9. Disable raw HTML.
    Expected result: raw HTML is rendered safely as text according to cmark behavior.
-6. Disable HTML export CSS embedding.
+10. Disable HTML export CSS embedding.
    Expected result: exported HTML omits embedded style blocks.
-7. Enable and disable session restoration.
+11. Enable and disable session restoration.
    Expected result: last-opened paths are retained only while the setting is enabled.
+
+## Rich Content Status
+
+1. Open `rich-markdown.md`.
+   Expected result: the status bar briefly reports rich content rendering, then rich content ready after Mermaid and KaTeX finish.
+2. Open a fixture with intentionally broken Mermaid or malformed math.
+   Expected result: the preview remains visible, the status bar reports a concise failure where runtime rendering fails, and the diagnostics popover contains detailed warnings/errors.
 
 ## Export And Print
 

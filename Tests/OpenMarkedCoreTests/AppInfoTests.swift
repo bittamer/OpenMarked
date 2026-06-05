@@ -463,6 +463,84 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(html.contains(#"data-openmarked-rich="math""#))
     }
 
+    func testDocumentInspectionBuildsEmptyDocumentWithoutRenderResult() {
+        let document = MarkdownDocument(
+            sourceURL: URL(fileURLWithPath: "/tmp/empty.md"),
+            sourceText: "",
+            bodyText: "",
+            frontMatter: nil,
+            metadata: DocumentFileMetadata(fileSize: 0, createdAt: nil, modifiedAt: nil),
+            statistics: .empty,
+            loadedAt: Date(timeIntervalSince1970: 0),
+            securityScopedBookmark: nil
+        )
+
+        let report = DocumentInspectionBuilder.build(document: document)
+
+        XCTAssertEqual(report.metadata.displayTitle, "empty.md")
+        XCTAssertEqual(report.metadata.titleSource, .fileName)
+        XCTAssertEqual(report.statistics, RichDocumentStatistics.empty)
+        XCTAssertTrue(report.links.isEmpty)
+        XCTAssertTrue(report.assets.isEmpty)
+        XCTAssertTrue(report.exportReadiness.isReady)
+    }
+
+    func testDocumentInspectionBuildsMetadataReportWithoutRenderResult() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/metadata-rich.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, loadedAt: Date(timeIntervalSince1970: 0), createBookmark: false)
+        let report = DocumentInspectionBuilder.build(document: document)
+
+        XCTAssertEqual(report.metadata.displayTitle, "Workbench Metadata Fixture")
+        XCTAssertEqual(report.metadata.titleSource, .frontMatter)
+        XCTAssertEqual(report.metadata.frontMatterFormat, .yaml)
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "tags" && $0.value == "[inspection, metadata, release]" })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "custom-field" && !$0.isStandard })
+        XCTAssertTrue(report.metadata.fileFacts.contains { $0.key == "path" && $0.value.hasSuffix("metadata-rich.md") })
+        XCTAssertEqual(report.statistics.words, document.statistics.wordCount)
+        XCTAssertEqual(report.statistics.linkCount, 0)
+    }
+
+    func testDocumentInspectionReportsRichStatistics() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/statistics-rich.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let report = DocumentInspectionBuilder.build(document: document, renderResult: result)
+
+        XCTAssertGreaterThanOrEqual(report.statistics.headingCount, 6)
+        XCTAssertEqual(report.statistics.linkCount, 1)
+        XCTAssertEqual(report.statistics.imageCount, 1)
+        XCTAssertEqual(report.statistics.codeBlockCount, 2)
+        XCTAssertEqual(report.statistics.tableCount, 1)
+        XCTAssertEqual(report.statistics.calloutCount, 1)
+        XCTAssertEqual(report.statistics.mermaidDiagramCount, 1)
+        XCTAssertEqual(report.statistics.mathExpressionCount, 2)
+        XCTAssertEqual(report.statistics.headingLevels[2], 6)
+        XCTAssertTrue(report.exportReadiness.isReady)
+    }
+
+    func testDocumentInspectionReportsLinksAssetsAndReadiness() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/inspection-links-assets.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let report = DocumentInspectionBuilder.build(document: document, renderResult: result)
+
+        XCTAssertEqual(report.metadata.displayTitle, "Inspection Links And Assets")
+        XCTAssertEqual(report.metadata.frontMatterFormat, .toml)
+        XCTAssertTrue(report.links.contains { $0.target == "README.md" && $0.status == .valid })
+        XCTAssertTrue(report.links.contains { $0.target == "#asset-section" && $0.kind == .sameDocumentHeading && $0.status == .valid })
+        XCTAssertTrue(report.links.contains { $0.target == "missing-guide.md" && $0.status == .missing })
+        XCTAssertTrue(report.links.contains { $0.target == "https://example.com/openmarked" && $0.kind == .remoteURL && $0.status == .skipped })
+        XCTAssertTrue(report.links.contains { $0.target == "https://" && $0.status == .malformed })
+        XCTAssertTrue(report.links.contains { $0.target == "javascript:alert" && $0.status == .unsupported })
+        XCTAssertTrue(report.assets.contains { $0.source == "../Assets/sample-mark.svg" && $0.status == .valid })
+        XCTAssertTrue(report.assets.contains { $0.source == "../Assets/missing-image.png" && $0.status == .missing })
+        XCTAssertTrue(report.assets.contains { $0.source == "https://example.com/openmarked.png" && $0.kind == .remoteImage && $0.status == .skipped })
+        XCTAssertFalse(report.exportReadiness.isReady)
+        XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Missing local link" && $0.source == "missing-guide.md" })
+        XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Missing image" && $0.source == "../Assets/missing-image.png" })
+        XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Remote image" && $0.source == "https://example.com/openmarked.png" })
+    }
+
     func testRenderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {
         let expectedKinds: Set<RenderDiagnosticKind> = [
             .missingLocalImage,

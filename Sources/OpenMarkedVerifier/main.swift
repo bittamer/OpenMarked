@@ -354,7 +354,13 @@ let richFixturePaths = [
     "Fixtures/Markdown/callouts.md",
     "Fixtures/Markdown/links.md",
     "Fixtures/Markdown/broken-links.md",
-    "Fixtures/Markdown/github-readme-compat.md"
+    "Fixtures/Markdown/github-readme-compat.md",
+    "Fixtures/Markdown/metadata-rich.md",
+    "Fixtures/Markdown/inspection-links-assets.md",
+    "Fixtures/Markdown/statistics-rich.md",
+    "Fixtures/Markdown/print-readiness.md",
+    "Fixtures/Markdown/heading-depth.md",
+    "Fixtures/Markdown/wide-table.md"
 ]
 
 for path in richFixturePaths {
@@ -364,6 +370,73 @@ for path in richFixturePaths {
     verify(!document.bodyText.isEmpty, "\(path) should load source text")
     verify(!result.fullHTML.isEmpty, "\(path) should render full HTML")
 }
+
+let emptyInspectionDocument = MarkdownDocument(
+    sourceURL: URL(fileURLWithPath: "/tmp/empty.md"),
+    sourceText: "",
+    bodyText: "",
+    frontMatter: nil,
+    metadata: DocumentFileMetadata(fileSize: 0, createdAt: nil, modifiedAt: nil),
+    statistics: .empty,
+    loadedAt: Date(timeIntervalSince1970: 0),
+    securityScopedBookmark: nil
+)
+let emptyInspectionReport = DocumentInspectionBuilder.build(document: emptyInspectionDocument)
+verify(emptyInspectionReport.statistics == .empty, "empty inspection report should keep zero statistics")
+verify(emptyInspectionReport.exportReadiness.isReady, "empty inspection report should be export-ready")
+
+let metadataInspectionURL = URL(fileURLWithPath: "Fixtures/Markdown/metadata-rich.md").standardizedFileURL
+let metadataInspectionDocument = try MarkdownDocumentLoader.load(
+    url: metadataInspectionURL,
+    loadedAt: Date(timeIntervalSince1970: 0),
+    createBookmark: false
+)
+let metadataInspectionReport = DocumentInspectionBuilder.build(document: metadataInspectionDocument)
+verify(metadataInspectionReport.metadata.displayTitle == "Workbench Metadata Fixture", "inspection metadata should use front matter title")
+verify(metadataInspectionReport.metadata.titleSource == .frontMatter, "inspection metadata should record front matter title source")
+verify(metadataInspectionReport.metadata.frontMatterFormat == .yaml, "inspection metadata should record YAML front matter")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "tags" }, "inspection metadata should include tags")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "custom-field" && !$0.isStandard }, "inspection metadata should include custom fields")
+verify(metadataInspectionReport.metadata.fileFacts.contains { $0.key == "path" && $0.value.hasSuffix("metadata-rich.md") }, "inspection metadata should include file facts")
+
+let statisticsInspectionURL = URL(fileURLWithPath: "Fixtures/Markdown/statistics-rich.md").standardizedFileURL
+let statisticsInspectionDocument = try MarkdownDocumentLoader.load(url: statisticsInspectionURL, createBookmark: false)
+let statisticsInspectionResult = try renderer.render(RenderRequest(document: statisticsInspectionDocument))
+let statisticsInspectionReport = DocumentInspectionBuilder.build(
+    document: statisticsInspectionDocument,
+    renderResult: statisticsInspectionResult
+)
+verify(statisticsInspectionReport.statistics.headingLevels[2] == 6, "inspection statistics should count heading levels")
+verify(statisticsInspectionReport.statistics.linkCount == 1, "inspection statistics should count rendered links")
+verify(statisticsInspectionReport.statistics.imageCount == 1, "inspection statistics should count rendered images")
+verify(statisticsInspectionReport.statistics.codeBlockCount == 2, "inspection statistics should count fenced code blocks")
+verify(statisticsInspectionReport.statistics.tableCount == 1, "inspection statistics should count tables")
+verify(statisticsInspectionReport.statistics.calloutCount == 1, "inspection statistics should count GitHub callouts")
+verify(statisticsInspectionReport.statistics.mermaidDiagramCount == 1, "inspection statistics should count Mermaid diagrams")
+verify(statisticsInspectionReport.statistics.mathExpressionCount == 2, "inspection statistics should count math expressions")
+verify(statisticsInspectionReport.exportReadiness.isReady, "rich statistics fixture should be export-ready")
+
+let referenceInspectionURL = URL(fileURLWithPath: "Fixtures/Markdown/inspection-links-assets.md").standardizedFileURL
+let referenceInspectionDocument = try MarkdownDocumentLoader.load(url: referenceInspectionURL, createBookmark: false)
+let referenceInspectionResult = try renderer.render(RenderRequest(document: referenceInspectionDocument))
+let referenceInspectionReport = DocumentInspectionBuilder.build(
+    document: referenceInspectionDocument,
+    renderResult: referenceInspectionResult
+)
+verify(referenceInspectionReport.metadata.frontMatterFormat == .toml, "inspection should support TOML front matter")
+verify(referenceInspectionReport.links.contains { $0.target == "README.md" && $0.status == .valid }, "inspection should mark existing local links valid")
+verify(referenceInspectionReport.links.contains { $0.target == "#asset-section" && $0.status == .valid }, "inspection should mark existing heading links valid")
+verify(referenceInspectionReport.links.contains { $0.target == "missing-guide.md" && $0.status == .missing }, "inspection should mark missing local links")
+verify(referenceInspectionReport.links.contains { $0.target == "https://example.com/openmarked" && $0.status == .skipped }, "inspection should mark remote links as skipped")
+verify(referenceInspectionReport.links.contains { $0.target == "https://" && $0.status == .malformed }, "inspection should mark malformed links")
+verify(referenceInspectionReport.links.contains { $0.target == "javascript:alert" && $0.status == .unsupported }, "inspection should mark unsupported schemes")
+verify(referenceInspectionReport.assets.contains { $0.source == "../Assets/sample-mark.svg" && $0.status == .valid }, "inspection should mark existing local images valid")
+verify(referenceInspectionReport.assets.contains { $0.source == "../Assets/missing-image.png" && $0.status == .missing }, "inspection should mark missing local images")
+verify(referenceInspectionReport.assets.contains { $0.source == "https://example.com/openmarked.png" && $0.kind == .remoteImage && $0.status == .skipped }, "inspection should mark remote images as skipped")
+verify(!referenceInspectionReport.exportReadiness.isReady, "inspection should block readiness for missing references")
+verify(referenceInspectionReport.exportReadiness.issues.contains { $0.title == "Missing local link" && $0.source == "missing-guide.md" }, "readiness should include missing local links")
+verify(referenceInspectionReport.exportReadiness.issues.contains { $0.title == "Missing image" && $0.source == "../Assets/missing-image.png" }, "readiness should include missing images")
+verify(referenceInspectionReport.exportReadiness.issues.contains { $0.title == "Remote image" && $0.source == "https://example.com/openmarked.png" }, "readiness should include remote images as informational")
 
 let mermaidURL = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
 let mermaidDocument = try MarkdownDocumentLoader.load(url: mermaidURL, createBookmark: false)

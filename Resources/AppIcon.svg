@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">OpenMarked placeholder icon</title>
+  <rect width="1024" height="1024" rx="192" fill="#111827"/>
+  <rect x="172" y="196" width="680" height="632" rx="72" fill="#f9fafb"/>
+  <path d="M284 672V336h92l136 198 136-198h92v336h-96V484L548 632h-96L380 484v188z" fill="#111827"/>
+</svg>
+

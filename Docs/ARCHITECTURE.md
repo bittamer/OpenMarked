@@ -135,17 +135,18 @@ Even if early local builds are not sandboxed, sandbox assumptions should shape t
 
 ## Distribution Direction
 
-Phase 0 verifies with Swift Package Manager:
+Phase 10 keeps distribution lightweight and reproducible while the project is still pre-notarization.
 
-```sh
-swift build
-swift test
-```
+Distribution behavior:
+
+- `Scripts/verify_release.sh` runs the automated release gate: debug build, app product build, release build, verifier, performance smoke, SwiftPM tests, package metadata, diff hygiene, ASCII scan, packaging, ad hoc signing, and ZIP creation.
+- `Scripts/package_release.sh` wraps the SwiftPM release executable into `dist/OpenMarked-0.1.0/OpenMarked.app`, copies the SwiftPM resource bundle to the bundle root for `Bundle.module` lookup, mirrors it under `Contents/Resources`, writes Info.plist metadata from `Packaging/Info.plist.template`, ad hoc signs the bundle, and creates `dist/OpenMarked-0.1.0-macOS.zip`.
+- Release notes live in `RELEASE_NOTES.md`; the owner gate and tag instructions live in `Docs/RELEASE.md`; the manual pass lives in `Docs/QA.md`.
+- The MVP artifact is ad hoc signed and not notarized. Users and contributors should treat it as a developer artifact until signing credentials and notarization are available.
 
 Later phases can add:
 
-- App bundle packaging.
-- Code signing.
+- Developer ID signing.
 - Notarization.
 - DMG creation.
 - Homebrew Cask.

@@ -27,12 +27,53 @@ final class WatchEventBox: @unchecked Sendable {
     }
 }
 
+@discardableResult
+func measureSeconds(_ body: () throws -> Void) rethrows -> Double {
+    let start = DispatchTime.now().uptimeNanoseconds
+    try body()
+    let end = DispatchTime.now().uptimeNanoseconds
+    return Double(end - start) / 1_000_000_000
+}
+
+func runPerformanceSmoke(renderer: CMarkGFMRenderer) throws {
+    let fixtures = [
+        "Fixtures/Markdown/readme.md",
+        "Fixtures/Markdown/gfm.md",
+        "Fixtures/Markdown/long-document.md"
+    ]
+
+    for path in fixtures {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        var document: MarkdownDocument?
+        let loadSeconds = try measureSeconds {
+            document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        }
+
+        guard let document else {
+            verify(false, "performance fixture should load: \(path)")
+            continue
+        }
+
+        var result: RenderResult?
+        let renderSeconds = try measureSeconds {
+            result = try renderer.render(RenderRequest(document: document))
+        }
+
+        verify(result?.fullHTML.isEmpty == false, "performance fixture should render: \(path)")
+        verify(loadSeconds < 2.0, "\(path) should load within 2 seconds")
+        verify(renderSeconds < 2.0, "\(path) should render within 2 seconds")
+        print(String(format: "Performance smoke: %@ load=%.4fs render=%.4fs words=%d", path, loadSeconds, renderSeconds, document.statistics.wordCount))
+    }
+}
+
 verify(AppInfo.supportsFileExtension("md"), "md should be supported")
 verify(AppInfo.supportsFileExtension("MARKDOWN"), "MARKDOWN should be supported case-insensitively")
+verify(AppInfo.supportsFileExtension("mkdn"), "mkdn should be supported")
 verify(AppInfo.supportsFileExtension("txt"), "txt should be supported")
 verify(!AppInfo.supportsFileExtension("pdf"), "pdf should not be supported in the MVP skeleton")
 verify(!AppInfo.supportsFileExtension("docx"), "docx should not be supported in the MVP skeleton")
-verify(AppInfo.version == "0.1.0-alpha.1", "version should be 0.1.0-alpha.1")
+verify(AppInfo.version == "0.1.0", "version should be 0.1.0")
+verify(AppInfo.build == "1", "build should be 1")
 
 var state = DocumentWindowState()
 verify(!state.hasDocument, "new window state should not have a document")
@@ -237,4 +278,8 @@ let creationEvent = try waitForWatchEvent(url: missingWatchedURL) { url in
 }
 verify(creationEvent.kind == .replaced || creationEvent.kind == .changed, "creation of a missing watched file should be detected")
 
-print("OpenMarked Phase 9 verifier passed.")
+if CommandLine.arguments.contains("--performance-smoke") {
+    try runPerformanceSmoke(renderer: renderer)
+}
+
+print("OpenMarked Phase 10 verifier passed.")

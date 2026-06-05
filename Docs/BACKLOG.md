@@ -101,4 +101,10 @@ This tracker mirrors `MVP_IMPLEMENTATION_PLAN.md` at a high level. The detailed 
 
 ## Phase 10: QA, Packaging, and Release
 
-- [ ] MVP-1001 through MVP-1007.
+- [x] MVP-1001: Create Manual QA Checklist.
+- [ ] MVP-1002: Run Fixture Visual QA. Checklist and automated render/performance smoke are in place; owner visual pass is pending.
+- [x] MVP-1003: Performance Smoke Test.
+- [x] MVP-1004: Package Debug/Developer Build.
+- [x] MVP-1005: Add Versioning and About Window.
+- [x] MVP-1006: Write MVP Release Notes.
+- [ ] MVP-1007: Final MVP Gate Review. Owner approval and release tag are pending after changes are committed.

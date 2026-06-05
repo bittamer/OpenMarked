@@ -76,14 +76,27 @@ public enum PreviewThemeStore {
     }
 
     private static func loadCSS(named name: String, fallback: String) -> String {
-        let url = Bundle.module.url(forResource: name, withExtension: "css", subdirectory: "Themes")
-            ?? Bundle.module.url(forResource: name, withExtension: "css")
+        for bundle in resourceBundles {
+            let url = bundle.url(forResource: name, withExtension: "css", subdirectory: "Themes")
+                ?? bundle.url(forResource: name, withExtension: "css")
 
-        guard let url, let css = try? String(contentsOf: url, encoding: .utf8) else {
-            return fallback
+            if let url, let css = try? String(contentsOf: url, encoding: .utf8) {
+                return css
+            }
         }
 
-        return css
+        return fallback
+    }
+
+    private static var resourceBundles: [Bundle] {
+        if let resourceURL = Bundle.main.resourceURL {
+            let conventionalBundleURL = resourceURL.appendingPathComponent("OpenMarked_OpenMarkedCore.bundle")
+            if let bundle = Bundle(url: conventionalBundleURL) {
+                return [bundle]
+            }
+        }
+
+        return [Bundle.module]
     }
 
     private static let fallbackScreenCSS = """

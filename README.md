@@ -2,7 +2,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently through Phase 9: settings, accessibility, and polish. The first MVP is focused on a beautiful local Markdown preview experience, reliable CommonMark/GitHub Flavored Markdown rendering, file watching, document navigation, built-in themes, HTML/PDF export, and a small set of persistent user preferences.
+The project is currently through Phase 10: QA, packaging, and release preparation. The first MVP is focused on a beautiful local Markdown preview experience, reliable CommonMark/GitHub Flavored Markdown rendering, file watching, document navigation, built-in themes, HTML/PDF export, persistent user preferences, and repeatable developer release packaging.
 
 ## Current Status
 
@@ -25,11 +25,12 @@ This repository currently contains:
 - A native Settings window for preview defaults, content loading, export defaults, live preview, scroll preservation, and session restoration.
 - Keyboard shortcuts for core document, preview, navigation, zoom, search, export, and print actions.
 - Accessibility labels for primary controls and states, plus reduced-motion handling for preview navigation/search scrolling.
+- Manual QA checklist, release notes, release gate notes, performance smoke coverage, and a developer packaging script that creates `OpenMarked.app` and a ZIP artifact.
 - Core test target.
 - Markdown fixture corpus.
 - CI workflow for Swift build and tests.
 
-Packaging, signing, notarization, release automation, and final visual QA are implemented in later MVP phases.
+Signing credentials, notarization, DMG creation, Homebrew Cask, and automated visual regression tests are deferred beyond the MVP.
 
 ## Platform
 
@@ -51,7 +52,25 @@ swift test
 
 Open the package in Xcode by opening `Package.swift`.
 
-Some Command Line Tools only environments do not expose `XCTest` or Swift Testing to SwiftPM. In that case, `swift run OpenMarkedVerifier` provides the Phase 0 local smoke verification, while CI should run `swift test` on a full Xcode runner.
+Some Command Line Tools only environments do not expose `XCTest` or Swift Testing to SwiftPM. In that case, `swift run OpenMarkedVerifier` provides the local smoke verification, while CI should run `swift test` on a full Xcode runner.
+
+For the full release gate:
+
+```sh
+Scripts/verify_release.sh
+```
+
+## Developer Packaging
+
+Create a local developer artifact with:
+
+```sh
+Scripts/package_release.sh
+```
+
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.1.0/OpenMarked.app`, copies SwiftPM resources, ad hoc signs the bundle when `codesign` is available, verifies the signature, and creates `dist/OpenMarked-0.1.0-macOS.zip`.
+
+This artifact is not notarized. Gatekeeper behavior is documented in `Docs/RELEASE.md` and `RELEASE_NOTES.md`.
 
 ## Usage
 
@@ -71,7 +90,7 @@ OpenMarked is designed as a local-first viewer. It does not send document conten
 
 ## Known Limitations
 
-The MVP does not yet ship as a signed `.app` bundle, notarized DMG, or Homebrew Cask. PDF and print output use WebKit/AppKit and still need final visual QA across themes. Custom themes, plugin processors, DOCX/EPUB export, grammar tools, and browser integrations are intentionally deferred.
+The MVP developer artifact is ad hoc signed but not notarized. It does not yet ship as a DMG or Homebrew Cask. PDF and print output use WebKit/AppKit and should be visually checked before publishing release artifacts. Custom themes, plugin processors, DOCX/EPUB export, grammar tools, and browser integrations are intentionally deferred.
 
 ## Feedback
 

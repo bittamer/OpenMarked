@@ -21,7 +21,7 @@ jobs:
       - name: Build
         run: swift build
 
-      - name: Phase 0 verifier
+      - name: MVP verifier
         run: swift run OpenMarkedVerifier
 
       - name: Test

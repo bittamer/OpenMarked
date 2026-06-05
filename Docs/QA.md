@@ -1,0 +1,124 @@
+# OpenMarked MVP QA Checklist
+
+Use this checklist for the final `0.1.0` manual QA pass. Run it on macOS 13 or newer from a clean checkout after `Scripts/verify_release.sh` passes.
+
+## Automated Gate
+
+1. Run `Scripts/verify_release.sh`.
+   Expected result: debug build, release build, verifier, performance smoke, tests, package description, diff hygiene, ASCII scan, app bundle creation, ad hoc signing, and ZIP creation all complete.
+2. Confirm `dist/OpenMarked-0.1.0/OpenMarked.app` exists.
+   Expected result: the app bundle launches.
+3. Confirm `dist/OpenMarked-0.1.0-macOS.zip` exists.
+   Expected result: the ZIP expands to `OpenMarked.app`.
+4. Open About OpenMarked.
+   Expected result: the About panel shows OpenMarked, version `0.1.0`, build `1`, license, and project URL.
+
+## Opening Workflows
+
+1. Launch OpenMarked with no arguments.
+   Expected result: an empty window appears with a clear open action.
+2. Use File > Open to open `Fixtures/Markdown/readme.md`.
+   Expected result: the document renders and the window title changes to `readme.md`.
+3. Drag `Fixtures/Markdown/gfm.md` into the preview area.
+   Expected result: the dropped document replaces the current empty/active target or opens cleanly.
+4. Open multiple fixtures at once from the open panel.
+   Expected result: each supported file opens in a document window.
+5. Open an unsupported file such as `Package.swift`.
+   Expected result: the app shows a readable unsupported-file error.
+
+## Rendering Fixtures
+
+Open every file in `Fixtures/Markdown`:
+
+- `README.md`
+- `edge-cases.md`
+- `footnotes.md`
+- `front-matter.md`
+- `gfm.md`
+- `local-images.md`
+- `long-document.md`
+- `prose.md`
+- `raw-html.md`
+
+Expected result: no crash, no blank preview, headings render, code blocks keep spacing, tables fit the content width, task lists show checkboxes, footnotes are usable, and front matter is hidden from the rendered body.
+
+## File Watching And Local Images
+
+1. Open a fixture in a text editor and save a content change.
+   Expected result: OpenMarked updates after a short debounce without stealing focus.
+2. Save through an editor that performs atomic replacement.
+   Expected result: the document still updates.
+3. Open `local-images.md`.
+   Expected result: the local SVG renders and no missing-image warning appears.
+4. Temporarily rename the local image asset.
+   Expected result: a missing-image diagnostic appears.
+5. Restore the image asset.
+   Expected result: the warning clears after reload/update.
+
+## Navigation And Search
+
+1. Toggle the outline from toolbar and menu.
+   Expected result: the sidebar appears/disappears without layout overlap.
+2. Filter the outline.
+   Expected result: matching headings remain and indentation resets when filtering.
+3. Click outline headings.
+   Expected result: the preview scrolls to the heading and highlights it briefly.
+4. Use Command-F, Command-G, and Shift-Command-G.
+   Expected result: preview search opens, highlights matches, and navigates forward/back.
+5. Use zoom in, zoom out, and actual size.
+   Expected result: rendered text scales between supported bounds.
+
+## Themes, Appearance, And Accessibility
+
+1. Switch through Default, GitHub, and Minimal themes.
+   Expected result: typography, tables, code blocks, and links remain readable.
+2. Repeat a fixture check in light appearance and dark appearance.
+   Expected result: chrome and preview are readable in both appearances.
+3. Enable reduced motion in System Settings.
+   Expected result: preview navigation/search uses immediate scrolling instead of smooth scrolling.
+4. Navigate primary controls with keyboard.
+   Expected result: open, reload, outline, theme, search, source, export, and settings controls are reachable.
+5. Run a VoiceOver smoke pass on the toolbar, empty state, error state, outline, find bar, and settings.
+   Expected result: controls and states have meaningful labels.
+
+## Settings
+
+1. Change default theme and font scale in Settings.
+   Expected result: current and new document windows use the updated defaults where appropriate.
+2. Disable live updates.
+   Expected result: file changes no longer trigger preview reloads until manual reload.
+3. Disable preserve scroll position.
+   Expected result: reloading returns the preview to the top.
+4. Disable remote images.
+   Expected result: remote image sources are blocked in preview HTML.
+5. Disable raw HTML.
+   Expected result: raw HTML is rendered safely as text according to cmark behavior.
+6. Disable HTML export CSS embedding.
+   Expected result: exported HTML omits embedded style blocks.
+7. Enable and disable session restoration.
+   Expected result: last-opened paths are retained only while the setting is enabled.
+
+## Export And Print
+
+1. Export standalone HTML.
+   Expected result: the file writes successfully and opens in a browser.
+2. Export `local-images.md` as HTML.
+   Expected result: local images are embedded when the setting is enabled.
+3. Copy rendered HTML.
+   Expected result: pasteboard includes rendered HTML and plain text.
+4. Export PDF.
+   Expected result: a PDF is created and print CSS keeps the document readable.
+5. Print.
+   Expected result: the native print panel opens and preview output is readable.
+
+## Release Gate
+
+Record the final pass in `Docs/RELEASE.md` before tagging:
+
+- QA runner:
+- Date:
+- macOS version:
+- Commit SHA:
+- Artifact path:
+- Known issues:
+- Release decision:

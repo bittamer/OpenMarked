@@ -2,8 +2,12 @@ import Foundation
 
 public enum AppInfo {
     public static let name = "OpenMarked"
-    public static let version = "0.1.0-alpha.1"
+    public static let version = "0.1.0"
+    public static let build = "1"
+    public static let bundleIdentifier = "org.openmarked.OpenMarked"
     public static let minimumMacOSVersion = "13.0"
+    public static let repositoryURL = URL(string: "https://github.com/openmarked/openmarked")!
+    public static let licenseName = "GNU General Public License v3.0"
 
     public static let summary = "An open source, native macOS Markdown previewer."
 
@@ -12,6 +16,7 @@ public enum AppInfo {
         "markdown",
         "mdown",
         "mkd",
+        "mkdn",
         "txt",
         "text"
     ]
@@ -20,4 +25,3 @@ public enum AppInfo {
         supportedFileExtensions.contains(fileExtension.lowercased())
     }
 }
-

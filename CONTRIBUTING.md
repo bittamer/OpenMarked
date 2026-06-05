@@ -14,6 +14,12 @@ swift test
 
 Open `Package.swift` in Xcode for app development.
 
+Run the release gate before publishing an artifact:
+
+```sh
+Scripts/verify_release.sh
+```
+
 ## Contribution Guidelines
 
 - Keep MVP work scoped to the current phase unless a later-phase change is needed to unblock it.

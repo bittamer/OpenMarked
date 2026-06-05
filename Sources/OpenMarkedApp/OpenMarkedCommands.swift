@@ -5,6 +5,12 @@ struct OpenMarkedCommands: Commands {
     @ObservedObject var appController: AppController
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About \(AppInfo.name)") {
+                appController.showAboutPanel()
+            }
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("Open...") {
                 appController.presentOpenPanel()

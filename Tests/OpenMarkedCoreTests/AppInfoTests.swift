@@ -17,8 +17,9 @@ final class AppInfoTests: XCTestCase {
         XCTAssertFalse(AppInfo.supportsFileExtension(""))
     }
 
-    func testVersionIsAlphaOneForPhaseZeroSkeleton() {
-        XCTAssertEqual(AppInfo.version, "0.1.0-alpha.1")
+    func testVersionIsMVPReleaseVersion() {
+        XCTAssertEqual(AppInfo.version, "0.1.0")
+        XCTAssertEqual(AppInfo.build, "1")
     }
 
     func testWindowStateTransitions() throws {
@@ -298,9 +299,10 @@ struct AppInfoTests {
         #expect(!AppInfo.supportsFileExtension(""))
     }
 
-    @Test("Phase 0 skeleton uses alpha 1 version")
-    func versionIsAlphaOneForPhaseZeroSkeleton() {
-        #expect(AppInfo.version == "0.1.0-alpha.1")
+    @Test("MVP release uses 0.1.0 version")
+    func versionIsMVPReleaseVersion() {
+        #expect(AppInfo.version == "0.1.0")
+        #expect(AppInfo.build == "1")
     }
 
     @Test("Window state transitions from empty to loaded")

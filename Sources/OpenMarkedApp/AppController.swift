@@ -180,6 +180,29 @@ final class AppController: ObservableObject {
         activeWindowController?.helpPlaceholder()
     }
 
+    func showAboutPanel() {
+        let credits = NSAttributedString(
+            string: """
+            \(AppInfo.summary)
+
+            \(AppInfo.licenseName)
+            \(AppInfo.repositoryURL.absoluteString)
+            """,
+            attributes: [
+                .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
+
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [
+            .applicationName: AppInfo.name,
+            .applicationVersion: AppInfo.version,
+            .version: "Build \(AppInfo.build)",
+            .credits: credits
+        ])
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
     func restoreLastSessionIfNeeded() {
         guard !didAttemptSessionRestore else {
             return

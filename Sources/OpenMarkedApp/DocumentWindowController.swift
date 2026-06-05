@@ -106,6 +106,26 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         persistCurrentWindowState()
     }
 
+    func toggleInspector() {
+        state.toggleInspector()
+        persistCurrentWindowState()
+    }
+
+    func setInspectorVisible(_ isVisible: Bool) {
+        state.setInspectorVisible(isVisible)
+        persistCurrentWindowState()
+    }
+
+    func selectInspectorSection(_ section: DocumentInspectorSection) {
+        state.selectInspectorSection(section)
+        persistCurrentWindowState()
+    }
+
+    func showInspector(section: DocumentInspectorSection) {
+        state.showInspector(section: section)
+        persistCurrentWindowState()
+    }
+
     func setTheme(id: String) {
         let theme = PreviewThemeStore.theme(id: id)
         state.setTheme(id: theme.id)

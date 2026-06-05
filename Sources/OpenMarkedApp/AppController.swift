@@ -31,6 +31,14 @@ final class AppController: ObservableObject {
         activeWindowController?.state.hasDocument ?? false
     }
 
+    var activeHasWindow: Bool {
+        activeWindowController != nil
+    }
+
+    var activeIsInspectorVisible: Bool {
+        activeWindowController?.state.layout.isInspectorVisible ?? false
+    }
+
     func registerWindowController(_ controller: DocumentWindowController) {
         if activeWindowController == nil {
             activeWindowController = controller
@@ -103,6 +111,18 @@ final class AppController: ObservableObject {
 
     func toggleOutline() {
         activeWindowController?.toggleOutline()
+    }
+
+    func toggleInspector() {
+        activeWindowController?.toggleInspector()
+    }
+
+    func showInspector(section: DocumentInspectorSection) {
+        activeWindowController?.showInspector(section: section)
+    }
+
+    func selectInspectorSection(_ section: DocumentInspectorSection) {
+        activeWindowController?.selectInspectorSection(section)
     }
 
     func zoomIn() {

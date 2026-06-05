@@ -127,6 +127,21 @@ struct OpenMarkedCommands: Commands {
                 appController.toggleOutline()
             }
             .keyboardShortcut("0", modifiers: [.command])
+
+            Button(appController.activeIsInspectorVisible ? "Hide Inspector" : "Show Inspector") {
+                appController.toggleInspector()
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+            .disabled(!appController.activeHasWindow)
+
+            Divider()
+
+            ForEach(DocumentInspectorSection.allCases) { section in
+                Button(section.title) {
+                    appController.showInspector(section: section)
+                }
+                .disabled(!appController.activeHasDocument)
+            }
         }
 
         CommandGroup(replacing: .help) {

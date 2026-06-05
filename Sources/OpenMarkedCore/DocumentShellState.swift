@@ -146,19 +146,91 @@ public struct PreviewError: Error, Equatable, LocalizedError, Sendable {
     }
 }
 
-public struct WindowLayoutState: Equatable {
-    public var isOutlineVisible: Bool
-    public var selectedThemeID: String
-    public var fontScale: Double
+public enum DocumentInspectorSection: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
+    case summary
+    case metadata
+    case links
+    case assets
+    case diagnostics
+    case statistics
+    case export
 
-    public init(isOutlineVisible: Bool = true, selectedThemeID: String = "default", fontScale: Double = 1.0) {
-        self.isOutlineVisible = isOutlineVisible
-        self.selectedThemeID = selectedThemeID
-        self.fontScale = fontScale
+    public var id: String {
+        rawValue
+    }
+
+    public var title: String {
+        switch self {
+        case .summary:
+            return "Summary"
+        case .metadata:
+            return "Metadata"
+        case .links:
+            return "Links"
+        case .assets:
+            return "Assets"
+        case .diagnostics:
+            return "Diagnostics"
+        case .statistics:
+            return "Statistics"
+        case .export:
+            return "Export"
+        }
     }
 }
 
-extension WindowLayoutState: Codable, Sendable {}
+public struct WindowLayoutState: Equatable, Codable, Sendable {
+    public var isOutlineVisible: Bool
+    public var isInspectorVisible: Bool
+    public var selectedInspectorSection: DocumentInspectorSection
+    public var selectedThemeID: String
+    public var fontScale: Double
+
+    public init(
+        isOutlineVisible: Bool = true,
+        isInspectorVisible: Bool = false,
+        selectedInspectorSection: DocumentInspectorSection = .summary,
+        selectedThemeID: String = "default",
+        fontScale: Double = 1.0
+    ) {
+        self.isOutlineVisible = isOutlineVisible
+        self.isInspectorVisible = isInspectorVisible
+        self.selectedInspectorSection = selectedInspectorSection
+        self.selectedThemeID = selectedThemeID
+        self.fontScale = fontScale
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isOutlineVisible
+        case isInspectorVisible
+        case selectedInspectorSection
+        case selectedThemeID
+        case fontScale
+    }
+
+    public init(from decoder: Decoder) throws {
+        let defaults = WindowLayoutState()
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        self.init(
+            isOutlineVisible: try container.decodeIfPresent(Bool.self, forKey: .isOutlineVisible) ?? defaults.isOutlineVisible,
+            isInspectorVisible: try container.decodeIfPresent(Bool.self, forKey: .isInspectorVisible) ?? defaults.isInspectorVisible,
+            selectedInspectorSection: (try? container.decodeIfPresent(DocumentInspectorSection.self, forKey: .selectedInspectorSection)) ?? defaults.selectedInspectorSection,
+            selectedThemeID: try container.decodeIfPresent(String.self, forKey: .selectedThemeID) ?? defaults.selectedThemeID,
+            fontScale: try container.decodeIfPresent(Double.self, forKey: .fontScale) ?? defaults.fontScale
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+
+        try container.encode(isOutlineVisible, forKey: .isOutlineVisible)
+        try container.encode(isInspectorVisible, forKey: .isInspectorVisible)
+        try container.encode(selectedInspectorSection, forKey: .selectedInspectorSection)
+        try container.encode(selectedThemeID, forKey: .selectedThemeID)
+        try container.encode(fontScale, forKey: .fontScale)
+    }
+}
 
 public enum LivePreviewStatus: Equatable, Sendable {
     case inactive
@@ -277,6 +349,14 @@ public struct DocumentWindowState: Equatable {
         return nil
     }
 
+    public var currentInspectionReport: DocumentInspectionReport? {
+        guard let document = currentMarkdownDocument else {
+            return nil
+        }
+
+        return DocumentInspectionBuilder.build(document: document, renderResult: currentRenderResult)
+    }
+
     public mutating func beginOpening(url: URL) {
         content = .loading(PendingDocument(url: url))
         preview = .loading
@@ -343,6 +423,27 @@ public struct DocumentWindowState: Equatable {
     public mutating func toggleOutline() {
         layout.isOutlineVisible.toggle()
         statusMessage = layout.isOutlineVisible ? "Outline shown" : "Outline hidden"
+    }
+
+    public mutating func toggleInspector() {
+        layout.isInspectorVisible.toggle()
+        statusMessage = layout.isInspectorVisible ? "Inspector shown" : "Inspector hidden"
+    }
+
+    public mutating func setInspectorVisible(_ isVisible: Bool) {
+        layout.isInspectorVisible = isVisible
+        statusMessage = isVisible ? "Inspector shown" : "Inspector hidden"
+    }
+
+    public mutating func selectInspectorSection(_ section: DocumentInspectorSection) {
+        layout.selectedInspectorSection = section
+        statusMessage = "Inspector: \(section.title)"
+    }
+
+    public mutating func showInspector(section: DocumentInspectorSection) {
+        layout.isInspectorVisible = true
+        layout.selectedInspectorSection = section
+        statusMessage = "Inspector: \(section.title)"
     }
 
     public mutating func setTheme(id: String) {

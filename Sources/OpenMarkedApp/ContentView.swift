@@ -25,6 +25,13 @@ struct ContentView: View {
                 }
 
                 PreviewShell(controller: controller, isDropTargeted: isDropTargeted)
+
+                if controller.state.layout.isInspectorVisible {
+                    ChromeDivider(.vertical)
+
+                    InspectorSidebar(controller: controller)
+                        .frame(minWidth: 240, idealWidth: 286, maxWidth: 340)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -95,6 +102,15 @@ private struct AppToolbar: View {
                     isActive: controller.state.layout.isOutlineVisible
                 ) {
                     controller.toggleOutline()
+                }
+
+                ToolbarIconButton(
+                    systemImage: "sidebar.right",
+                    help: "Toggle inspector",
+                    accessibilityLabel: "Toggle inspector",
+                    isActive: controller.state.layout.isInspectorVisible
+                ) {
+                    controller.toggleInspector()
                 }
             }
 

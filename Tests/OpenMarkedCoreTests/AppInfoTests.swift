@@ -66,6 +66,61 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(state.search.query.isEmpty)
     }
 
+    func testInspectorStateTransitions() {
+        var state = DocumentWindowState()
+
+        XCTAssertFalse(state.layout.isInspectorVisible)
+        XCTAssertEqual(state.layout.selectedInspectorSection, .summary)
+
+        state.toggleInspector()
+        XCTAssertTrue(state.layout.isInspectorVisible)
+        XCTAssertEqual(state.statusMessage, "Inspector shown")
+
+        state.selectInspectorSection(.links)
+        XCTAssertEqual(state.layout.selectedInspectorSection, .links)
+        XCTAssertTrue(state.layout.isInspectorVisible)
+
+        state.showInspector(section: .export)
+        XCTAssertTrue(state.layout.isInspectorVisible)
+        XCTAssertEqual(state.layout.selectedInspectorSection, .export)
+
+        state.setInspectorVisible(false)
+        XCTAssertFalse(state.layout.isInspectorVisible)
+        XCTAssertEqual(state.layout.selectedInspectorSection, .export)
+    }
+
+    func testWindowLayoutDecodesOldPayloadWithInspectorDefaults() throws {
+        let data = Data(
+            """
+            {
+              "isOutlineVisible": false,
+              "selectedThemeID": "github",
+              "fontScale": 1.2
+            }
+            """.utf8
+        )
+
+        let layout = try JSONDecoder().decode(WindowLayoutState.self, from: data)
+
+        XCTAssertFalse(layout.isOutlineVisible)
+        XCTAssertFalse(layout.isInspectorVisible)
+        XCTAssertEqual(layout.selectedInspectorSection, .summary)
+        XCTAssertEqual(layout.selectedThemeID, "github")
+        XCTAssertEqual(layout.fontScale, 1.2)
+
+        let unknownSectionData = Data(
+            """
+            {
+              "isInspectorVisible": true,
+              "selectedInspectorSection": "futureSection"
+            }
+            """.utf8
+        )
+        let unknownSectionLayout = try JSONDecoder().decode(WindowLayoutState.self, from: unknownSectionData)
+        XCTAssertTrue(unknownSectionLayout.isInspectorVisible)
+        XCTAssertEqual(unknownSectionLayout.selectedInspectorSection, .summary)
+    }
+
     func testMarkdownDocumentLoadsSourceAndStats() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -100,7 +155,13 @@ final class AppInfoTests: XCTestCase {
         let store = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: "DocumentWindowState")
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
-        let layout = WindowLayoutState(isOutlineVisible: false, selectedThemeID: "default", fontScale: 1.2)
+        let layout = WindowLayoutState(
+            isOutlineVisible: false,
+            isInspectorVisible: true,
+            selectedInspectorSection: .metadata,
+            selectedThemeID: "default",
+            fontScale: 1.2
+        )
 
         store.save(document: document, layout: layout, frame: DocumentWindowFrame(x: 10, y: 20, width: 900, height: 600))
 

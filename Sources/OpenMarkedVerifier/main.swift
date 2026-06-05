@@ -114,6 +114,16 @@ state.updatePreviewSearchResult(matchCount: 3, selectedMatchIndex: 2)
 verify(state.search.resultSummary == "2 of 3", "search result summary should show selected match")
 state.hidePreviewSearch()
 verify(!state.search.isVisible && state.search.query.isEmpty, "search should clear when hidden")
+verify(!state.layout.isInspectorVisible, "inspector should default hidden")
+verify(state.layout.selectedInspectorSection == .summary, "inspector should default to summary")
+state.toggleInspector()
+verify(state.layout.isInspectorVisible, "toggleInspector should show the inspector")
+state.selectInspectorSection(.links)
+verify(state.layout.selectedInspectorSection == .links, "selectInspectorSection should update the current inspector section")
+state.showInspector(section: .export)
+verify(state.layout.isInspectorVisible && state.layout.selectedInspectorSection == .export, "showInspector should reveal and select a section")
+state.setInspectorVisible(false)
+verify(!state.layout.isInspectorVisible && state.layout.selectedInspectorSection == .export, "hiding inspector should preserve the selected section")
 
 do {
     _ = try DocumentOpenValidator.validate(url: URL(fileURLWithPath: "Package.swift"))
@@ -135,11 +145,41 @@ guard let userDefaults = UserDefaults(suiteName: suiteName) else {
 }
 defer { userDefaults.removePersistentDomain(forName: suiteName) }
 let store = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: "VerifierWindowState")
-let savedLayout = WindowLayoutState(isOutlineVisible: false, selectedThemeID: "default", fontScale: 1.2)
+let savedLayout = WindowLayoutState(
+    isOutlineVisible: false,
+    isInspectorVisible: true,
+    selectedInspectorSection: .metadata,
+    selectedThemeID: "default",
+    fontScale: 1.2
+)
 store.save(document: markdownDocument, layout: savedLayout, frame: DocumentWindowFrame(x: 1, y: 2, width: 900, height: 600))
 let restored = store.restore(forDocumentID: markdownDocument.id)
 verify(restored?.layout == savedLayout, "window layout should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
+let oldLayoutPayload = Data(
+    """
+    {
+      "isOutlineVisible": false,
+      "selectedThemeID": "github",
+      "fontScale": 1.2
+    }
+    """.utf8
+)
+let decodedOldLayout = try JSONDecoder().decode(WindowLayoutState.self, from: oldLayoutPayload)
+verify(!decodedOldLayout.isOutlineVisible, "old layout payload should preserve outline visibility")
+verify(!decodedOldLayout.isInspectorVisible, "old layout payload should default inspector hidden")
+verify(decodedOldLayout.selectedInspectorSection == .summary, "old layout payload should default inspector to summary")
+let unknownInspectorSectionPayload = Data(
+    """
+    {
+      "isInspectorVisible": true,
+      "selectedInspectorSection": "futureSection"
+    }
+    """.utf8
+)
+let decodedUnknownInspectorSectionLayout = try JSONDecoder().decode(WindowLayoutState.self, from: unknownInspectorSectionPayload)
+verify(decodedUnknownInspectorSectionLayout.isInspectorVisible, "unknown inspector section layout should preserve visibility")
+verify(decodedUnknownInspectorSectionLayout.selectedInspectorSection == .summary, "unknown inspector section layout should fall back to summary")
 
 let settingsStore = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "VerifierSettings", lastDocumentPathsKey: "VerifierLastPaths")
 let savedSettings = ApplicationSettings(

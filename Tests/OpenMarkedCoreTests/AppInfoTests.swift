@@ -89,6 +89,53 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(state.layout.selectedInspectorSection, .export)
     }
 
+    func testCurrentSectionStateTracksRenderedOutline() {
+        var state = DocumentWindowState()
+        let document = MarkdownDocument(
+            sourceURL: URL(fileURLWithPath: "/tmp/outline.md"),
+            sourceText: "# One\n\n## Two\n",
+            bodyText: "# One\n\n## Two\n",
+            frontMatter: nil,
+            metadata: DocumentFileMetadata(fileSize: 0, createdAt: nil, modifiedAt: nil),
+            statistics: .empty,
+            loadedAt: Date(timeIntervalSince1970: 0),
+            securityScopedBookmark: nil
+        )
+        let rendered = RenderResult(
+            bodyHTML: "",
+            fullHTML: "",
+            outline: [
+                OutlineItem(id: "one", level: 1, title: "One"),
+                OutlineItem(id: "two", level: 2, title: "Two")
+            ],
+            diagnostics: [],
+            statistics: .empty,
+            rendererName: "test",
+            rendererVersion: nil
+        )
+
+        state.finishOpening(document: OpenedDocument(markdownDocument: document))
+        state.finishRendering(rendered)
+        state.updateCurrentSection(id: "two")
+
+        XCTAssertEqual(state.currentSectionID, "two")
+        XCTAssertEqual(state.currentOutlineItem?.title, "Two")
+
+        let rerendered = RenderResult(
+            bodyHTML: "",
+            fullHTML: "",
+            outline: [OutlineItem(id: "one", level: 1, title: "One")],
+            diagnostics: [],
+            statistics: .empty,
+            rendererName: "test",
+            rendererVersion: nil
+        )
+        state.finishRendering(rerendered)
+
+        XCTAssertNil(state.currentSectionID)
+        XCTAssertNil(state.currentOutlineItem)
+    }
+
     func testWindowLayoutDecodesOldPayloadWithInspectorDefaults() throws {
         let data = Data(
             """
@@ -105,6 +152,7 @@ final class AppInfoTests: XCTestCase {
         XCTAssertFalse(layout.isOutlineVisible)
         XCTAssertFalse(layout.isInspectorVisible)
         XCTAssertEqual(layout.selectedInspectorSection, .summary)
+        XCTAssertEqual(layout.outlineDisplayOptions, .default)
         XCTAssertEqual(layout.selectedThemeID, "github")
         XCTAssertEqual(layout.fontScale, 1.2)
 
@@ -177,6 +225,7 @@ final class AppInfoTests: XCTestCase {
             isOutlineVisible: false,
             isInspectorVisible: true,
             selectedInspectorSection: .metadata,
+            outlineDisplayOptions: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 3, showsAutoNumbers: true),
             selectedThemeID: "default",
             fontScale: 1.2
         )
@@ -185,6 +234,9 @@ final class AppInfoTests: XCTestCase {
 
         let restored = store.restore(forDocumentID: document.id)
         XCTAssertEqual(restored?.layout, layout)
+        XCTAssertEqual(restored?.layout.outlineDisplayOptions.mode, .flat)
+        XCTAssertEqual(restored?.layout.outlineDisplayOptions.maximumVisibleLevel, 3)
+        XCTAssertTrue(restored?.layout.outlineDisplayOptions.showsAutoNumbers == true)
         XCTAssertEqual(restored?.frame?.width, 900)
     }
 
@@ -1078,6 +1130,40 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(OutlineFilter.filter(outline, query: "missing"), [])
     }
 
+    func testOutlineDisplayBuilderAppliesDisplayOptions() {
+        let outline = [
+            OutlineItem(id: "intro", level: 1, title: "Introduction"),
+            OutlineItem(id: "goals", level: 2, title: "Goals"),
+            OutlineItem(id: "details", level: 3, title: "Implementation Details"),
+            OutlineItem(id: "api", level: 2, title: "API")
+        ]
+
+        let hierarchical = OutlineDisplayBuilder.items(outline: outline)
+        XCTAssertEqual(hierarchical.map(\.id), ["intro", "goals", "details", "api"])
+        XCTAssertEqual(hierarchical.map(\.indentationLevel), [0, 1, 2, 1])
+
+        let collapsed = OutlineDisplayBuilder.items(
+            outline: outline,
+            options: OutlineDisplayOptions(maximumVisibleLevel: 2)
+        )
+        XCTAssertEqual(collapsed.map(\.id), ["intro", "goals", "api"])
+
+        let flatNumbered = OutlineDisplayBuilder.items(
+            outline: outline,
+            options: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 6, showsAutoNumbers: true)
+        )
+        XCTAssertEqual(flatNumbered.map(\.displayTitle), ["1 Introduction", "1.1 Goals", "1.1.1 Implementation Details", "1.2 API"])
+        XCTAssertEqual(flatNumbered.map(\.indentationLevel), [0, 0, 0, 0])
+
+        let filtered = OutlineDisplayBuilder.items(
+            outline: outline,
+            query: "details",
+            options: OutlineDisplayOptions(maximumVisibleLevel: 2)
+        )
+        XCTAssertEqual(filtered.map(\.id), ["details"])
+        XCTAssertEqual(filtered.map(\.indentationLevel), [0])
+    }
+
     func testMissingLocalImageDiagnostic() throws {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("openmarked-missing-image-\(UUID().uuidString).md")
@@ -1196,6 +1282,54 @@ struct AppInfoTests {
         #expect(state.windowTitle == "readme.md")
         #expect(state.canReloadPreview)
         #expect(state.canExport)
+    }
+
+    @Test("Current section state tracks rendered outline")
+    func currentSectionStateTracksRenderedOutline() {
+        var state = DocumentWindowState()
+        let document = MarkdownDocument(
+            sourceURL: URL(fileURLWithPath: "/tmp/outline.md"),
+            sourceText: "# One\n\n## Two\n",
+            bodyText: "# One\n\n## Two\n",
+            frontMatter: nil,
+            metadata: DocumentFileMetadata(fileSize: 0, createdAt: nil, modifiedAt: nil),
+            statistics: .empty,
+            loadedAt: Date(timeIntervalSince1970: 0),
+            securityScopedBookmark: nil
+        )
+        let rendered = RenderResult(
+            bodyHTML: "",
+            fullHTML: "",
+            outline: [
+                OutlineItem(id: "one", level: 1, title: "One"),
+                OutlineItem(id: "two", level: 2, title: "Two")
+            ],
+            diagnostics: [],
+            statistics: .empty,
+            rendererName: "test",
+            rendererVersion: nil
+        )
+
+        state.finishOpening(document: OpenedDocument(markdownDocument: document))
+        state.finishRendering(rendered)
+        state.updateCurrentSection(id: "two")
+
+        #expect(state.currentSectionID == "two")
+        #expect(state.currentOutlineItem?.title == "Two")
+
+        let rerendered = RenderResult(
+            bodyHTML: "",
+            fullHTML: "",
+            outline: [OutlineItem(id: "one", level: 1, title: "One")],
+            diagnostics: [],
+            statistics: .empty,
+            rendererName: "test",
+            rendererVersion: nil
+        )
+        state.finishRendering(rerendered)
+
+        #expect(state.currentSectionID == nil)
+        #expect(state.currentOutlineItem == nil)
     }
 
     @Test("Live preview state transitions are tracked separately")
@@ -2034,6 +2168,41 @@ struct AppInfoTests {
         #expect(OutlineFilter.filter(outline, query: "").map(\.id) == ["intro", "goals", "details"])
         #expect(OutlineFilter.filter(outline, query: "GOAL").map(\.id) == ["goals"])
         #expect(OutlineFilter.filter(outline, query: "missing").isEmpty)
+    }
+
+    @Test("Outline display builder applies display options")
+    func outlineDisplayBuilderAppliesDisplayOptions() {
+        let outline = [
+            OutlineItem(id: "intro", level: 1, title: "Introduction"),
+            OutlineItem(id: "goals", level: 2, title: "Goals"),
+            OutlineItem(id: "details", level: 3, title: "Implementation Details"),
+            OutlineItem(id: "api", level: 2, title: "API")
+        ]
+
+        let hierarchical = OutlineDisplayBuilder.items(outline: outline)
+        #expect(hierarchical.map(\.id) == ["intro", "goals", "details", "api"])
+        #expect(hierarchical.map(\.indentationLevel) == [0, 1, 2, 1])
+
+        let collapsed = OutlineDisplayBuilder.items(
+            outline: outline,
+            options: OutlineDisplayOptions(maximumVisibleLevel: 2)
+        )
+        #expect(collapsed.map(\.id) == ["intro", "goals", "api"])
+
+        let flatNumbered = OutlineDisplayBuilder.items(
+            outline: outline,
+            options: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 6, showsAutoNumbers: true)
+        )
+        #expect(flatNumbered.map(\.displayTitle) == ["1 Introduction", "1.1 Goals", "1.1.1 Implementation Details", "1.2 API"])
+        #expect(flatNumbered.map(\.indentationLevel) == [0, 0, 0, 0])
+
+        let filtered = OutlineDisplayBuilder.items(
+            outline: outline,
+            query: "details",
+            options: OutlineDisplayOptions(maximumVisibleLevel: 2)
+        )
+        #expect(filtered.map(\.id) == ["details"])
+        #expect(filtered.map(\.indentationLevel) == [0])
     }
 
     @Test("Local asset extractor finds image references")

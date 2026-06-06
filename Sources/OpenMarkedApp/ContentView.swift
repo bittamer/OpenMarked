@@ -328,7 +328,6 @@ private struct OutlineSidebar: View {
     @Environment(\.appChromeTheme) private var chrome
     @ObservedObject var controller: DocumentWindowController
     @State private var outlineFilter = ""
-    @State private var selectedItemID: OutlineItem.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -387,6 +386,10 @@ private struct OutlineSidebar: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 10)
 
+            outlineDisplayControls
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+
             outlineContent
 
             Spacer(minLength: 0)
@@ -404,13 +407,72 @@ private struct OutlineSidebar: View {
         return outline.count
     }
 
+    private var outlineDisplayControls: some View {
+        HStack(spacing: 6) {
+            Picker("Outline display", selection: outlineDisplayModeBinding) {
+                Image(systemName: "list.bullet.indent")
+                    .tag(OutlineDisplayMode.hierarchical)
+                    .accessibilityLabel("Hierarchical outline")
+                Image(systemName: "list.bullet")
+                    .tag(OutlineDisplayMode.flat)
+                    .accessibilityLabel("Flat outline")
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 74)
+            .help("Outline display mode")
+
+            Menu {
+                ForEach(1...6, id: \.self) { level in
+                    Button("H1-H\(level)") {
+                        var options = controller.state.layout.outlineDisplayOptions
+                        options.maximumVisibleLevel = level
+                        controller.setOutlineDisplayOptions(options)
+                    }
+                }
+            } label: {
+                Label("H1-H\(controller.state.layout.outlineDisplayOptions.normalized().maximumVisibleLevel)", systemImage: "line.3.horizontal.decrease")
+                    .labelStyle(.titleAndIcon)
+            }
+            .menuStyle(.borderlessButton)
+            .help("Visible heading levels")
+
+            Button {
+                var options = controller.state.layout.outlineDisplayOptions
+                options.showsAutoNumbers.toggle()
+                controller.setOutlineDisplayOptions(options)
+            } label: {
+                Image(systemName: controller.state.layout.outlineDisplayOptions.showsAutoNumbers ? "list.number" : "list.bullet")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 24, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(controller.state.layout.outlineDisplayOptions.showsAutoNumbers ? chrome.accent : chrome.secondaryText)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(controller.state.layout.outlineDisplayOptions.showsAutoNumbers ? chrome.accent.opacity(0.12) : chrome.controlBackground.opacity(0.65))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(chrome.separator, lineWidth: 1)
+            )
+            .help("Toggle outline numbering")
+            .accessibilityLabel("Toggle outline numbering")
+        }
+        .controlSize(.small)
+    }
+
     @ViewBuilder
     private var outlineContent: some View {
         switch controller.state.content {
         case .loaded:
             if let outline = controller.state.currentRenderResult?.outline, !outline.isEmpty {
-                let filteredOutline = OutlineFilter.filter(outline, query: outlineFilter)
-                if filteredOutline.isEmpty {
+                let displayItems = OutlineDisplayBuilder.items(
+                    outline: outline,
+                    query: outlineFilter,
+                    options: controller.state.layout.outlineDisplayOptions
+                )
+                if displayItems.isEmpty {
                     OutlinePlaceholder(
                         systemImage: "magnifyingglass",
                         message: "No matching headings."
@@ -418,14 +480,14 @@ private struct OutlineSidebar: View {
                 } else {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 1) {
-                            ForEach(filteredOutline) { item in
+                            ForEach(displayItems) { displayItem in
                                 OutlineRow(
-                                    item: item,
-                                    isSelected: selectedItemID == item.id,
-                                    leadingPadding: outlineLeadingPadding(for: item)
+                                    item: displayItem.item,
+                                    displayTitle: displayItem.displayTitle,
+                                    isCurrent: controller.state.currentSectionID == displayItem.id,
+                                    leadingPadding: CGFloat(displayItem.indentationLevel) * 13
                                 ) {
-                                    selectedItemID = item.id
-                                    controller.scrollToOutlineItem(item)
+                                    controller.scrollToOutlineItem(displayItem.item)
                                 }
                             }
                         }
@@ -459,11 +521,15 @@ private struct OutlineSidebar: View {
         }
     }
 
-    private func outlineLeadingPadding(for item: OutlineItem) -> CGFloat {
-        if outlineFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return CGFloat(max(0, item.level - 1)) * 13
-        }
-        return 0
+    private var outlineDisplayModeBinding: Binding<OutlineDisplayMode> {
+        Binding(
+            get: { controller.state.layout.outlineDisplayOptions.mode },
+            set: { mode in
+                var options = controller.state.layout.outlineDisplayOptions
+                options.mode = mode
+                controller.setOutlineDisplayOptions(options)
+            }
+        )
     }
 }
 
@@ -471,7 +537,8 @@ private struct OutlineRow: View {
     @Environment(\.appChromeTheme) private var chrome
 
     let item: OutlineItem
-    let isSelected: Bool
+    let displayTitle: String
+    let isCurrent: Bool
     let leadingPadding: CGFloat
     let action: () -> Void
 
@@ -480,7 +547,7 @@ private struct OutlineRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 0) {
-                if isSelected {
+                if isCurrent {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(chrome.accent)
                         .frame(width: 3, height: 14)
@@ -489,14 +556,14 @@ private struct OutlineRow: View {
                     Spacer().frame(width: leadingPadding + 9)
                 }
 
-                Text(item.title)
+                Text(displayTitle)
                     .font(.system(size: 12.5, weight: item.level <= 1 ? .semibold : .regular))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(isSelected ? chrome.accent : chrome.text)
+            .foregroundStyle(isCurrent ? chrome.accent : chrome.text)
             .padding(.vertical, 5)
             .padding(.horizontal, 6)
             .background(
@@ -508,10 +575,11 @@ private struct OutlineRow: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help("Jump to \(item.title)")
+        .accessibilityLabel(isCurrent ? "Current section, \(item.title)" : item.title)
     }
 
     private var backgroundFill: Color {
-        if isSelected {
+        if isCurrent {
             return chrome.accent.opacity(0.12)
         }
         if isHovering {
@@ -628,6 +696,9 @@ private struct PreviewShell: View {
                         },
                         onSearchResult: { result in
                             controller.updateSearchResult(result)
+                        },
+                        onCurrentSectionChange: { sectionID in
+                            controller.updateCurrentPreviewSection(id: sectionID)
                         }
                     )
                 }
@@ -902,6 +973,16 @@ private struct StatusBar: View {
                 .truncationMode(.middle)
 
             Spacer()
+
+            if let currentSection = controller.state.currentOutlineItem {
+                Label(currentSection.title, systemImage: "number")
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 220, alignment: .leading)
+                    .help("Current section: \(currentSection.title)")
+                    .accessibilityLabel("Current section \(currentSection.title)")
+            }
 
             if let statistics = currentStatistics {
                 Text("\(statistics.wordCount) words")

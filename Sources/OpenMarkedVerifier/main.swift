@@ -151,12 +151,16 @@ let savedLayout = WindowLayoutState(
     isOutlineVisible: false,
     isInspectorVisible: true,
     selectedInspectorSection: .metadata,
+    outlineDisplayOptions: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 3, showsAutoNumbers: true),
     selectedThemeID: "default",
     fontScale: 1.2
 )
 store.save(document: markdownDocument, layout: savedLayout, frame: DocumentWindowFrame(x: 1, y: 2, width: 900, height: 600))
 let restored = store.restore(forDocumentID: markdownDocument.id)
 verify(restored?.layout == savedLayout, "window layout should persist")
+verify(restored?.layout.outlineDisplayOptions.mode == .flat, "outline display mode should persist")
+verify(restored?.layout.outlineDisplayOptions.maximumVisibleLevel == 3, "outline visible level should persist")
+verify(restored?.layout.outlineDisplayOptions.showsAutoNumbers == true, "outline numbering preference should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
 let oldLayoutPayload = Data(
     """
@@ -171,6 +175,7 @@ let decodedOldLayout = try JSONDecoder().decode(WindowLayoutState.self, from: ol
 verify(!decodedOldLayout.isOutlineVisible, "old layout payload should preserve outline visibility")
 verify(!decodedOldLayout.isInspectorVisible, "old layout payload should default inspector hidden")
 verify(decodedOldLayout.selectedInspectorSection == .summary, "old layout payload should default inspector to summary")
+verify(decodedOldLayout.outlineDisplayOptions == .default, "old layout payload should default outline display options")
 let unknownInspectorSectionPayload = Data(
     """
     {
@@ -182,6 +187,32 @@ let unknownInspectorSectionPayload = Data(
 let decodedUnknownInspectorSectionLayout = try JSONDecoder().decode(WindowLayoutState.self, from: unknownInspectorSectionPayload)
 verify(decodedUnknownInspectorSectionLayout.isInspectorVisible, "unknown inspector section layout should preserve visibility")
 verify(decodedUnknownInspectorSectionLayout.selectedInspectorSection == .summary, "unknown inspector section layout should fall back to summary")
+
+let outlineDisplayFixture = [
+    OutlineItem(id: "intro", level: 1, title: "Introduction"),
+    OutlineItem(id: "goals", level: 2, title: "Goals"),
+    OutlineItem(id: "details", level: 3, title: "Implementation Details"),
+    OutlineItem(id: "api", level: 2, title: "API")
+]
+let hierarchicalOutline = OutlineDisplayBuilder.items(outline: outlineDisplayFixture)
+verify(hierarchicalOutline.map(\.indentationLevel) == [0, 1, 2, 1], "hierarchical outline should indent by heading level")
+let collapsedOutline = OutlineDisplayBuilder.items(
+    outline: outlineDisplayFixture,
+    options: OutlineDisplayOptions(maximumVisibleLevel: 2)
+)
+verify(collapsedOutline.map(\.id) == ["intro", "goals", "api"], "outline collapse should hide deeper levels")
+let numberedFlatOutline = OutlineDisplayBuilder.items(
+    outline: outlineDisplayFixture,
+    options: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 6, showsAutoNumbers: true)
+)
+verify(numberedFlatOutline.map(\.displayTitle) == ["1 Introduction", "1.1 Goals", "1.1.1 Implementation Details", "1.2 API"], "outline numbering should follow heading hierarchy")
+verify(numberedFlatOutline.allSatisfy { $0.indentationLevel == 0 }, "flat outline should remove indentation")
+let filteredCollapsedOutline = OutlineDisplayBuilder.items(
+    outline: outlineDisplayFixture,
+    query: "details",
+    options: OutlineDisplayOptions(maximumVisibleLevel: 2)
+)
+verify(filteredCollapsedOutline.map(\.id) == ["details"], "outline filtering should find collapsed headings")
 
 let settingsStore = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "VerifierSettings", lastDocumentPathsKey: "VerifierLastPaths")
 let savedSettings = ApplicationSettings(
@@ -346,6 +377,21 @@ verify(renderResult.fullHTML.contains("<title>OpenMarked Fixture README</title>"
 verify(renderResult.fullHTML.contains("--om-font-scale: 1.000"), "default font scale should be injected")
 verify(renderResult.fullHTML.contains("New York"), "default theme CSS should be injected")
 verify(renderResult.bodyHTML.contains("om-code-keyword"), "code highlighting should be applied")
+
+state.finishRendering(renderResult)
+state.updateCurrentSection(id: renderResult.outline.first?.id)
+verify(state.currentOutlineItem?.id == renderResult.outline.first?.id, "window state should expose the current outline item")
+let headinglessResult = RenderResult(
+    bodyHTML: "",
+    fullHTML: "",
+    outline: [],
+    diagnostics: [],
+    statistics: .empty,
+    rendererName: "test",
+    rendererVersion: nil
+)
+state.finishRendering(headinglessResult)
+verify(state.currentSectionID == nil, "window state should clear current section when rendered outline no longer contains it")
 
 let githubTheme = PreviewThemeStore.theme(id: "github")
 let githubThemeResult = try renderer.render(RenderRequest(document: markdownDocument, theme: githubTheme, fontScale: 1.3))

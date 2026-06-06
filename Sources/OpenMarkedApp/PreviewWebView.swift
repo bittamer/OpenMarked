@@ -47,6 +47,7 @@ struct PreviewWebView: NSViewRepresentable {
     let onRichContentReady: (Set<RichMarkdownFeature>) -> Void
     let onRichContentFailed: (String) -> Void
     let onSearchResult: (PreviewSearchResult) -> Void
+    let onCurrentSectionChange: (String?) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -54,13 +55,15 @@ struct PreviewWebView: NSViewRepresentable {
             onRichContentRendering: onRichContentRendering,
             onRichContentReady: onRichContentReady,
             onRichContentFailed: onRichContentFailed,
-            onSearchResult: onSearchResult
+            onSearchResult: onSearchResult,
+            onCurrentSectionChange: onCurrentSectionChange
         )
     }
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.userContentController.add(context.coordinator, name: "openMarkedSection")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -76,6 +79,7 @@ struct PreviewWebView: NSViewRepresentable {
         context.coordinator.onRichContentReady = onRichContentReady
         context.coordinator.onRichContentFailed = onRichContentFailed
         context.coordinator.onSearchResult = onSearchResult
+        context.coordinator.onCurrentSectionChange = onCurrentSectionChange
         context.coordinator.preservesScrollPosition = preservesScrollPosition
         context.coordinator.usesReducedMotion = usesReducedMotion
         context.coordinator.load(renderResult: renderResult, baseURL: baseURL)
@@ -95,13 +99,18 @@ struct PreviewWebView: NSViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        nsView.configuration.userContentController.removeScriptMessageHandler(forName: "openMarkedSection")
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         weak var webView: WKWebView?
         var onStatusUpdate: (String) -> Void
         var onRichContentRendering: (Set<RichMarkdownFeature>) -> Void
         var onRichContentReady: (Set<RichMarkdownFeature>) -> Void
         var onRichContentFailed: (String) -> Void
         var onSearchResult: (PreviewSearchResult) -> Void
+        var onCurrentSectionChange: (String?) -> Void
         var lastHTML: String?
         var lastBaseURL: URL?
         var lastRichMarkdownState: RichMarkdownRenderState = .empty
@@ -119,13 +128,15 @@ struct PreviewWebView: NSViewRepresentable {
             onRichContentRendering: @escaping (Set<RichMarkdownFeature>) -> Void,
             onRichContentReady: @escaping (Set<RichMarkdownFeature>) -> Void,
             onRichContentFailed: @escaping (String) -> Void,
-            onSearchResult: @escaping (PreviewSearchResult) -> Void
+            onSearchResult: @escaping (PreviewSearchResult) -> Void,
+            onCurrentSectionChange: @escaping (String?) -> Void
         ) {
             self.onStatusUpdate = onStatusUpdate
             self.onRichContentRendering = onRichContentRendering
             self.onRichContentReady = onRichContentReady
             self.onRichContentFailed = onRichContentFailed
             self.onSearchResult = onSearchResult
+            self.onCurrentSectionChange = onCurrentSectionChange
         }
 
         func load(renderResult: RenderResult, baseURL: URL) {
@@ -176,6 +187,7 @@ struct PreviewWebView: NSViewRepresentable {
               target.scrollIntoView({ behavior: '\(behavior)', block: 'start' });
               target.classList.add('om-heading-target');
               window.setTimeout(function() { target.classList.remove('om-heading-target'); }, 900);
+              if (window.openMarkedSectionTracker) { window.openMarkedSectionTracker.report(target.id); }
               return true;
             })();
             """
@@ -252,9 +264,25 @@ struct PreviewWebView: NSViewRepresentable {
             (function() {
               var scrollable = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
               window.scrollTo(0, scrollable * \(boundedRatio));
+              if (window.openMarkedSectionTracker) { window.openMarkedSectionTracker.schedule(); }
             })();
             """
             webView?.evaluateJavaScript(script)
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "openMarkedSection" else {
+                return
+            }
+
+            if let dictionary = message.body as? [String: Any] {
+                let id = dictionary["id"] as? String
+                onCurrentSectionChange(id?.isEmpty == true ? nil : id)
+            } else if let id = message.body as? String {
+                onCurrentSectionChange(id.isEmpty ? nil : id)
+            } else {
+                onCurrentSectionChange(nil)
+            }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -317,6 +345,60 @@ struct PreviewWebView: NSViewRepresentable {
                 document.head.appendChild(style);
               }
               window.openMarkedPrefersReducedMotion = \(usesReducedMotion ? "true" : "false");
+              window.openMarkedSectionTracker = {
+                lastID: undefined,
+                pending: false,
+                headings: function() {
+                  return Array.prototype.slice.call(document.querySelectorAll('.om-document h1[id], .om-document h2[id], .om-document h3[id], .om-document h4[id], .om-document h5[id], .om-document h6[id]'));
+                },
+                post: function(id) {
+                  if (this.lastID === id) { return; }
+                  this.lastID = id;
+                  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openMarkedSection) {
+                    window.webkit.messageHandlers.openMarkedSection.postMessage({ id: id || null });
+                  }
+                },
+                currentID: function() {
+                  var headings = this.headings();
+                  if (!headings.length) { return null; }
+                  var current = headings[0];
+                  var threshold = Math.max(72, window.innerHeight * 0.18);
+                  for (var i = 0; i < headings.length; i += 1) {
+                    var rect = headings[i].getBoundingClientRect();
+                    if (rect.top <= threshold) {
+                      current = headings[i];
+                    } else {
+                      break;
+                    }
+                  }
+                  return current ? current.id : null;
+                },
+                report: function(id) {
+                  this.post(id || this.currentID());
+                },
+                schedule: function() {
+                  if (this.pending) { return; }
+                  this.pending = true;
+                  var tracker = this;
+                  window.requestAnimationFrame(function() {
+                    window.setTimeout(function() {
+                      tracker.pending = false;
+                      tracker.report();
+                    }, 80);
+                  });
+                },
+                install: function() {
+                  var tracker = this;
+                  if (!this.installed) {
+                    window.addEventListener('scroll', function() { tracker.schedule(); }, { passive: true });
+                    window.addEventListener('resize', function() { tracker.schedule(); }, { passive: true });
+                    this.installed = true;
+                  }
+                  this.schedule();
+                  window.setTimeout(function() { tracker.schedule(); }, 250);
+                }
+              };
+              window.openMarkedSectionTracker.install();
               window.openMarkedSearch = {
                 state: { query: '', index: -1 },
                 clear: function() {

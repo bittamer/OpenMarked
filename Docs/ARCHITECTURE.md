@@ -105,7 +105,9 @@ Phase 7 keeps document navigation native where possible and preview-specific beh
 
 Navigation behavior:
 
-- The outline sidebar renders the renderer-provided heading list, filters headings through `OutlineFilter`, and sends heading IDs to the WebView navigation bridge.
+- The outline sidebar renders the renderer-provided heading list, filters headings through `OutlineFilter`, applies persistent `OutlineDisplayOptions`, and sends heading IDs to the WebView navigation bridge.
+- `PreviewWebView` owns preview-specific section tracking with app-injected JavaScript. It throttles scroll/resize updates, reports heading IDs through a WebKit script-message bridge, and keeps scroll preservation separate from current-section state.
+- `DocumentWindowState.currentSectionID` is the shared source for the highlighted outline row and status-bar section breadcrumb.
 - Preview search uses a small injected JavaScript helper rather than relying on WebKit find APIs, so highlighting and next/previous behavior are predictable on the MVP deployment target.
 - Source actions are native AppKit operations: reveal in Finder, open in the default editor, copy path, and reload from disk.
 - Render diagnostics are exposed through a status-bar popover. Missing-image, missing-link, heading-fragment, malformed-link, unsupported-scheme, and skipped link checks are grouped by kind so warnings stay scannable.

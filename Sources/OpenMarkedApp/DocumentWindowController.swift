@@ -429,7 +429,17 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func scrollToOutlineItem(_ item: OutlineItem) {
         previewNavigationRequest = PreviewNavigationRequest(elementID: item.id)
+        state.updateCurrentSection(id: item.id)
         state.notePlaceholderAction("Jumped to \(item.title)")
+    }
+
+    func updateCurrentPreviewSection(id: String?) {
+        state.updateCurrentSection(id: id)
+    }
+
+    func setOutlineDisplayOptions(_ options: OutlineDisplayOptions) {
+        state.setOutlineDisplayOptions(options)
+        persistCurrentWindowState()
     }
 
     func updatePreviewStatus(_ message: String) {

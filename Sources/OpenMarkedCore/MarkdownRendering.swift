@@ -129,6 +129,116 @@ public struct OutlineItem: Equatable, Identifiable, Sendable {
     }
 }
 
+public enum OutlineDisplayMode: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
+    case hierarchical
+    case flat
+
+    public var id: String {
+        rawValue
+    }
+}
+
+public struct OutlineDisplayOptions: Codable, Equatable, Sendable {
+    public var mode: OutlineDisplayMode
+    public var maximumVisibleLevel: Int
+    public var showsAutoNumbers: Bool
+
+    public init(
+        mode: OutlineDisplayMode = .hierarchical,
+        maximumVisibleLevel: Int = 6,
+        showsAutoNumbers: Bool = false
+    ) {
+        self.mode = mode
+        self.maximumVisibleLevel = maximumVisibleLevel
+        self.showsAutoNumbers = showsAutoNumbers
+    }
+
+    public static let `default` = OutlineDisplayOptions()
+
+    public func normalized() -> OutlineDisplayOptions {
+        var options = self
+        options.maximumVisibleLevel = min(6, max(1, maximumVisibleLevel))
+        return options
+    }
+}
+
+public struct OutlineDisplayItem: Equatable, Identifiable, Sendable {
+    public let item: OutlineItem
+    public let displayTitle: String
+    public let indentationLevel: Int
+
+    public var id: String {
+        item.id
+    }
+}
+
+public enum OutlineDisplayBuilder {
+    public static func items(
+        outline: [OutlineItem],
+        query: String = "",
+        options: OutlineDisplayOptions = .default
+    ) -> [OutlineDisplayItem] {
+        let normalizedOptions = options.normalized()
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let numberByID = outlineNumbering(for: outline)
+        let filteredOutline = OutlineFilter.filter(outline, query: query)
+        let visibleOutline = trimmedQuery.isEmpty
+            ? filteredOutline.filter { $0.level <= normalizedOptions.maximumVisibleLevel }
+            : filteredOutline
+
+        return visibleOutline.map { item in
+            let displayTitle: String
+            if normalizedOptions.showsAutoNumbers, let number = numberByID[item.id] {
+                displayTitle = "\(number) \(item.title)"
+            } else {
+                displayTitle = item.title
+            }
+
+            return OutlineDisplayItem(
+                item: item,
+                displayTitle: displayTitle,
+                indentationLevel: indentationLevel(
+                    for: item,
+                    mode: normalizedOptions.mode,
+                    isFiltering: !trimmedQuery.isEmpty
+                )
+            )
+        }
+    }
+
+    private static func indentationLevel(
+        for item: OutlineItem,
+        mode: OutlineDisplayMode,
+        isFiltering: Bool
+    ) -> Int {
+        guard mode == .hierarchical, !isFiltering else {
+            return 0
+        }
+
+        return max(0, item.level - 1)
+    }
+
+    private static func outlineNumbering(for outline: [OutlineItem]) -> [String: String] {
+        var counters = Array(repeating: 0, count: 6)
+        var numbering: [String: String] = [:]
+
+        for item in outline {
+            let index = min(5, max(0, item.level - 1))
+            counters[index] += 1
+            if index + 1 < counters.count {
+                for resetIndex in (index + 1)..<counters.count {
+                    counters[resetIndex] = 0
+                }
+            }
+
+            let visibleCounters = counters[0...index].filter { $0 > 0 }
+            numbering[item.id] = visibleCounters.map(String.init).joined(separator: ".")
+        }
+
+        return numbering
+    }
+}
+
 public enum OutlineFilter {
     public static func filter(_ outline: [OutlineItem], query: String) -> [OutlineItem] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)

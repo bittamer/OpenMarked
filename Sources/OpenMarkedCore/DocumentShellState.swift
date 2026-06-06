@@ -183,6 +183,7 @@ public struct WindowLayoutState: Equatable, Codable, Sendable {
     public var isOutlineVisible: Bool
     public var isInspectorVisible: Bool
     public var selectedInspectorSection: DocumentInspectorSection
+    public var outlineDisplayOptions: OutlineDisplayOptions
     public var selectedThemeID: String
     public var fontScale: Double
 
@@ -190,12 +191,14 @@ public struct WindowLayoutState: Equatable, Codable, Sendable {
         isOutlineVisible: Bool = true,
         isInspectorVisible: Bool = false,
         selectedInspectorSection: DocumentInspectorSection = .summary,
+        outlineDisplayOptions: OutlineDisplayOptions = .default,
         selectedThemeID: String = "default",
         fontScale: Double = 1.0
     ) {
         self.isOutlineVisible = isOutlineVisible
         self.isInspectorVisible = isInspectorVisible
         self.selectedInspectorSection = selectedInspectorSection
+        self.outlineDisplayOptions = outlineDisplayOptions.normalized()
         self.selectedThemeID = selectedThemeID
         self.fontScale = fontScale
     }
@@ -204,6 +207,7 @@ public struct WindowLayoutState: Equatable, Codable, Sendable {
         case isOutlineVisible
         case isInspectorVisible
         case selectedInspectorSection
+        case outlineDisplayOptions
         case selectedThemeID
         case fontScale
     }
@@ -216,6 +220,7 @@ public struct WindowLayoutState: Equatable, Codable, Sendable {
             isOutlineVisible: try container.decodeIfPresent(Bool.self, forKey: .isOutlineVisible) ?? defaults.isOutlineVisible,
             isInspectorVisible: try container.decodeIfPresent(Bool.self, forKey: .isInspectorVisible) ?? defaults.isInspectorVisible,
             selectedInspectorSection: (try? container.decodeIfPresent(DocumentInspectorSection.self, forKey: .selectedInspectorSection)) ?? defaults.selectedInspectorSection,
+            outlineDisplayOptions: (try? container.decodeIfPresent(OutlineDisplayOptions.self, forKey: .outlineDisplayOptions))?.normalized() ?? defaults.outlineDisplayOptions,
             selectedThemeID: try container.decodeIfPresent(String.self, forKey: .selectedThemeID) ?? defaults.selectedThemeID,
             fontScale: try container.decodeIfPresent(Double.self, forKey: .fontScale) ?? defaults.fontScale
         )
@@ -227,6 +232,7 @@ public struct WindowLayoutState: Equatable, Codable, Sendable {
         try container.encode(isOutlineVisible, forKey: .isOutlineVisible)
         try container.encode(isInspectorVisible, forKey: .isInspectorVisible)
         try container.encode(selectedInspectorSection, forKey: .selectedInspectorSection)
+        try container.encode(outlineDisplayOptions.normalized(), forKey: .outlineDisplayOptions)
         try container.encode(selectedThemeID, forKey: .selectedThemeID)
         try container.encode(fontScale, forKey: .fontScale)
     }
@@ -286,6 +292,7 @@ public struct DocumentWindowState: Equatable {
     public var livePreview: LivePreviewStatus
     public var richContentPreview: RichContentPreviewStatus
     public var search: PreviewSearchState
+    public var currentSectionID: String?
     public var statusMessage: String
 
     public init(
@@ -295,6 +302,7 @@ public struct DocumentWindowState: Equatable {
         livePreview: LivePreviewStatus = .inactive,
         richContentPreview: RichContentPreviewStatus = .inactive,
         search: PreviewSearchState = PreviewSearchState(),
+        currentSectionID: String? = nil,
         statusMessage: String = "No document"
     ) {
         self.content = content
@@ -303,6 +311,7 @@ public struct DocumentWindowState: Equatable {
         self.livePreview = livePreview
         self.richContentPreview = richContentPreview
         self.search = search
+        self.currentSectionID = currentSectionID
         self.statusMessage = statusMessage
     }
 
@@ -349,6 +358,14 @@ public struct DocumentWindowState: Equatable {
         return nil
     }
 
+    public var currentOutlineItem: OutlineItem? {
+        guard let currentSectionID else {
+            return nil
+        }
+
+        return currentRenderResult?.outline.first { $0.id == currentSectionID }
+    }
+
     public var currentInspectionReport: DocumentInspectionReport? {
         guard let document = currentMarkdownDocument else {
             return nil
@@ -363,6 +380,7 @@ public struct DocumentWindowState: Equatable {
         livePreview = .inactive
         richContentPreview = .inactive
         search = PreviewSearchState()
+        currentSectionID = nil
         statusMessage = "Opening \(url.lastPathComponent)"
     }
 
@@ -370,6 +388,7 @@ public struct DocumentWindowState: Equatable {
         content = .loaded(document)
         preview = .placeholder
         richContentPreview = .inactive
+        currentSectionID = nil
         statusMessage = "Opened \(document.displayName)"
     }
 
@@ -384,6 +403,9 @@ public struct DocumentWindowState: Equatable {
         richContentPreview = result.richMarkdownState.requiresRichContentRuntime
             ? .pending(result.richMarkdownState.richContentRuntimeFeatures)
             : .inactive
+        if let currentSectionID, !result.outline.contains(where: { $0.id == currentSectionID }) {
+            self.currentSectionID = nil
+        }
         let warningCount = result.diagnostics.filter { $0.severity == .warning }.count
         if warningCount > 0 {
             statusMessage = "Rendered with \(warningCount) warning\(warningCount == 1 ? "" : "s")"
@@ -396,6 +418,7 @@ public struct DocumentWindowState: Equatable {
         let previewError = PreviewError(error: error)
         preview = .error(previewError)
         richContentPreview = .inactive
+        currentSectionID = nil
         statusMessage = previewError.message
     }
 
@@ -408,6 +431,7 @@ public struct DocumentWindowState: Equatable {
         preview = .error(PreviewError(documentOpenError: error))
         livePreview = .inactive
         richContentPreview = .inactive
+        currentSectionID = nil
         statusMessage = error.message
     }
 
@@ -417,6 +441,7 @@ public struct DocumentWindowState: Equatable {
         livePreview = .inactive
         richContentPreview = .inactive
         search = PreviewSearchState()
+        currentSectionID = nil
         statusMessage = "No document"
     }
 
@@ -438,6 +463,11 @@ public struct DocumentWindowState: Equatable {
     public mutating func selectInspectorSection(_ section: DocumentInspectorSection) {
         layout.selectedInspectorSection = section
         statusMessage = "Inspector: \(section.title)"
+    }
+
+    public mutating func setOutlineDisplayOptions(_ options: OutlineDisplayOptions) {
+        layout.outlineDisplayOptions = options.normalized()
+        statusMessage = "Outline display updated"
     }
 
     public mutating func showInspector(section: DocumentInspectorSection) {
@@ -468,6 +498,10 @@ public struct DocumentWindowState: Equatable {
 
     public mutating func notePlaceholderAction(_ message: String) {
         statusMessage = message
+    }
+
+    public mutating func updateCurrentSection(id: String?) {
+        currentSectionID = id
     }
 
     public mutating func beginRichContentRendering(features: Set<RichMarkdownFeature>) {

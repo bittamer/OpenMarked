@@ -189,7 +189,9 @@ let savedSettings = ApplicationSettings(
     appChromeThemeID: "tokyo-night",
     defaultFontScale: 4.0,
     isLivePreviewEnabled: false,
-    renderProfile: .gitHubReadme
+    renderProfile: .gitHubReadme,
+    statisticsWordsPerMinute: 999,
+    includesFrontMatterInStatistics: true
 )
 settingsStore.save(savedSettings)
 let restoredSettings = settingsStore.load()
@@ -200,6 +202,9 @@ verify(!restoredSettings.isLivePreviewEnabled, "settings should persist live pre
 verify(restoredSettings.renderProfile == .gitHubReadme, "settings should persist render profile")
 verify(restoredSettings.richMarkdownOptions == .default, "settings should default rich Markdown options")
 verify(!restoredSettings.richMarkdownOptions.validatesRemoteLinks, "remote link validation should default off")
+verify(restoredSettings.statisticsWordsPerMinute == DocumentStatisticsOptions.maximumWordsPerMinute, "settings should clamp words-per-minute")
+verify(restoredSettings.includesFrontMatterInStatistics, "settings should persist front matter statistics preference")
+verify(restoredSettings.documentStatisticsOptions.includesFrontMatter, "settings should expose normalized statistics options")
 settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL])
 verify(settingsStore.loadLastDocumentURLs().first?.path == markdownDocument.sourceURL.path, "settings store should persist last document paths")
 
@@ -216,6 +221,8 @@ let decodedOldSettings = try JSONDecoder().decode(ApplicationSettings.self, from
 verify(decodedOldSettings.appChromeThemeID == "default", "old settings payloads should decode with the default app chrome theme")
 verify(decodedOldSettings.richMarkdownOptions == .default, "old settings payloads should decode with rich Markdown defaults")
 verify(decodedOldSettings.renderProfile == .openMarked, "old settings payloads should decode with the OpenMarked render profile")
+verify(decodedOldSettings.statisticsWordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute, "old settings payloads should decode with default reading speed")
+verify(!decodedOldSettings.includesFrontMatterInStatistics, "old settings payloads should keep front matter excluded from statistics")
 
 verify(
     AppChromeThemeStore.allBuiltInThemes.map(\.id) == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
@@ -485,7 +492,43 @@ verify(statisticsInspectionReport.statistics.tableCount == 1, "inspection statis
 verify(statisticsInspectionReport.statistics.calloutCount == 1, "inspection statistics should count GitHub callouts")
 verify(statisticsInspectionReport.statistics.mermaidDiagramCount == 1, "inspection statistics should count Mermaid diagrams")
 verify(statisticsInspectionReport.statistics.mathExpressionCount == 2, "inspection statistics should count math expressions")
+verify(statisticsInspectionReport.statistics.sectionStatistics.filter { $0.level == 2 }.count == 6, "inspection statistics should count level-two sections")
+verify(statisticsInspectionReport.statistics.longestSection != nil, "inspection statistics should report a longest section")
+verify(statisticsInspectionReport.statistics.estimatedPageCount >= 1, "inspection statistics should estimate printable pages")
 verify(statisticsInspectionReport.exportReadiness.isReady, "rich statistics fixture should be export-ready")
+
+let readingBodyWords = Array(repeating: "body", count: 450).joined(separator: " ")
+let readingFrontMatterWords = Array(repeating: "meta", count: 250).joined(separator: " ")
+let readingOptionsSource = """
+---
+title: Reading Options
+summary: \(readingFrontMatterWords)
+---
+# Reading Options
+
+\(readingBodyWords)
+"""
+let readingOptionsParsed = FrontMatterParser.parse(readingOptionsSource)
+let readingOptionsDocument = MarkdownDocument(
+    sourceURL: URL(fileURLWithPath: "/tmp/reading-options.md"),
+    sourceText: readingOptionsSource,
+    bodyText: readingOptionsParsed.bodyText,
+    frontMatter: readingOptionsParsed.frontMatter,
+    metadata: DocumentFileMetadata(fileSize: Int64(readingOptionsSource.utf8.count), createdAt: nil, modifiedAt: nil),
+    statistics: DocumentStatisticsCalculator.calculate(bodyText: readingOptionsParsed.bodyText),
+    loadedAt: Date(timeIntervalSince1970: 0),
+    securityScopedBookmark: nil
+)
+let readingBodyOnlyReport = DocumentInspectionBuilder.build(document: readingOptionsDocument)
+let readingInclusiveReport = DocumentInspectionBuilder.build(
+    document: readingOptionsDocument,
+    statisticsOptions: DocumentStatisticsOptions(wordsPerMinute: 100, includesFrontMatter: true)
+)
+verify(!readingBodyOnlyReport.statistics.includesFrontMatter, "statistics should exclude front matter by default")
+verify(readingInclusiveReport.statistics.includesFrontMatter, "statistics should include front matter when requested")
+verify(readingInclusiveReport.statistics.wordsPerMinute == 100, "statistics should use tuned words-per-minute")
+verify(readingInclusiveReport.statistics.words > readingBodyOnlyReport.statistics.words, "front matter should increase tuned word count")
+verify(readingInclusiveReport.statistics.readingTimeMinutes > readingBodyOnlyReport.statistics.readingTimeMinutes, "slower tuned reading speed should increase read time")
 
 let referenceInspectionURL = URL(fileURLWithPath: "Fixtures/Markdown/inspection-links-assets.md").standardizedFileURL
 let referenceInspectionDocument = try MarkdownDocumentLoader.load(url: referenceInspectionURL, createBookmark: false)

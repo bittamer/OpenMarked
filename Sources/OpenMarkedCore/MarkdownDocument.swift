@@ -138,6 +138,34 @@ public struct DocumentStatistics: Equatable, Sendable {
     public static let empty = DocumentStatistics(wordCount: 0, characterCount: 0, lineCount: 0, readingTimeMinutes: 0)
 }
 
+public struct DocumentStatisticsOptions: Codable, Equatable, Sendable {
+    public static let defaultWordsPerMinute = 225
+    public static let minimumWordsPerMinute = 100
+    public static let maximumWordsPerMinute = 600
+
+    public var wordsPerMinute: Int
+    public var includesFrontMatter: Bool
+
+    public init(
+        wordsPerMinute: Int = Self.defaultWordsPerMinute,
+        includesFrontMatter: Bool = false
+    ) {
+        self.wordsPerMinute = wordsPerMinute
+        self.includesFrontMatter = includesFrontMatter
+    }
+
+    public static let `default` = DocumentStatisticsOptions()
+
+    public func normalized() -> DocumentStatisticsOptions {
+        var options = self
+        options.wordsPerMinute = min(
+            Self.maximumWordsPerMinute,
+            max(Self.minimumWordsPerMinute, wordsPerMinute)
+        )
+        return options
+    }
+}
+
 public struct SecurityScopedBookmark: Equatable, Sendable {
     public let data: Data
     public let isStale: Bool
@@ -567,12 +595,16 @@ private enum MarkdownDocumentTitleResolver {
 }
 
 public enum DocumentStatisticsCalculator {
-    private static let wordsPerMinute = 225
-
-    public static func calculate(bodyText: String) -> DocumentStatistics {
+    public static func calculate(
+        bodyText: String,
+        wordsPerMinute: Int = DocumentStatisticsOptions.defaultWordsPerMinute
+    ) -> DocumentStatistics {
+        let normalizedWordsPerMinute = DocumentStatisticsOptions(wordsPerMinute: wordsPerMinute)
+            .normalized()
+            .wordsPerMinute
         let lineCount = bodyText.isEmpty ? 0 : bodyText.components(separatedBy: "\n").count
-        let wordCount = countWords(in: textForWordCounting(bodyText))
-        let readingTime = wordCount == 0 ? 0 : max(1, Int(ceil(Double(wordCount) / Double(wordsPerMinute))))
+        let wordCount = wordCount(in: bodyText)
+        let readingTime = wordCount == 0 ? 0 : max(1, Int(ceil(Double(wordCount) / Double(normalizedWordsPerMinute))))
 
         return DocumentStatistics(
             wordCount: wordCount,
@@ -580,6 +612,21 @@ public enum DocumentStatisticsCalculator {
             lineCount: lineCount,
             readingTimeMinutes: readingTime
         )
+    }
+
+    public static func calculate(
+        document: MarkdownDocument,
+        options: DocumentStatisticsOptions = .default
+    ) -> DocumentStatistics {
+        let normalizedOptions = options.normalized()
+        return calculate(
+            bodyText: normalizedOptions.includesFrontMatter ? document.sourceText : document.bodyText,
+            wordsPerMinute: normalizedOptions.wordsPerMinute
+        )
+    }
+
+    public static func wordCount(in markdownText: String) -> Int {
+        countWords(in: textForWordCounting(markdownText))
     }
 
     private static func textForWordCounting(_ text: String) -> String {

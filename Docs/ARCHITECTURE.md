@@ -109,7 +109,7 @@ Navigation behavior:
 - Preview search uses a small injected JavaScript helper rather than relying on WebKit find APIs, so highlighting and next/previous behavior are predictable on the MVP deployment target.
 - Source actions are native AppKit operations: reveal in Finder, open in the default editor, copy path, and reload from disk.
 - Render diagnostics are exposed through a status-bar popover. Missing-image, missing-link, heading-fragment, malformed-link, unsupported-scheme, and skipped link checks are grouped by kind so warnings stay scannable.
-- Status statistics stay compact in the bar, with character and line counts available through tooltips.
+- Status statistics stay compact in the bar and recompute with the current reading settings. The Statistics inspector expands the same inspection data into metric tiles, heading-level counts, section word/paragraph counts, longest section, and estimated printable pages.
 
 ## Link Validation Direction
 
@@ -158,8 +158,8 @@ Phase 9 keeps persistent preferences in `OpenMarkedCore` and applies them from t
 
 Settings behavior:
 
-- `ApplicationSettings` is a small codable value that stores preview defaults, content policy, export defaults, live preview behavior, scroll preservation, and optional session restoration.
-- `ApplicationSettingsStore` persists settings and last-opened document paths through `UserDefaults`, with normalization for unknown themes and out-of-range font scales.
+- `ApplicationSettings` is a small codable value that stores preview defaults, content policy, export defaults, live preview behavior, reading statistics preferences, scroll preservation, and optional session restoration.
+- `ApplicationSettingsStore` persists settings and last-opened document paths through `UserDefaults`, with normalization for unknown themes, out-of-range font scales, and out-of-range reading-speed values.
 - `MarkdownRenderProfile` is stored with settings and passed through `RenderOptions`; the default OpenMarked profile preserves current behavior, while the GitHub README profile switches heading slug generation and profile-aware heading-link validation.
 - Rich Markdown toggles for Mermaid, KaTeX, GitHub callouts, and link validation live in `RichMarkdownOptions` and re-render the active document when changed.
 - Current documents re-render when content policy, rich Markdown settings, render profile, or preview defaults change. Theme and zoom only update from defaults when those specific defaults changed.

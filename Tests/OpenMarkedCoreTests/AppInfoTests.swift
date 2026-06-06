@@ -202,7 +202,9 @@ final class AppInfoTests: XCTestCase {
                 defaultFontScale: 4.0,
                 isLivePreviewEnabled: false,
                 renderProfile: .gitHubReadme,
-                richMarkdownOptions: richOptions
+                richMarkdownOptions: richOptions,
+                statisticsWordsPerMinute: 999,
+                includesFrontMatterInStatistics: true
             )
         )
 
@@ -214,6 +216,10 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(restored.renderProfile, .gitHubReadme)
         XCTAssertFalse(restored.richMarkdownOptions.rendersMermaid)
         XCTAssertTrue(restored.richMarkdownOptions.validatesRemoteLinks)
+        XCTAssertEqual(restored.statisticsWordsPerMinute, DocumentStatisticsOptions.maximumWordsPerMinute)
+        XCTAssertTrue(restored.includesFrontMatterInStatistics)
+        XCTAssertEqual(restored.documentStatisticsOptions.wordsPerMinute, DocumentStatisticsOptions.maximumWordsPerMinute)
+        XCTAssertTrue(restored.documentStatisticsOptions.includesFrontMatter)
 
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         store.saveLastDocumentURLs([url])
@@ -240,6 +246,8 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(decoded.renderProfile, .openMarked)
         XCTAssertEqual(decoded.richMarkdownOptions, .default)
         XCTAssertFalse(decoded.richMarkdownOptions.validatesRemoteLinks)
+        XCTAssertEqual(decoded.statisticsWordsPerMinute, DocumentStatisticsOptions.defaultWordsPerMinute)
+        XCTAssertFalse(decoded.includesFrontMatterInStatistics)
     }
 
     func testRenderProfileGroundworkAffectsHeadingAndLinkBehavior() throws {
@@ -628,7 +636,47 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(report.statistics.mermaidDiagramCount, 1)
         XCTAssertEqual(report.statistics.mathExpressionCount, 2)
         XCTAssertEqual(report.statistics.headingLevels[2], 6)
+        XCTAssertEqual(report.statistics.sectionStatistics.filter { $0.level == 2 }.count, 6)
+        XCTAssertNotNil(report.statistics.longestSection)
+        XCTAssertGreaterThanOrEqual(report.statistics.estimatedPageCount, 1)
         XCTAssertTrue(report.exportReadiness.isReady)
+    }
+
+    func testDocumentInspectionUsesReadingStatisticsOptions() throws {
+        let bodyWords = Array(repeating: "body", count: 450).joined(separator: " ")
+        let frontMatterWords = Array(repeating: "meta", count: 250).joined(separator: " ")
+        let source = """
+        ---
+        title: Reading Options
+        summary: \(frontMatterWords)
+        ---
+        # Reading Options
+
+        \(bodyWords)
+        """
+        let parsed = FrontMatterParser.parse(source)
+        let document = MarkdownDocument(
+            sourceURL: URL(fileURLWithPath: "/tmp/reading-options.md"),
+            sourceText: source,
+            bodyText: parsed.bodyText,
+            frontMatter: parsed.frontMatter,
+            metadata: DocumentFileMetadata(fileSize: Int64(source.utf8.count), createdAt: nil, modifiedAt: nil),
+            statistics: DocumentStatisticsCalculator.calculate(bodyText: parsed.bodyText),
+            loadedAt: Date(timeIntervalSince1970: 0),
+            securityScopedBookmark: nil
+        )
+
+        let bodyOnlyReport = DocumentInspectionBuilder.build(document: document)
+        let inclusiveReport = DocumentInspectionBuilder.build(
+            document: document,
+            statisticsOptions: DocumentStatisticsOptions(wordsPerMinute: 100, includesFrontMatter: true)
+        )
+
+        XCTAssertFalse(bodyOnlyReport.statistics.includesFrontMatter)
+        XCTAssertTrue(inclusiveReport.statistics.includesFrontMatter)
+        XCTAssertEqual(inclusiveReport.statistics.wordsPerMinute, 100)
+        XCTAssertGreaterThan(inclusiveReport.statistics.words, bodyOnlyReport.statistics.words)
+        XCTAssertGreaterThan(inclusiveReport.statistics.readingTimeMinutes, bodyOnlyReport.statistics.readingTimeMinutes)
     }
 
     func testDocumentInspectionReportsLinksAssetsAndReadiness() throws {
@@ -1175,7 +1223,9 @@ struct AppInfoTests {
                 defaultFontScale: 4.0,
                 isLivePreviewEnabled: false,
                 renderProfile: .gitHubReadme,
-                richMarkdownOptions: richOptions
+                richMarkdownOptions: richOptions,
+                statisticsWordsPerMinute: 999,
+                includesFrontMatterInStatistics: true
             )
         )
 
@@ -1187,6 +1237,10 @@ struct AppInfoTests {
         #expect(restored.renderProfile == .gitHubReadme)
         #expect(!restored.richMarkdownOptions.rendersMermaid)
         #expect(restored.richMarkdownOptions.validatesRemoteLinks)
+        #expect(restored.statisticsWordsPerMinute == DocumentStatisticsOptions.maximumWordsPerMinute)
+        #expect(restored.includesFrontMatterInStatistics)
+        #expect(restored.documentStatisticsOptions.wordsPerMinute == DocumentStatisticsOptions.maximumWordsPerMinute)
+        #expect(restored.documentStatisticsOptions.includesFrontMatter)
 
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         store.saveLastDocumentURLs([url])
@@ -1214,6 +1268,8 @@ struct AppInfoTests {
         #expect(decoded.renderProfile == .openMarked)
         #expect(decoded.richMarkdownOptions == .default)
         #expect(!decoded.richMarkdownOptions.validatesRemoteLinks)
+        #expect(decoded.statisticsWordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute)
+        #expect(!decoded.includesFrontMatterInStatistics)
     }
 
     @Test("Render profile groundwork affects heading and link behavior")
@@ -1561,6 +1617,44 @@ struct AppInfoTests {
         #expect(document.frontMatter == nil)
         #expect(document.statistics.wordCount > 0)
         #expect(document.metadata.fileSize > 0)
+    }
+
+    @Test("Document statistics options tune reading estimates")
+    func documentStatisticsOptionsTuneReadingEstimates() throws {
+        let bodyWords = Array(repeating: "body", count: 450).joined(separator: " ")
+        let frontMatterWords = Array(repeating: "meta", count: 250).joined(separator: " ")
+        let source = """
+        ---
+        title: Reading Options
+        summary: \(frontMatterWords)
+        ---
+        # Reading Options
+
+        \(bodyWords)
+        """
+        let parsed = FrontMatterParser.parse(source)
+        let document = MarkdownDocument(
+            sourceURL: URL(fileURLWithPath: "/tmp/reading-options.md"),
+            sourceText: source,
+            bodyText: parsed.bodyText,
+            frontMatter: parsed.frontMatter,
+            metadata: DocumentFileMetadata(fileSize: Int64(source.utf8.count), createdAt: nil, modifiedAt: nil),
+            statistics: DocumentStatisticsCalculator.calculate(bodyText: parsed.bodyText),
+            loadedAt: Date(timeIntervalSince1970: 0),
+            securityScopedBookmark: nil
+        )
+
+        let bodyOnlyReport = DocumentInspectionBuilder.build(document: document)
+        let inclusiveReport = DocumentInspectionBuilder.build(
+            document: document,
+            statisticsOptions: DocumentStatisticsOptions(wordsPerMinute: 100, includesFrontMatter: true)
+        )
+
+        #expect(!bodyOnlyReport.statistics.includesFrontMatter)
+        #expect(inclusiveReport.statistics.includesFrontMatter)
+        #expect(inclusiveReport.statistics.wordsPerMinute == 100)
+        #expect(inclusiveReport.statistics.words > bodyOnlyReport.statistics.words)
+        #expect(inclusiveReport.statistics.readingTimeMinutes > bodyOnlyReport.statistics.readingTimeMinutes)
     }
 
     @Test("Front matter is parsed and removed from body")

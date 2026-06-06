@@ -888,6 +888,7 @@ private struct ErrorDocumentView: View {
 
 private struct StatusBar: View {
     @Environment(\.appChromeTheme) private var chrome
+    @EnvironmentObject private var appController: AppController
     @ObservedObject var controller: DocumentWindowController
     @State private var isDiagnosticsPopoverPresented = false
 
@@ -902,11 +903,11 @@ private struct StatusBar: View {
 
             Spacer()
 
-            if let statistics = controller.state.currentMarkdownDocument?.statistics {
+            if let statistics = currentStatistics {
                 Text("\(statistics.wordCount) words")
-                    .help("\(statistics.characterCount) characters, \(statistics.lineCount) lines")
+                    .help(statisticsHelp(statistics))
                 Text("\(statistics.readingTimeMinutes) min read")
-                    .help("\(statistics.characterCount) characters, \(statistics.lineCount) lines")
+                    .help(statisticsHelp(statistics))
             }
             if let diagnostics = controller.state.currentRenderResult?.diagnostics, !diagnostics.isEmpty {
                 Button {
@@ -969,6 +970,21 @@ private struct StatusBar: View {
         case .error:
             return "exclamationmark.circle"
         }
+    }
+
+    private var currentStatistics: DocumentStatistics? {
+        guard let document = controller.state.currentMarkdownDocument else {
+            return nil
+        }
+        return DocumentStatisticsCalculator.calculate(
+            document: document,
+            options: appController.settings.documentStatisticsOptions
+        )
+    }
+
+    private func statisticsHelp(_ statistics: DocumentStatistics) -> String {
+        let scope = appController.settings.includesFrontMatterInStatistics ? "including front matter" : "excluding front matter"
+        return "\(statistics.characterCount) characters, \(statistics.lineCount) lines, \(scope), \(appController.settings.statisticsWordsPerMinute) WPM"
     }
 
     private var livePreviewStatusTitle: String? {
@@ -1240,6 +1256,24 @@ struct SettingsView: View {
                 Toggle("Restore last opened documents", isOn: settingBinding(\.restoresLastOpenedDocuments))
             }
 
+            Section("Reading Statistics") {
+                HStack {
+                    Stepper(
+                        "Words per minute",
+                        value: wordsPerMinuteBinding,
+                        in: DocumentStatisticsOptions.minimumWordsPerMinute...DocumentStatisticsOptions.maximumWordsPerMinute,
+                        step: 25
+                    )
+                    Text("\(appController.settings.statisticsWordsPerMinute) WPM")
+                        .monospacedDigit()
+                        .frame(width: 80, alignment: .trailing)
+                }
+                .help("Adjust the reading-time estimate used by the status bar and Statistics inspector.")
+
+                Toggle("Count front matter", isOn: settingBinding(\.includesFrontMatterInStatistics))
+                    .help("Include front matter in word, character, line, and reading-time counts.")
+            }
+
             Section("Content") {
                 Toggle("Load remote images", isOn: settingBinding(\.allowsRemoteImages))
                 Toggle("Allow raw HTML", isOn: settingBinding(\.allowsRawHTML))
@@ -1287,6 +1321,17 @@ struct SettingsView: View {
             set: { newValue in
                 appController.updateSettings { settings in
                     settings.defaultFontScale = newValue
+                }
+            }
+        )
+    }
+
+    private var wordsPerMinuteBinding: Binding<Int> {
+        Binding(
+            get: { appController.settings.statisticsWordsPerMinute },
+            set: { newValue in
+                appController.updateSettings { settings in
+                    settings.statisticsWordsPerMinute = newValue
                 }
             }
         )

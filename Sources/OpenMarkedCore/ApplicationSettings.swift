@@ -13,6 +13,8 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var restoresLastOpenedDocuments: Bool
     public var renderProfile: MarkdownRenderProfile
     public var richMarkdownOptions: RichMarkdownOptions
+    public var statisticsWordsPerMinute: Int
+    public var includesFrontMatterInStatistics: Bool
 
     public init(
         defaultThemeID: String = PreviewThemeStore.defaultThemeID,
@@ -26,7 +28,9 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         embedsLocalImagesInHTMLExport: Bool = true,
         restoresLastOpenedDocuments: Bool = false,
         renderProfile: MarkdownRenderProfile = .openMarked,
-        richMarkdownOptions: RichMarkdownOptions = .default
+        richMarkdownOptions: RichMarkdownOptions = .default,
+        statisticsWordsPerMinute: Int = DocumentStatisticsOptions.defaultWordsPerMinute,
+        includesFrontMatterInStatistics: Bool = false
     ) {
         self.defaultThemeID = defaultThemeID
         self.appChromeThemeID = appChromeThemeID
@@ -40,6 +44,8 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         self.restoresLastOpenedDocuments = restoresLastOpenedDocuments
         self.renderProfile = renderProfile
         self.richMarkdownOptions = richMarkdownOptions
+        self.statisticsWordsPerMinute = statisticsWordsPerMinute
+        self.includesFrontMatterInStatistics = includesFrontMatterInStatistics
     }
 
     public static let `default` = ApplicationSettings()
@@ -49,7 +55,21 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         settings.defaultThemeID = PreviewThemeStore.theme(id: defaultThemeID).id
         settings.appChromeThemeID = AppChromeThemeStore.theme(id: appChromeThemeID).id
         settings.defaultFontScale = min(2.0, max(0.6, defaultFontScale))
+        settings.statisticsWordsPerMinute = DocumentStatisticsOptions(
+            wordsPerMinute: statisticsWordsPerMinute,
+            includesFrontMatter: includesFrontMatterInStatistics
+        )
+        .normalized()
+        .wordsPerMinute
         return settings
+    }
+
+    public var documentStatisticsOptions: DocumentStatisticsOptions {
+        DocumentStatisticsOptions(
+            wordsPerMinute: statisticsWordsPerMinute,
+            includesFrontMatter: includesFrontMatterInStatistics
+        )
+        .normalized()
     }
 
     public var defaultLayout: WindowLayoutState {
@@ -73,6 +93,8 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         case restoresLastOpenedDocuments
         case renderProfile
         case richMarkdownOptions
+        case statisticsWordsPerMinute
+        case includesFrontMatterInStatistics
     }
 
     public init(from decoder: Decoder) throws {
@@ -91,7 +113,9 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
             embedsLocalImagesInHTMLExport: try container.decodeIfPresent(Bool.self, forKey: .embedsLocalImagesInHTMLExport) ?? defaults.embedsLocalImagesInHTMLExport,
             restoresLastOpenedDocuments: try container.decodeIfPresent(Bool.self, forKey: .restoresLastOpenedDocuments) ?? defaults.restoresLastOpenedDocuments,
             renderProfile: try container.decodeIfPresent(MarkdownRenderProfile.self, forKey: .renderProfile) ?? defaults.renderProfile,
-            richMarkdownOptions: try container.decodeIfPresent(RichMarkdownOptions.self, forKey: .richMarkdownOptions) ?? defaults.richMarkdownOptions
+            richMarkdownOptions: try container.decodeIfPresent(RichMarkdownOptions.self, forKey: .richMarkdownOptions) ?? defaults.richMarkdownOptions,
+            statisticsWordsPerMinute: try container.decodeIfPresent(Int.self, forKey: .statisticsWordsPerMinute) ?? defaults.statisticsWordsPerMinute,
+            includesFrontMatterInStatistics: try container.decodeIfPresent(Bool.self, forKey: .includesFrontMatterInStatistics) ?? defaults.includesFrontMatterInStatistics
         )
     }
 }

@@ -4,6 +4,7 @@ import OpenMarkedCore
 
 struct InspectorSidebar: View {
     @Environment(\.appChromeTheme) private var chrome
+    @EnvironmentObject private var appController: AppController
     @ObservedObject var controller: DocumentWindowController
 
     var body: some View {
@@ -90,7 +91,7 @@ struct InspectorSidebar: View {
                 message: "The document could not be inspected."
             )
         case .loaded:
-            if let report = controller.state.currentInspectionReport {
+            if let report = currentInspectionReport {
                 ScrollView {
                     sectionContent(report)
                         .padding(.horizontal, 12)
@@ -104,6 +105,18 @@ struct InspectorSidebar: View {
                 )
             }
         }
+    }
+
+    private var currentInspectionReport: DocumentInspectionReport? {
+        guard let document = controller.state.currentMarkdownDocument else {
+            return nil
+        }
+
+        return DocumentInspectionBuilder.build(
+            document: document,
+            renderResult: controller.state.currentRenderResult,
+            statisticsOptions: appController.settings.documentStatisticsOptions
+        )
     }
 
     @ViewBuilder
@@ -278,18 +291,26 @@ private struct StatisticsInspectorSection: View {
         InspectorSectionStack(title: "Statistics") {
             InspectorMetricGrid(
                 metrics: [
-                    InspectorMetric(title: "Words", value: "\(report.statistics.words)", systemImage: "text.alignleft"),
-                    InspectorMetric(title: "Characters", value: "\(report.statistics.characters)", systemImage: "character.cursor.ibeam"),
-                    InspectorMetric(title: "Lines", value: "\(report.statistics.lines)", systemImage: "text.justify.left"),
-                    InspectorMetric(title: "Read Time", value: "\(report.statistics.readingTimeMinutes)m", systemImage: "clock"),
-                    InspectorMetric(title: "Tables", value: "\(report.statistics.tableCount)", systemImage: "tablecells"),
-                    InspectorMetric(title: "Code", value: "\(report.statistics.codeBlockCount)", systemImage: "chevron.left.forwardslash.chevron.right"),
-                    InspectorMetric(title: "Callouts", value: "\(report.statistics.calloutCount)", systemImage: "quote.bubble"),
-                    InspectorMetric(title: "Mermaid", value: "\(report.statistics.mermaidDiagramCount)", systemImage: "point.3.connected.trianglepath.dotted"),
-                    InspectorMetric(title: "Math", value: "\(report.statistics.mathExpressionCount)", systemImage: "function"),
-                    InspectorMetric(title: "Warnings", value: "\(report.statistics.missingReferenceCount)", systemImage: "exclamationmark.triangle")
+                    InspectorMetric(title: "Words", value: "\(report.statistics.words)", systemImage: "text.alignleft", help: statisticsScopeHelp),
+                    InspectorMetric(title: "Read Time", value: "\(report.statistics.readingTimeMinutes)m", systemImage: "clock", help: "Estimated at \(report.statistics.wordsPerMinute) words per minute."),
+                    InspectorMetric(title: "Pages", value: "\(report.statistics.estimatedPageCount)", systemImage: "doc.text", help: "Estimated PDF pages based on words and rich content."),
+                    InspectorMetric(title: "Sections", value: "\(report.statistics.sectionStatistics.count)", systemImage: "list.bullet.indent", help: "Markdown headings with section-level counts."),
+                    InspectorMetric(title: "Paragraphs", value: "\(report.statistics.paragraphCount)", systemImage: "paragraphsign", help: "Rendered paragraph elements."),
+                    InspectorMetric(title: "Links", value: "\(report.statistics.linkCount)", systemImage: "link", help: "Rendered document links."),
+                    InspectorMetric(title: "Images", value: "\(report.statistics.imageCount)", systemImage: "photo", help: "Rendered image references."),
+                    InspectorMetric(title: "Tables", value: "\(report.statistics.tableCount)", systemImage: "tablecells", help: "Rendered tables."),
+                    InspectorMetric(title: "Code", value: "\(report.statistics.codeBlockCount)", systemImage: "chevron.left.forwardslash.chevron.right", help: "Fenced code blocks."),
+                    InspectorMetric(title: "Callouts", value: "\(report.statistics.calloutCount)", systemImage: "quote.bubble", help: "GitHub-style callout blocks."),
+                    InspectorMetric(title: "Mermaid", value: "\(report.statistics.mermaidDiagramCount)", systemImage: "point.3.connected.trianglepath.dotted", help: "Mermaid diagram blocks."),
+                    InspectorMetric(title: "Math", value: "\(report.statistics.mathExpressionCount)", systemImage: "function", help: "KaTeX math expressions."),
+                    InspectorMetric(title: "Warnings", value: "\(report.statistics.missingReferenceCount)", systemImage: "exclamationmark.triangle", help: "Missing or malformed references."),
+                    InspectorMetric(title: "Diagnostics", value: "\(report.statistics.diagnosticCount)", systemImage: "stethoscope", help: "Renderer and document diagnostics.")
                 ]
             )
+
+            if let longestSection = report.statistics.longestSection {
+                InspectorSectionHighlight(section: longestSection)
+            }
 
             if !report.statistics.headingLevels.isEmpty {
                 InspectorFieldGroup(
@@ -307,7 +328,15 @@ private struct StatisticsInspectorSection: View {
                         }
                 )
             }
+
+            InspectorSectionStatisticsGroup(sections: report.statistics.sectionStatistics)
         }
+    }
+
+    private var statisticsScopeHelp: String {
+        report.statistics.includesFrontMatter
+            ? "Word, character, line, and reading-time counts include front matter."
+            : "Word, character, line, and reading-time counts exclude front matter."
     }
 }
 
@@ -377,10 +406,19 @@ private struct InspectorTitleBlock: View {
 }
 
 private struct InspectorMetric: Identifiable {
-    let id = UUID()
+    let id: String
     let title: String
     let value: String
     let systemImage: String
+    let help: String
+
+    init(title: String, value: String, systemImage: String, help: String? = nil) {
+        self.id = "\(title):\(value):\(systemImage)"
+        self.title = title
+        self.value = value
+        self.systemImage = systemImage
+        self.help = help ?? "\(title): \(value)"
+    }
 }
 
 private struct InspectorMetricGrid: View {
@@ -434,6 +472,110 @@ private struct InspectorMetricCell: View {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .stroke(chrome.separator.opacity(0.8), lineWidth: 1)
         )
+        .help(metric.help)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(metric.title), \(metric.value)")
+    }
+}
+
+private struct InspectorSectionHighlight: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    let section: DocumentSectionStatistic
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Longest Section")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(chrome.secondaryText)
+                .textCase(.uppercase)
+
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: "text.badge.star")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(chrome.accent)
+                    .frame(width: 18, height: 18)
+                    .padding(.top, 1)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(section.title)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(chrome.text)
+                        .lineLimit(2)
+                    Text("H\(section.level) - \(section.wordCount) words - \(section.paragraphCount) paragraph\(section.paragraphCount == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(chrome.secondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, 7)
+        }
+        .help("Longest section by word count.")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Longest section \(section.title), \(section.wordCount) words")
+    }
+}
+
+private struct InspectorSectionStatisticsGroup: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    let sections: [DocumentSectionStatistic]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Sections")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(chrome.secondaryText)
+                .textCase(.uppercase)
+
+            if sections.isEmpty {
+                InlineEmptyState(systemImage: "list.bullet.indent", message: "No headings found.")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(sections) { section in
+                        InspectorSectionStatisticRow(section: section)
+                        if section.id != sections.last?.id {
+                            InspectorDivider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct InspectorSectionStatisticRow: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    let section: DocumentSectionStatistic
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Text("H\(section.level)")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(chrome.accent)
+                .frame(width: 24, alignment: .leading)
+                .padding(.top, 1)
+
+            Text(section.title)
+                .font(.caption)
+                .foregroundStyle(chrome.text)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(section.wordCount)w")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(chrome.text)
+                Text("\(section.paragraphCount)p")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(chrome.secondaryText)
+            }
+        }
+        .padding(.vertical, 6)
+        .help("\(section.title): \(section.wordCount) words, \(section.paragraphCount) paragraphs.")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Section \(section.title), heading level \(section.level), \(section.wordCount) words, \(section.paragraphCount) paragraphs")
     }
 }
 

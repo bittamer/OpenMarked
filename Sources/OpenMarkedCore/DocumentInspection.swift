@@ -109,13 +109,39 @@ public enum MetadataFieldSource: String, Equatable, Sendable {
     case file
 }
 
+public struct DocumentSectionStatistic: Equatable, Identifiable, Sendable {
+    public let id: String
+    public let title: String
+    public let level: Int
+    public let wordCount: Int
+    public let paragraphCount: Int
+
+    public init(
+        id: String,
+        title: String,
+        level: Int,
+        wordCount: Int,
+        paragraphCount: Int
+    ) {
+        self.id = id
+        self.title = title
+        self.level = level
+        self.wordCount = wordCount
+        self.paragraphCount = paragraphCount
+    }
+}
+
 public struct RichDocumentStatistics: Equatable, Sendable {
     public let words: Int
     public let characters: Int
     public let lines: Int
     public let readingTimeMinutes: Int
+    public let estimatedPageCount: Int
+    public let wordsPerMinute: Int
+    public let includesFrontMatter: Bool
     public let headingCount: Int
     public let headingLevels: [Int: Int]
+    public let sectionStatistics: [DocumentSectionStatistic]
     public let paragraphCount: Int
     public let linkCount: Int
     public let imageCount: Int
@@ -134,8 +160,12 @@ public struct RichDocumentStatistics: Equatable, Sendable {
         characters: Int,
         lines: Int,
         readingTimeMinutes: Int,
+        estimatedPageCount: Int = 0,
+        wordsPerMinute: Int = DocumentStatisticsOptions.defaultWordsPerMinute,
+        includesFrontMatter: Bool = false,
         headingCount: Int,
         headingLevels: [Int: Int],
+        sectionStatistics: [DocumentSectionStatistic] = [],
         paragraphCount: Int,
         linkCount: Int,
         imageCount: Int,
@@ -153,8 +183,12 @@ public struct RichDocumentStatistics: Equatable, Sendable {
         self.characters = characters
         self.lines = lines
         self.readingTimeMinutes = readingTimeMinutes
+        self.estimatedPageCount = estimatedPageCount
+        self.wordsPerMinute = wordsPerMinute
+        self.includesFrontMatter = includesFrontMatter
         self.headingCount = headingCount
         self.headingLevels = headingLevels
+        self.sectionStatistics = sectionStatistics
         self.paragraphCount = paragraphCount
         self.linkCount = linkCount
         self.imageCount = imageCount
@@ -169,13 +203,26 @@ public struct RichDocumentStatistics: Equatable, Sendable {
         self.diagnosticCount = diagnosticCount
     }
 
+    public var longestSection: DocumentSectionStatistic? {
+        sectionStatistics.max { left, right in
+            if left.wordCount == right.wordCount {
+                return left.title > right.title
+            }
+            return left.wordCount < right.wordCount
+        }
+    }
+
     public static let empty = RichDocumentStatistics(
         words: 0,
         characters: 0,
         lines: 0,
         readingTimeMinutes: 0,
+        estimatedPageCount: 0,
+        wordsPerMinute: DocumentStatisticsOptions.defaultWordsPerMinute,
+        includesFrontMatter: false,
         headingCount: 0,
         headingLevels: [:],
+        sectionStatistics: [],
         paragraphCount: 0,
         linkCount: 0,
         imageCount: 0,
@@ -314,15 +361,27 @@ public enum ExportReadinessSeverity: String, Equatable, Sendable {
 }
 
 public enum DocumentInspectionBuilder {
-    public static func build(document: MarkdownDocument, renderResult: RenderResult) -> DocumentInspectionReport {
-        buildReport(document: document, renderResult: renderResult)
+    public static func build(
+        document: MarkdownDocument,
+        renderResult: RenderResult,
+        statisticsOptions: DocumentStatisticsOptions = .default
+    ) -> DocumentInspectionReport {
+        buildReport(document: document, renderResult: renderResult, statisticsOptions: statisticsOptions)
     }
 
-    public static func build(document: MarkdownDocument, renderResult: RenderResult? = nil) -> DocumentInspectionReport {
-        buildReport(document: document, renderResult: renderResult)
+    public static func build(
+        document: MarkdownDocument,
+        renderResult: RenderResult? = nil,
+        statisticsOptions: DocumentStatisticsOptions = .default
+    ) -> DocumentInspectionReport {
+        buildReport(document: document, renderResult: renderResult, statisticsOptions: statisticsOptions)
     }
 
-    private static func buildReport(document: MarkdownDocument, renderResult: RenderResult?) -> DocumentInspectionReport {
+    private static func buildReport(
+        document: MarkdownDocument,
+        renderResult: RenderResult?,
+        statisticsOptions: DocumentStatisticsOptions
+    ) -> DocumentInspectionReport {
         let diagnostics = deduplicatedDiagnostics(document.frontMatterDiagnostics + (renderResult?.diagnostics ?? []))
         let bodyHTML = renderResult?.bodyHTML ?? ""
         let links = buildLinks(from: bodyHTML, diagnostics: diagnostics)
@@ -332,7 +391,8 @@ public enum DocumentInspectionBuilder {
             renderResult: renderResult,
             links: links,
             assets: assets,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            statisticsOptions: statisticsOptions
         )
         let exportReadiness = buildExportReadiness(
             diagnostics: diagnostics,
@@ -470,13 +530,20 @@ public enum DocumentInspectionBuilder {
         renderResult: RenderResult?,
         links: [DocumentLinkReference],
         assets: [DocumentAssetReference],
-        diagnostics: [RenderDiagnostic]
+        diagnostics: [RenderDiagnostic],
+        statisticsOptions: DocumentStatisticsOptions
     ) -> RichDocumentStatistics {
+        let normalizedOptions = statisticsOptions.normalized()
+        let baseStatistics = DocumentStatisticsCalculator.calculate(document: document, options: normalizedOptions)
         let html = renderResult?.bodyHTML ?? ""
         let outline = renderResult?.outline ?? []
         let headingLevels = outline.reduce(into: [Int: Int]()) { counts, item in
             counts[item.level, default: 0] += 1
         }
+        let sectionStatistics = buildSectionStatistics(
+            in: document.bodyText,
+            outline: outline
+        )
         let missingReferenceKinds: Set<RenderDiagnosticKind> = [
             .missingLocalImage,
             .missingLocalLink,
@@ -486,12 +553,21 @@ public enum DocumentInspectionBuilder {
         ]
 
         return RichDocumentStatistics(
-            words: document.statistics.wordCount,
-            characters: document.statistics.characterCount,
-            lines: document.statistics.lineCount,
-            readingTimeMinutes: document.statistics.readingTimeMinutes,
+            words: baseStatistics.wordCount,
+            characters: baseStatistics.characterCount,
+            lines: baseStatistics.lineCount,
+            readingTimeMinutes: baseStatistics.readingTimeMinutes,
+            estimatedPageCount: estimatedPDFPageCount(
+                words: baseStatistics.wordCount,
+                imageCount: assets.count,
+                tableCount: countOccurrences(of: #"<table\b"#, in: html),
+                codeBlockCount: countFencedCodeBlocks(in: document.bodyText)
+            ),
+            wordsPerMinute: normalizedOptions.wordsPerMinute,
+            includesFrontMatter: normalizedOptions.includesFrontMatter,
             headingCount: outline.count,
             headingLevels: headingLevels,
+            sectionStatistics: sectionStatistics,
             paragraphCount: countOccurrences(of: #"<p(?:\s|>)"#, in: html),
             linkCount: links.count,
             imageCount: assets.count,
@@ -786,6 +862,158 @@ public enum DocumentInspectionBuilder {
                 return pipeCount >= 8 || (pipeCount >= 4 && line.count > 120)
             }
             .count
+    }
+
+    private static func buildSectionStatistics(
+        in markdown: String,
+        outline: [OutlineItem]
+    ) -> [DocumentSectionStatistic] {
+        struct SectionAccumulator {
+            let id: String
+            let title: String
+            let level: Int
+            var lines: [String]
+        }
+
+        var sections: [DocumentSectionStatistic] = []
+        var currentSection: SectionAccumulator?
+        var headingIndex = 0
+        var isInFence = false
+
+        func flushSection() {
+            guard let section = currentSection else {
+                return
+            }
+            let sectionMarkdown = section.lines.joined(separator: "\n")
+            sections.append(
+                DocumentSectionStatistic(
+                    id: section.id,
+                    title: section.title,
+                    level: section.level,
+                    wordCount: DocumentStatisticsCalculator.wordCount(in: sectionMarkdown),
+                    paragraphCount: countMarkdownParagraphs(in: sectionMarkdown)
+                )
+            )
+            currentSection = nil
+        }
+
+        for rawLine in markdown.components(separatedBy: "\n") {
+            let trimmedLine = rawLine.trimmingCharacters(in: .whitespaces)
+            if isFenceLine(trimmedLine) {
+                currentSection?.lines.append(rawLine)
+                isInFence.toggle()
+                continue
+            }
+
+            if !isInFence, let heading = parseMarkdownHeading(trimmedLine) {
+                flushSection()
+                let outlineItem = headingIndex < outline.count ? outline[headingIndex] : nil
+                let outlineTitle = outlineItem?.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                currentSection = SectionAccumulator(
+                    id: outlineItem?.id ?? "section-\(headingIndex + 1)",
+                    title: outlineTitle.flatMap { $0.isEmpty ? nil : $0 } ?? heading.title,
+                    level: outlineItem?.level ?? heading.level,
+                    lines: []
+                )
+                headingIndex += 1
+            } else {
+                currentSection?.lines.append(rawLine)
+            }
+        }
+
+        flushSection()
+        return sections
+    }
+
+    private static func parseMarkdownHeading(_ trimmedLine: String) -> (level: Int, title: String)? {
+        guard trimmedLine.first == Character("#") else {
+            return nil
+        }
+
+        let level = trimmedLine.prefix { $0 == Character("#") }.count
+        guard (1...6).contains(level),
+              trimmedLine.dropFirst(level).first?.isWhitespace == true
+        else {
+            return nil
+        }
+
+        var title = String(trimmedLine.dropFirst(level))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"\s+#+\s*$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        title = normalizedSectionHeadingTitle(title)
+
+        return title.isEmpty ? nil : (level, title)
+    }
+
+    private static func normalizedSectionHeadingTitle(_ title: String) -> String {
+        title
+            .replacingOccurrences(of: #"`([^`]*)`"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"[*_~]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func countMarkdownParagraphs(in markdown: String) -> Int {
+        var count = 0
+        var isInParagraph = false
+        var isInFence = false
+
+        func flushParagraph() {
+            if isInParagraph {
+                count += 1
+                isInParagraph = false
+            }
+        }
+
+        for rawLine in markdown.components(separatedBy: "\n") {
+            let trimmedLine = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedLine.isEmpty else {
+                flushParagraph()
+                continue
+            }
+
+            if isFenceLine(trimmedLine) {
+                flushParagraph()
+                isInFence.toggle()
+                continue
+            }
+
+            if isInFence || isNonParagraphBlock(trimmedLine) {
+                flushParagraph()
+                continue
+            }
+
+            isInParagraph = true
+        }
+
+        flushParagraph()
+        return count
+    }
+
+    private static func isNonParagraphBlock(_ trimmedLine: String) -> Bool {
+        trimmedLine.hasPrefix("|")
+            || trimmedLine.hasPrefix("<")
+            || trimmedLine == "---"
+            || trimmedLine == "***"
+            || parseMarkdownHeading(trimmedLine) != nil
+    }
+
+    private static func isFenceLine(_ trimmedLine: String) -> Bool {
+        trimmedLine.hasPrefix("```") || trimmedLine.hasPrefix("~~~")
+    }
+
+    private static func estimatedPDFPageCount(
+        words: Int,
+        imageCount: Int,
+        tableCount: Int,
+        codeBlockCount: Int
+    ) -> Int {
+        let weightedWords = Double(words + (imageCount * 120) + (tableCount * 80) + (codeBlockCount * 60))
+        guard weightedWords > 0 else {
+            return 0
+        }
+        return max(1, Int(ceil(weightedWords / 500.0)))
     }
 
     private static func isValidRemoteURL(_ source: String) -> Bool {

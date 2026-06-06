@@ -12,11 +12,13 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
     private var webView: WKWebView?
     private var job: Job?
     private var richMarkdownState: RichMarkdownRenderState = .empty
+    private var printConfiguration: PrintConfiguration = .default
 
     func exportPDF(
         html: String,
         baseURL: URL,
         richMarkdownState: RichMarkdownRenderState = .empty,
+        printConfiguration: PrintConfiguration = .default,
         destinationURL: URL,
         completion: @escaping (Result<Void, ExportError>) -> Void
     ) {
@@ -24,6 +26,7 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
             html: html,
             baseURL: baseURL,
             richMarkdownState: richMarkdownState,
+            printConfiguration: printConfiguration,
             job: .pdf(destinationURL: destinationURL, completion: completion)
         )
     }
@@ -32,19 +35,37 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
         html: String,
         baseURL: URL,
         richMarkdownState: RichMarkdownRenderState = .empty,
+        printConfiguration: PrintConfiguration = .default,
         completion: @escaping (Result<Void, ExportError>) -> Void
     ) {
-        load(html: html, baseURL: baseURL, richMarkdownState: richMarkdownState, job: .print(completion: completion))
+        load(
+            html: html,
+            baseURL: baseURL,
+            richMarkdownState: richMarkdownState,
+            printConfiguration: printConfiguration,
+            job: .print(completion: completion)
+        )
     }
 
-    private func load(html: String, baseURL: URL, richMarkdownState: RichMarkdownRenderState, job: Job) {
+    private func load(
+        html: String,
+        baseURL: URL,
+        richMarkdownState: RichMarkdownRenderState,
+        printConfiguration: PrintConfiguration,
+        job: Job
+    ) {
         self.job = job
         self.richMarkdownState = richMarkdownState
+        self.printConfiguration = printConfiguration.normalized()
 
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = richMarkdownState.requiresRichContentRuntime
+        let paperSize = self.printConfiguration.pageSize.paperSizePoints
 
-        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 612, height: 792), configuration: configuration)
+        let webView = WKWebView(
+            frame: CGRect(x: 0, y: 0, width: paperSize.width, height: paperSize.height),
+            configuration: configuration
+        )
         webView.navigationDelegate = self
         self.webView = webView
         webView.loadHTMLString(html, baseURL: baseURL)
@@ -131,12 +152,15 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
     }
 
     private func configuredPrintInfo() -> NSPrintInfo {
+        let normalized = printConfiguration.normalized()
+        let paperSize = normalized.pageSize.paperSizePoints
+        let margins = normalized.margins
         let printInfo = NSPrintInfo()
-        printInfo.paperSize = NSSize(width: 612, height: 792)
-        printInfo.leftMargin = 54
-        printInfo.rightMargin = 54
-        printInfo.topMargin = 54
-        printInfo.bottomMargin = 54
+        printInfo.paperSize = NSSize(width: paperSize.width, height: paperSize.height)
+        printInfo.leftMargin = margins.leftPoints
+        printInfo.rightMargin = margins.rightPoints
+        printInfo.topMargin = margins.topPoints
+        printInfo.bottomMargin = margins.bottomPoints
         printInfo.horizontalPagination = .automatic
         printInfo.verticalPagination = .automatic
         return printInfo
@@ -159,6 +183,7 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
         webView = nil
         job = nil
         richMarkdownState = .empty
+        printConfiguration = .default
     }
 }
 

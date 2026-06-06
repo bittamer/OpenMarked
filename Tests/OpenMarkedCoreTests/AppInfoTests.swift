@@ -230,7 +230,16 @@ final class AppInfoTests: XCTestCase {
             fontScale: 1.2
         )
 
-        store.save(document: document, layout: layout, frame: DocumentWindowFrame(x: 10, y: 20, width: 900, height: 600))
+        let exportDestinations = DocumentExportDestinations(
+            html: URL(fileURLWithPath: "/tmp/openmarked-readme.html"),
+            pdf: URL(fileURLWithPath: "/tmp/openmarked-readme.pdf")
+        )
+        store.save(
+            document: document,
+            layout: layout,
+            frame: DocumentWindowFrame(x: 10, y: 20, width: 900, height: 600),
+            exportDestinations: exportDestinations
+        )
 
         let restored = store.restore(forDocumentID: document.id)
         XCTAssertEqual(restored?.layout, layout)
@@ -238,6 +247,7 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(restored?.layout.outlineDisplayOptions.maximumVisibleLevel, 3)
         XCTAssertTrue(restored?.layout.outlineDisplayOptions.showsAutoNumbers == true)
         XCTAssertEqual(restored?.frame?.width, 900)
+        XCTAssertEqual(restored?.exportDestinations, exportDestinations)
     }
 
     func testApplicationSettingsStorePersistsAndNormalizesSettings() throws {
@@ -247,6 +257,15 @@ final class AppInfoTests: XCTestCase {
 
         let store = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "Settings", lastDocumentPathsKey: "LastPaths")
         let richOptions = RichMarkdownOptions(rendersMermaid: false, validatesRemoteLinks: true)
+        let printConfiguration = PrintConfiguration(
+            pageSize: .a4,
+            margins: PrintMargins(top: 0.1, right: 3.0, bottom: 0.7, left: 0.8),
+            contentMaxWidth: 100,
+            startsHeadingOneOnNewPage: true,
+            startsHeadingTwoOnNewPage: true,
+            includesDocumentTitle: true,
+            themeMode: .defaultPrint
+        )
         store.save(
             ApplicationSettings(
                 defaultThemeID: "missing",
@@ -256,7 +275,8 @@ final class AppInfoTests: XCTestCase {
                 renderProfile: .gitHubReadme,
                 richMarkdownOptions: richOptions,
                 statisticsWordsPerMinute: 999,
-                includesFrontMatterInStatistics: true
+                includesFrontMatterInStatistics: true,
+                printConfiguration: printConfiguration
             )
         )
 
@@ -272,6 +292,14 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(restored.includesFrontMatterInStatistics)
         XCTAssertEqual(restored.documentStatisticsOptions.wordsPerMinute, DocumentStatisticsOptions.maximumWordsPerMinute)
         XCTAssertTrue(restored.documentStatisticsOptions.includesFrontMatter)
+        XCTAssertEqual(restored.printConfiguration.pageSize, .a4)
+        XCTAssertEqual(restored.printConfiguration.margins.top, PrintMargins.minimumInches)
+        XCTAssertEqual(restored.printConfiguration.margins.right, PrintMargins.maximumInches)
+        XCTAssertEqual(restored.printConfiguration.contentMaxWidth, PrintConfiguration.minimumContentMaxWidth)
+        XCTAssertTrue(restored.printConfiguration.startsHeadingOneOnNewPage)
+        XCTAssertTrue(restored.printConfiguration.startsHeadingTwoOnNewPage)
+        XCTAssertTrue(restored.printConfiguration.includesDocumentTitle)
+        XCTAssertEqual(restored.printConfiguration.themeMode, .defaultPrint)
 
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         store.saveLastDocumentURLs([url])
@@ -300,6 +328,7 @@ final class AppInfoTests: XCTestCase {
         XCTAssertFalse(decoded.richMarkdownOptions.validatesRemoteLinks)
         XCTAssertEqual(decoded.statisticsWordsPerMinute, DocumentStatisticsOptions.defaultWordsPerMinute)
         XCTAssertFalse(decoded.includesFrontMatterInStatistics)
+        XCTAssertEqual(decoded.printConfiguration, .default)
     }
 
     func testRenderProfileGroundworkAffectsHeadingAndLinkBehavior() throws {
@@ -1271,6 +1300,43 @@ final class AppInfoTests: XCTestCase {
         XCTAssertFalse(unstyledHTML.contains("<style>"))
     }
 
+    func testPrintConfigurationAppliesToStandaloneHTML() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let configuration = PrintConfiguration(
+            pageSize: .a4,
+            margins: PrintMargins(top: 0.5, right: 0.6, bottom: 0.7, left: 0.8),
+            contentMaxWidth: 700,
+            startsHeadingOneOnNewPage: true,
+            startsHeadingTwoOnNewPage: true,
+            includesDocumentTitle: true,
+            themeMode: .defaultPrint
+        )
+
+        let html = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: result,
+            document: document,
+            options: HTMLExportOptions(printConfiguration: configuration)
+        )
+
+        XCTAssertTrue(html.contains("om-print-document-title"))
+        XCTAssertTrue(html.contains("OpenMarked Fixture README"))
+        XCTAssertTrue(html.contains("om-print-include-title om-print-break-h1 om-print-break-h2 om-print-limit-width om-print-default-theme"))
+        XCTAssertTrue(html.contains("size: A4;"))
+        XCTAssertTrue(html.contains("margin: 0.50in 0.60in 0.70in 0.80in;"))
+        XCTAssertTrue(html.contains("max-width: min(700px, 100%);"))
+        XCTAssertTrue(html.contains("break-before: page;"))
+
+        let unstyledHTML = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: result,
+            document: document,
+            options: HTMLExportOptions(embedsThemeCSS: false, printConfiguration: configuration)
+        )
+        XCTAssertFalse(unstyledHTML.contains("om-print-document-title"))
+        XCTAssertFalse(unstyledHTML.contains("<style>"))
+    }
+
     func testFootnotesRenderWhenEnabled() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/footnotes.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -1431,6 +1497,15 @@ struct AppInfoTests {
 
         let store = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "Settings", lastDocumentPathsKey: "LastPaths")
         let richOptions = RichMarkdownOptions(rendersMermaid: false, validatesRemoteLinks: true)
+        let printConfiguration = PrintConfiguration(
+            pageSize: .a4,
+            margins: PrintMargins(top: 0.1, right: 3.0, bottom: 0.7, left: 0.8),
+            contentMaxWidth: 100,
+            startsHeadingOneOnNewPage: true,
+            startsHeadingTwoOnNewPage: true,
+            includesDocumentTitle: true,
+            themeMode: .defaultPrint
+        )
         store.save(
             ApplicationSettings(
                 defaultThemeID: "missing",
@@ -1440,7 +1515,8 @@ struct AppInfoTests {
                 renderProfile: .gitHubReadme,
                 richMarkdownOptions: richOptions,
                 statisticsWordsPerMinute: 999,
-                includesFrontMatterInStatistics: true
+                includesFrontMatterInStatistics: true,
+                printConfiguration: printConfiguration
             )
         )
 
@@ -1456,6 +1532,14 @@ struct AppInfoTests {
         #expect(restored.includesFrontMatterInStatistics)
         #expect(restored.documentStatisticsOptions.wordsPerMinute == DocumentStatisticsOptions.maximumWordsPerMinute)
         #expect(restored.documentStatisticsOptions.includesFrontMatter)
+        #expect(restored.printConfiguration.pageSize == .a4)
+        #expect(restored.printConfiguration.margins.top == PrintMargins.minimumInches)
+        #expect(restored.printConfiguration.margins.right == PrintMargins.maximumInches)
+        #expect(restored.printConfiguration.contentMaxWidth == PrintConfiguration.minimumContentMaxWidth)
+        #expect(restored.printConfiguration.startsHeadingOneOnNewPage)
+        #expect(restored.printConfiguration.startsHeadingTwoOnNewPage)
+        #expect(restored.printConfiguration.includesDocumentTitle)
+        #expect(restored.printConfiguration.themeMode == .defaultPrint)
 
         let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
         store.saveLastDocumentURLs([url])
@@ -1485,6 +1569,7 @@ struct AppInfoTests {
         #expect(!decoded.richMarkdownOptions.validatesRemoteLinks)
         #expect(decoded.statisticsWordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute)
         #expect(!decoded.includesFrontMatterInStatistics)
+        #expect(decoded.printConfiguration == .default)
     }
 
     @Test("Render profile groundwork affects heading and link behavior")
@@ -2367,6 +2452,44 @@ struct AppInfoTests {
             document: document,
             options: HTMLExportOptions(embedsLocalImages: false, embedsThemeCSS: false)
         )
+        #expect(!unstyledHTML.contains("<style>"))
+    }
+
+    @Test("Print configuration applies to standalone HTML")
+    func printConfigurationAppliesToStandaloneHTML() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let configuration = PrintConfiguration(
+            pageSize: .a4,
+            margins: PrintMargins(top: 0.5, right: 0.6, bottom: 0.7, left: 0.8),
+            contentMaxWidth: 700,
+            startsHeadingOneOnNewPage: true,
+            startsHeadingTwoOnNewPage: true,
+            includesDocumentTitle: true,
+            themeMode: .defaultPrint
+        )
+
+        let html = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: result,
+            document: document,
+            options: HTMLExportOptions(printConfiguration: configuration)
+        )
+
+        #expect(html.contains("om-print-document-title"))
+        #expect(html.contains("OpenMarked Fixture README"))
+        #expect(html.contains("om-print-include-title om-print-break-h1 om-print-break-h2 om-print-limit-width om-print-default-theme"))
+        #expect(html.contains("size: A4;"))
+        #expect(html.contains("margin: 0.50in 0.60in 0.70in 0.80in;"))
+        #expect(html.contains("max-width: min(700px, 100%);"))
+        #expect(html.contains("break-before: page;"))
+
+        let unstyledHTML = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: result,
+            document: document,
+            options: HTMLExportOptions(embedsThemeCSS: false, printConfiguration: configuration)
+        )
+        #expect(!unstyledHTML.contains("om-print-document-title"))
         #expect(!unstyledHTML.contains("<style>"))
     }
 

@@ -171,9 +171,18 @@ private struct AppToolbar: View {
                     Button("Export HTML...") {
                         controller.exportHTML()
                     }
+                    Button("Export HTML Again") {
+                        controller.repeatHTMLExport()
+                    }
+                    .disabled(!controller.canRepeatHTMLExport)
                     Button("Export PDF...") {
                         controller.exportPDF()
                     }
+                    Button("Export PDF Again") {
+                        controller.repeatPDFExport()
+                    }
+                    .disabled(!controller.canRepeatPDFExport)
+                    Divider()
                     Button("Copy Rendered HTML") {
                         controller.copyRenderedHTML()
                     }
@@ -1375,6 +1384,10 @@ struct SettingsView: View {
                 Toggle("Heading links", isOn: richMarkdownBinding(\.validatesHeadingFragments))
                 Toggle("Report remote links", isOn: richMarkdownBinding(\.validatesRemoteLinks))
                     .help("Remote URLs are parsed for manual checks; preview rendering does not crawl remote servers.")
+            }
+
+            Section("Print") {
+                PrintSettingsView()
             }
 
             Section("Export") {

@@ -133,9 +133,11 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
    Expected result: remote image sources are blocked in preview HTML.
 9. Disable raw HTML.
    Expected result: raw HTML is rendered safely as text according to cmark behavior.
-10. Disable HTML export CSS embedding.
+10. Change print page size, margins, content width, title, heading page breaks, and print style.
+   Expected result: PDF export and native Print use the selected page layout; standalone HTML includes print CSS when CSS embedding is enabled.
+11. Disable HTML export CSS embedding.
    Expected result: exported HTML omits embedded style blocks.
-11. Enable and disable session restoration.
+12. Enable and disable session restoration.
    Expected result: last-opened paths are retained only while the setting is enabled.
 
 ## Rich Content Status
@@ -153,11 +155,13 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
    Expected result: local images are embedded when the setting is enabled.
 3. Export `rich-markdown.md` as standalone HTML and open it offline.
    Expected result: callouts, Mermaid diagrams, and KaTeX math render without CDN access; user-authored scripts remain inert or removed.
-4. Copy rendered HTML.
+4. Use Export HTML Again and Export PDF Again after successful exports.
+   Expected result: each command prompts for explicit replacement and writes to the previous per-document destination without reopening a save panel.
+5. Copy rendered HTML.
    Expected result: pasteboard includes rendered HTML and plain text.
-5. Export PDF.
+6. Export PDF.
    Expected result: a PDF is created, print CSS keeps the document readable, and rich content has rendered before capture.
-6. Print.
+7. Print.
    Expected result: the native print panel opens and preview output is readable, including diagrams and equations.
 
 ## Release Gate

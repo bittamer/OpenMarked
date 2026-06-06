@@ -25,6 +25,11 @@ struct OpenMarkedCommands: Commands {
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(!appController.activeCanExport)
 
+            Button("Export HTML Again") {
+                appController.repeatHTMLExport()
+            }
+            .disabled(!appController.activeCanRepeatHTMLExport)
+
             Button("Copy Rendered HTML") {
                 appController.copyRenderedHTML()
             }
@@ -36,6 +41,11 @@ struct OpenMarkedCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: [.command, .option])
             .disabled(!appController.activeCanExport)
+
+            Button("Export PDF Again") {
+                appController.repeatPDFExport()
+            }
+            .disabled(!appController.activeCanRepeatPDFExport)
         }
 
         CommandGroup(replacing: .printItem) {

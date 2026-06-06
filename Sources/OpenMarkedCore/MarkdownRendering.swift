@@ -607,7 +607,8 @@ public enum HTMLDocumentAssembler {
         baseURL: URL? = nil,
         theme: PreviewTheme = PreviewThemeStore.defaultTheme,
         fontScale: Double = 1.0,
-        richMarkdownState: RichMarkdownRenderState = .empty
+        richMarkdownState: RichMarkdownRenderState = .empty,
+        printConfiguration: PrintConfiguration = .default
     ) -> String {
         let escapedTitle = HTMLUtilities.escapeText(title)
         let baseElement: String
@@ -619,6 +620,11 @@ public enum HTMLDocumentAssembler {
         let boundedFontScale = min(2.0, max(0.6, fontScale))
         let maxWidth = max(560, theme.defaultMaxWidth)
         let richContentStyles = RichContentHTMLAssets.styleBlock(for: richMarkdownState)
+        let normalizedPrintConfiguration = printConfiguration.normalized()
+        let bodyClassAttribute = bodyClassAttribute(for: normalizedPrintConfiguration)
+        let printDocumentTitleHTML = printDocumentTitleHTML(title: title, configuration: normalizedPrintConfiguration)
+        let printDocumentTitleScreenCSS = printDocumentTitleScreenCSS(configuration: normalizedPrintConfiguration)
+        let printCSS = printCSS(theme: theme, configuration: normalizedPrintConfiguration)
 
         return """
         <!doctype html>
@@ -635,18 +641,124 @@ public enum HTMLDocumentAssembler {
           }
           \(theme.screenCSS)
           \(theme.codeHighlightingCSS)
+          \(printDocumentTitleScreenCSS)
           @media print {
           \(theme.printCSS)
+          \(printCSS)
           }
           </style>\(richContentStyles)
         </head>
-        <body>
+        <body\(bodyClassAttribute)>
           <main class="om-document">
+        \(printDocumentTitleHTML)
         \(bodyHTML)
           </main>
         </body>
         </html>
         """
+    }
+
+    public static func printCSS(theme: PreviewTheme, configuration: PrintConfiguration) -> String {
+        let normalized = configuration.normalized()
+        guard normalized.requiresPrintStyleOverrides else {
+            return ""
+        }
+
+        var cssParts: [String] = []
+
+        if normalized.themeMode == .defaultPrint {
+            cssParts.append(PreviewThemeStore.defaultTheme.printCSS)
+        }
+
+        if normalized.overridesPageSetup {
+            cssParts.append(
+                """
+                @page {
+                  size: \(normalized.pageSize.cssValue);
+                  margin: \(normalized.margins.cssValue);
+                }
+                """
+            )
+        }
+
+        if let contentMaxWidth = normalized.contentMaxWidth {
+            cssParts.append(
+                """
+                body.om-print-limit-width .om-document {
+                  max-width: min(\(contentMaxWidth)px, 100%);
+                  margin-left: auto;
+                  margin-right: auto;
+                }
+                """
+            )
+        }
+
+        if normalized.includesDocumentTitle {
+            cssParts.append(
+                """
+                body.om-print-include-title .om-print-document-title {
+                  display: block;
+                  margin: 0 0 1.4em;
+                  padding: 0 0 0.5em;
+                  border-bottom: 1pt solid currentColor;
+                  font-size: 18pt;
+                  font-weight: 700;
+                  line-height: 1.25;
+                }
+                """
+            )
+        }
+
+        if normalized.startsHeadingOneOnNewPage {
+            cssParts.append(
+                """
+                body.om-print-break-h1 .om-document h1:not(:first-of-type) {
+                  break-before: page;
+                }
+                """
+            )
+        }
+
+        if normalized.startsHeadingTwoOnNewPage {
+            cssParts.append(
+                """
+                body.om-print-break-h2 .om-document h2 {
+                  break-before: page;
+                }
+                """
+            )
+        }
+
+        return cssParts.joined(separator: "\n")
+    }
+
+    public static func printDocumentTitleScreenCSS(configuration: PrintConfiguration) -> String {
+        guard configuration.normalized().includesDocumentTitle else {
+            return ""
+        }
+
+        return """
+        .om-print-document-title {
+          display: none;
+        }
+        """
+    }
+
+    public static func bodyClassAttribute(for configuration: PrintConfiguration) -> String {
+        let classes = configuration.normalized().bodyClasses
+        guard !classes.isEmpty else {
+            return ""
+        }
+
+        return #" class="\#(HTMLUtilities.escapeAttribute(classes.joined(separator: " ")))""#
+    }
+
+    public static func printDocumentTitleHTML(title: String, configuration: PrintConfiguration) -> String {
+        guard configuration.normalized().includesDocumentTitle else {
+            return ""
+        }
+
+        return #"<header class="om-print-document-title">\#(HTMLUtilities.escapeText(title))</header>"#
     }
 }
 

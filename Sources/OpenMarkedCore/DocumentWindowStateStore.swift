@@ -14,12 +14,25 @@ public struct DocumentWindowFrame: Codable, Equatable, Sendable {
     }
 }
 
+public struct DocumentExportDestinations: Codable, Equatable, Sendable {
+    public var html: URL?
+    public var pdf: URL?
+
+    public init(html: URL? = nil, pdf: URL? = nil) {
+        self.html = html
+        self.pdf = pdf
+    }
+
+    public static let empty = DocumentExportDestinations()
+}
+
 public struct PersistedDocumentWindowState: Codable, Equatable, Sendable {
     public let documentID: String
     public let sourceURL: URL
     public let bookmarkData: Data?
     public let layout: WindowLayoutState
     public let frame: DocumentWindowFrame?
+    public let exportDestinations: DocumentExportDestinations
     public let savedAt: Date
 
     public init(
@@ -28,6 +41,7 @@ public struct PersistedDocumentWindowState: Codable, Equatable, Sendable {
         bookmarkData: Data?,
         layout: WindowLayoutState,
         frame: DocumentWindowFrame?,
+        exportDestinations: DocumentExportDestinations = .empty,
         savedAt: Date = Date()
     ) {
         self.documentID = documentID
@@ -35,7 +49,29 @@ public struct PersistedDocumentWindowState: Codable, Equatable, Sendable {
         self.bookmarkData = bookmarkData
         self.layout = layout
         self.frame = frame
+        self.exportDestinations = exportDestinations
         self.savedAt = savedAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case documentID
+        case sourceURL
+        case bookmarkData
+        case layout
+        case frame
+        case exportDestinations
+        case savedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        documentID = try container.decode(String.self, forKey: .documentID)
+        sourceURL = try container.decode(URL.self, forKey: .sourceURL)
+        bookmarkData = try container.decodeIfPresent(Data.self, forKey: .bookmarkData)
+        layout = try container.decode(WindowLayoutState.self, forKey: .layout)
+        frame = try container.decodeIfPresent(DocumentWindowFrame.self, forKey: .frame)
+        exportDestinations = try container.decodeIfPresent(DocumentExportDestinations.self, forKey: .exportDestinations) ?? .empty
+        savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? Date()
     }
 }
 
@@ -56,7 +92,13 @@ public final class DocumentWindowStateStore: @unchecked Sendable {
         persist(states)
     }
 
-    public func save(document: MarkdownDocument, layout: WindowLayoutState, frame: DocumentWindowFrame? = nil, savedAt: Date = Date()) {
+    public func save(
+        document: MarkdownDocument,
+        layout: WindowLayoutState,
+        frame: DocumentWindowFrame? = nil,
+        exportDestinations: DocumentExportDestinations = .empty,
+        savedAt: Date = Date()
+    ) {
         save(
             PersistedDocumentWindowState(
                 documentID: document.id,
@@ -64,6 +106,7 @@ public final class DocumentWindowStateStore: @unchecked Sendable {
                 bookmarkData: document.securityScopedBookmark?.data,
                 layout: layout,
                 frame: frame,
+                exportDestinations: exportDestinations,
                 savedAt: savedAt
             )
         )

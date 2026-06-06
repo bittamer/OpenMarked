@@ -15,6 +15,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var richMarkdownOptions: RichMarkdownOptions
     public var statisticsWordsPerMinute: Int
     public var includesFrontMatterInStatistics: Bool
+    public var printConfiguration: PrintConfiguration
 
     public init(
         defaultThemeID: String = PreviewThemeStore.defaultThemeID,
@@ -30,7 +31,8 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         renderProfile: MarkdownRenderProfile = .openMarked,
         richMarkdownOptions: RichMarkdownOptions = .default,
         statisticsWordsPerMinute: Int = DocumentStatisticsOptions.defaultWordsPerMinute,
-        includesFrontMatterInStatistics: Bool = false
+        includesFrontMatterInStatistics: Bool = false,
+        printConfiguration: PrintConfiguration = .default
     ) {
         self.defaultThemeID = defaultThemeID
         self.appChromeThemeID = appChromeThemeID
@@ -46,6 +48,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         self.richMarkdownOptions = richMarkdownOptions
         self.statisticsWordsPerMinute = statisticsWordsPerMinute
         self.includesFrontMatterInStatistics = includesFrontMatterInStatistics
+        self.printConfiguration = printConfiguration
     }
 
     public static let `default` = ApplicationSettings()
@@ -61,6 +64,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         )
         .normalized()
         .wordsPerMinute
+        settings.printConfiguration = printConfiguration.normalized()
         return settings
     }
 
@@ -95,6 +99,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         case richMarkdownOptions
         case statisticsWordsPerMinute
         case includesFrontMatterInStatistics
+        case printConfiguration
     }
 
     public init(from decoder: Decoder) throws {
@@ -115,7 +120,8 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
             renderProfile: try container.decodeIfPresent(MarkdownRenderProfile.self, forKey: .renderProfile) ?? defaults.renderProfile,
             richMarkdownOptions: try container.decodeIfPresent(RichMarkdownOptions.self, forKey: .richMarkdownOptions) ?? defaults.richMarkdownOptions,
             statisticsWordsPerMinute: try container.decodeIfPresent(Int.self, forKey: .statisticsWordsPerMinute) ?? defaults.statisticsWordsPerMinute,
-            includesFrontMatterInStatistics: try container.decodeIfPresent(Bool.self, forKey: .includesFrontMatterInStatistics) ?? defaults.includesFrontMatterInStatistics
+            includesFrontMatterInStatistics: try container.decodeIfPresent(Bool.self, forKey: .includesFrontMatterInStatistics) ?? defaults.includesFrontMatterInStatistics,
+            printConfiguration: try container.decodeIfPresent(PrintConfiguration.self, forKey: .printConfiguration) ?? defaults.printConfiguration
         )
     }
 }

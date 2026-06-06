@@ -16,6 +16,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     private var sourceWatcher: FileSystemWatcher?
     private var assetWatchers: [URL: FileSystemWatcher] = [:]
     private var activePrintExporter: WebKitPrintExporter?
+    private var exportDestinations = DocumentExportDestinations.empty
 
     weak var window: NSWindow? {
         didSet {
@@ -30,10 +31,19 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         return false
     }
 
+    var canRepeatHTMLExport: Bool {
+        state.canExport && exportDestinations.html != nil
+    }
+
+    var canRepeatPDFExport: Bool {
+        state.canExport && exportDestinations.pdf != nil
+    }
+
     func open(url: URL) {
         stopLivePreview()
         previewNavigationRequest = nil
         previewSearchRequest = PreviewSearchRequest(action: .clear)
+        exportDestinations = .empty
         state.beginOpening(url: url)
         updateWindowTitle()
 
@@ -43,6 +53,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             state.finishOpening(document: document)
             if let restoredState = stateStore.restore(forDocumentID: markdownDocument.id) {
                 state.applyRestoredLayout(restoredState.layout)
+                exportDestinations = restoredState.exportDestinations
             } else {
                 state.applyRestoredLayout(AppController.shared.settings.defaultLayout)
             }
@@ -175,22 +186,25 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             return
         }
 
-        do {
-            let html = HTMLExportDocumentBuilder.standaloneHTML(
-                renderResult: context.renderResult,
-                document: context.document,
-                options: HTMLExportOptions(
-                    embedsLocalImages: AppController.shared.settings.embedsLocalImagesInHTMLExport,
-                    embedsThemeCSS: AppController.shared.settings.embedsCSSInHTMLExport
-                )
-            )
-            try HTMLExportWriter.write(html: html, to: destinationURL)
-            state.notePlaceholderAction("Exported HTML to \(destinationURL.lastPathComponent)")
-        } catch let error as ExportError {
-            presentExportError(error)
-        } catch {
-            presentExportError(.writeFailed(path: destinationURL.path, reason: error.localizedDescription))
+        exportHTML(context: context, to: destinationURL)
+    }
+
+    func repeatHTMLExport() {
+        guard let destinationURL = exportDestinations.html else {
+            state.notePlaceholderAction("No previous HTML export")
+            return
         }
+
+        guard let context = currentExportContext() else {
+            presentExportError(.missingRenderedDocument)
+            return
+        }
+
+        guard confirmRepeatExport(kind: "HTML", destinationURL: destinationURL) else {
+            return
+        }
+
+        exportHTML(context: context, to: destinationURL)
     }
 
     func copyRenderedHTML() {
@@ -221,31 +235,25 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             return
         }
 
-        let html = HTMLExportDocumentBuilder.standaloneHTML(
-            renderResult: context.renderResult,
-            document: context.document
-        )
-        let exporter = WebKitPrintExporter()
-        activePrintExporter = exporter
-        state.notePlaceholderAction("Exporting PDF")
-        exporter.exportPDF(
-            html: html,
-            baseURL: context.document.sourceURL.deletingLastPathComponent(),
-            richMarkdownState: context.renderResult.richMarkdownState,
-            destinationURL: destinationURL
-        ) { [weak self] result in
-            guard let self else {
-                return
-            }
+        exportPDF(context: context, to: destinationURL)
+    }
 
-            self.activePrintExporter = nil
-            switch result {
-            case .success:
-                self.state.notePlaceholderAction("Exported PDF to \(destinationURL.lastPathComponent)")
-            case .failure(let error):
-                self.presentExportError(error)
-            }
+    func repeatPDFExport() {
+        guard let destinationURL = exportDestinations.pdf else {
+            state.notePlaceholderAction("No previous PDF export")
+            return
         }
+
+        guard let context = currentExportContext() else {
+            presentExportError(.missingRenderedDocument)
+            return
+        }
+
+        guard confirmRepeatExport(kind: "PDF", destinationURL: destinationURL) else {
+            return
+        }
+
+        exportPDF(context: context, to: destinationURL)
     }
 
     func printDocument() {
@@ -256,7 +264,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
         let html = HTMLExportDocumentBuilder.standaloneHTML(
             renderResult: context.renderResult,
-            document: context.document
+            document: context.document,
+            options: HTMLExportOptions(printConfiguration: AppController.shared.settings.printConfiguration)
         )
         let exporter = WebKitPrintExporter()
         activePrintExporter = exporter
@@ -264,7 +273,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         exporter.print(
             html: html,
             baseURL: context.document.sourceURL.deletingLastPathComponent(),
-            richMarkdownState: context.renderResult.richMarkdownState
+            richMarkdownState: context.renderResult.richMarkdownState,
+            printConfiguration: AppController.shared.settings.printConfiguration
         ) { [weak self] result in
             guard let self else {
                 return
@@ -461,7 +471,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                     width: Double($0.frame.size.width),
                     height: Double($0.frame.size.height)
                 )
-            }
+            },
+            exportDestinations: exportDestinations
         )
     }
 
@@ -631,6 +642,77 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     private var currentSourceURL: URL? {
         state.currentMarkdownDocument?.sourceURL.standardizedFileURL
+    }
+
+    private func exportHTML(
+        context: (document: MarkdownDocument, renderResult: RenderResult),
+        to destinationURL: URL
+    ) {
+        do {
+            let settings = AppController.shared.settings
+            let html = HTMLExportDocumentBuilder.standaloneHTML(
+                renderResult: context.renderResult,
+                document: context.document,
+                options: HTMLExportOptions(
+                    embedsLocalImages: settings.embedsLocalImagesInHTMLExport,
+                    embedsThemeCSS: settings.embedsCSSInHTMLExport,
+                    printConfiguration: settings.printConfiguration
+                )
+            )
+            try HTMLExportWriter.write(html: html, to: destinationURL)
+            exportDestinations.html = destinationURL.standardizedFileURL
+            persistCurrentWindowState()
+            state.notePlaceholderAction("Exported HTML to \(destinationURL.lastPathComponent)")
+        } catch let error as ExportError {
+            presentExportError(error)
+        } catch {
+            presentExportError(.writeFailed(path: destinationURL.path, reason: error.localizedDescription))
+        }
+    }
+
+    private func exportPDF(
+        context: (document: MarkdownDocument, renderResult: RenderResult),
+        to destinationURL: URL
+    ) {
+        let html = HTMLExportDocumentBuilder.standaloneHTML(
+            renderResult: context.renderResult,
+            document: context.document,
+            options: HTMLExportOptions(printConfiguration: AppController.shared.settings.printConfiguration)
+        )
+        let exporter = WebKitPrintExporter()
+        activePrintExporter = exporter
+        state.notePlaceholderAction("Exporting PDF")
+        exporter.exportPDF(
+            html: html,
+            baseURL: context.document.sourceURL.deletingLastPathComponent(),
+            richMarkdownState: context.renderResult.richMarkdownState,
+            printConfiguration: AppController.shared.settings.printConfiguration,
+            destinationURL: destinationURL
+        ) { [weak self] result in
+            guard let self else {
+                return
+            }
+
+            self.activePrintExporter = nil
+            switch result {
+            case .success:
+                self.exportDestinations.pdf = destinationURL.standardizedFileURL
+                self.persistCurrentWindowState()
+                self.state.notePlaceholderAction("Exported PDF to \(destinationURL.lastPathComponent)")
+            case .failure(let error):
+                self.presentExportError(error)
+            }
+        }
+    }
+
+    private func confirmRepeatExport(kind: String, destinationURL: URL) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Replace Previous \(kind) Export?"
+        alert.informativeText = "OpenMarked will write \(destinationURL.path)."
+        alert.addButton(withTitle: "Replace")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func currentExportContext() -> (document: MarkdownDocument, renderResult: RenderResult)? {

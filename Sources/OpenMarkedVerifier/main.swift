@@ -155,13 +155,23 @@ let savedLayout = WindowLayoutState(
     selectedThemeID: "default",
     fontScale: 1.2
 )
-store.save(document: markdownDocument, layout: savedLayout, frame: DocumentWindowFrame(x: 1, y: 2, width: 900, height: 600))
+let savedExportDestinations = DocumentExportDestinations(
+    html: URL(fileURLWithPath: "/tmp/openmarked-verifier.html"),
+    pdf: URL(fileURLWithPath: "/tmp/openmarked-verifier.pdf")
+)
+store.save(
+    document: markdownDocument,
+    layout: savedLayout,
+    frame: DocumentWindowFrame(x: 1, y: 2, width: 900, height: 600),
+    exportDestinations: savedExportDestinations
+)
 let restored = store.restore(forDocumentID: markdownDocument.id)
 verify(restored?.layout == savedLayout, "window layout should persist")
 verify(restored?.layout.outlineDisplayOptions.mode == .flat, "outline display mode should persist")
 verify(restored?.layout.outlineDisplayOptions.maximumVisibleLevel == 3, "outline visible level should persist")
 verify(restored?.layout.outlineDisplayOptions.showsAutoNumbers == true, "outline numbering preference should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
+verify(restored?.exportDestinations == savedExportDestinations, "previous export destinations should persist per document")
 let oldLayoutPayload = Data(
     """
     {
@@ -215,6 +225,15 @@ let filteredCollapsedOutline = OutlineDisplayBuilder.items(
 verify(filteredCollapsedOutline.map(\.id) == ["details"], "outline filtering should find collapsed headings")
 
 let settingsStore = ApplicationSettingsStore(userDefaults: userDefaults, settingsKey: "VerifierSettings", lastDocumentPathsKey: "VerifierLastPaths")
+let savedPrintConfiguration = PrintConfiguration(
+    pageSize: .a4,
+    margins: PrintMargins(top: 0.1, right: 3.0, bottom: 0.7, left: 0.8),
+    contentMaxWidth: 100,
+    startsHeadingOneOnNewPage: true,
+    startsHeadingTwoOnNewPage: true,
+    includesDocumentTitle: true,
+    themeMode: .defaultPrint
+)
 let savedSettings = ApplicationSettings(
     defaultThemeID: "missing",
     appChromeThemeID: "tokyo-night",
@@ -222,7 +241,8 @@ let savedSettings = ApplicationSettings(
     isLivePreviewEnabled: false,
     renderProfile: .gitHubReadme,
     statisticsWordsPerMinute: 999,
-    includesFrontMatterInStatistics: true
+    includesFrontMatterInStatistics: true,
+    printConfiguration: savedPrintConfiguration
 )
 settingsStore.save(savedSettings)
 let restoredSettings = settingsStore.load()
@@ -236,6 +256,14 @@ verify(!restoredSettings.richMarkdownOptions.validatesRemoteLinks, "remote link 
 verify(restoredSettings.statisticsWordsPerMinute == DocumentStatisticsOptions.maximumWordsPerMinute, "settings should clamp words-per-minute")
 verify(restoredSettings.includesFrontMatterInStatistics, "settings should persist front matter statistics preference")
 verify(restoredSettings.documentStatisticsOptions.includesFrontMatter, "settings should expose normalized statistics options")
+verify(restoredSettings.printConfiguration.pageSize == .a4, "settings should persist print page size")
+verify(restoredSettings.printConfiguration.margins.top == PrintMargins.minimumInches, "settings should clamp small print margins")
+verify(restoredSettings.printConfiguration.margins.right == PrintMargins.maximumInches, "settings should clamp large print margins")
+verify(restoredSettings.printConfiguration.contentMaxWidth == PrintConfiguration.minimumContentMaxWidth, "settings should clamp print content width")
+verify(restoredSettings.printConfiguration.startsHeadingOneOnNewPage, "settings should persist print H1 page breaks")
+verify(restoredSettings.printConfiguration.startsHeadingTwoOnNewPage, "settings should persist print H2 page breaks")
+verify(restoredSettings.printConfiguration.includesDocumentTitle, "settings should persist print title preference")
+verify(restoredSettings.printConfiguration.themeMode == .defaultPrint, "settings should persist print theme mode")
 settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL])
 verify(settingsStore.loadLastDocumentURLs().first?.path == markdownDocument.sourceURL.path, "settings store should persist last document paths")
 
@@ -254,6 +282,7 @@ verify(decodedOldSettings.richMarkdownOptions == .default, "old settings payload
 verify(decodedOldSettings.renderProfile == .openMarked, "old settings payloads should decode with the OpenMarked render profile")
 verify(decodedOldSettings.statisticsWordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute, "old settings payloads should decode with default reading speed")
 verify(!decodedOldSettings.includesFrontMatterInStatistics, "old settings payloads should keep front matter excluded from statistics")
+verify(decodedOldSettings.printConfiguration == .default, "old settings payloads should decode with default print settings")
 let verifierUserThemeID = "\(UserPreviewTheme.idPrefix)verifier"
 let customThemeSettings = ApplicationSettings(defaultThemeID: verifierUserThemeID).normalized()
 verify(customThemeSettings.defaultThemeID == verifierUserThemeID, "user preview theme ids should survive settings normalization")
@@ -473,6 +502,26 @@ let unstyledExportHTML = HTMLExportDocumentBuilder.standaloneHTML(
     options: HTMLExportOptions(embedsLocalImages: false, embedsThemeCSS: false)
 )
 verify(!unstyledExportHTML.contains("<style>"), "HTML export should be able to omit embedded CSS")
+let printConfiguredHTML = HTMLExportDocumentBuilder.standaloneHTML(
+    renderResult: renderResult,
+    document: markdownDocument,
+    options: HTMLExportOptions(
+        printConfiguration: PrintConfiguration(
+            pageSize: .a4,
+            margins: PrintMargins(top: 0.5, right: 0.6, bottom: 0.7, left: 0.8),
+            contentMaxWidth: 700,
+            startsHeadingOneOnNewPage: true,
+            startsHeadingTwoOnNewPage: true,
+            includesDocumentTitle: true,
+            themeMode: .defaultPrint
+        )
+    )
+)
+verify(printConfiguredHTML.contains("om-print-document-title"), "print configuration should inject print-only document title markup")
+verify(printConfiguredHTML.contains("size: A4;"), "print configuration should inject page size CSS")
+verify(printConfiguredHTML.contains("margin: 0.50in 0.60in 0.70in 0.80in;"), "print configuration should inject margin CSS")
+verify(printConfiguredHTML.contains("max-width: min(700px, 100%);"), "print configuration should inject content width CSS")
+verify(printConfiguredHTML.contains("break-before: page;"), "print configuration should inject heading page-break CSS")
 
 let htmlExportURL = FileManager.default.temporaryDirectory.appendingPathComponent("openmarked-export-\(UUID().uuidString).html")
 try HTMLExportWriter.write(html: exportedLocalImageHTML, to: htmlExportURL)

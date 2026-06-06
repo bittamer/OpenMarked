@@ -30,6 +30,14 @@ final class AppController: ObservableObject {
         activeWindowController?.state.canExport ?? false
     }
 
+    var activeCanRepeatHTMLExport: Bool {
+        activeWindowController?.canRepeatHTMLExport ?? false
+    }
+
+    var activeCanRepeatPDFExport: Bool {
+        activeWindowController?.canRepeatPDFExport ?? false
+    }
+
     var activeHasDocument: Bool {
         activeWindowController?.state.hasDocument ?? false
     }
@@ -258,12 +266,20 @@ final class AppController: ObservableObject {
         activeWindowController?.exportHTML()
     }
 
+    func repeatHTMLExport() {
+        activeWindowController?.repeatHTMLExport()
+    }
+
     func copyRenderedHTML() {
         activeWindowController?.copyRenderedHTML()
     }
 
     func exportPDF() {
         activeWindowController?.exportPDF()
+    }
+
+    func repeatPDFExport() {
+        activeWindowController?.repeatPDFExport()
     }
 
     func printDocument() {

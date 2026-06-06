@@ -1,5 +1,11 @@
 import Foundation
 
+public enum DocumentTitleSource: String, Equatable, Sendable {
+    case frontMatter
+    case firstHeading
+    case fileName
+}
+
 public struct MarkdownDocument: Equatable, Identifiable, Sendable {
     public let id: String
     public let sourceURL: URL
@@ -7,6 +13,7 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
     public let sourceText: String
     public let bodyText: String
     public let frontMatter: FrontMatter?
+    public let frontMatterDiagnostics: [RenderDiagnostic]
     public let metadata: DocumentFileMetadata
     public let statistics: DocumentStatistics
     public let loadedAt: Date
@@ -17,6 +24,7 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
         sourceText: String,
         bodyText: String,
         frontMatter: FrontMatter?,
+        frontMatterDiagnostics: [RenderDiagnostic] = [],
         metadata: DocumentFileMetadata,
         statistics: DocumentStatistics,
         loadedAt: Date,
@@ -27,6 +35,7 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
         self.sourceText = sourceText
         self.bodyText = bodyText
         self.frontMatter = frontMatter
+        self.frontMatterDiagnostics = frontMatterDiagnostics
         self.metadata = metadata
         self.statistics = statistics
         self.loadedAt = loadedAt
@@ -39,6 +48,31 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
             return title
         }
         return displayName
+    }
+
+    public var resolvedTitle: String {
+        switch resolvedTitleSource {
+        case .frontMatter:
+            return frontMatter?.title ?? displayName
+        case .firstHeading:
+            return firstHeadingTitle ?? displayName
+        case .fileName:
+            return displayName
+        }
+    }
+
+    public var resolvedTitleSource: DocumentTitleSource {
+        if let title = frontMatter?.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .frontMatter
+        }
+        if firstHeadingTitle != nil {
+            return .firstHeading
+        }
+        return .fileName
+    }
+
+    public var firstHeadingTitle: String? {
+        MarkdownDocumentTitleResolver.firstHeadingTitle(in: bodyText)
     }
 }
 
@@ -57,6 +91,7 @@ public struct DocumentFileMetadata: Equatable, Sendable {
 public enum FrontMatterFormat: String, Equatable, Sendable {
     case yaml
     case toml
+    case json
 }
 
 public struct FrontMatter: Equatable, Sendable {
@@ -217,6 +252,7 @@ public enum MarkdownDocumentLoader {
             sourceText: normalizedText,
             bodyText: parsedFrontMatter.bodyText,
             frontMatter: parsedFrontMatter.frontMatter,
+            frontMatterDiagnostics: parsedFrontMatter.diagnostics,
             metadata: metadata,
             statistics: statistics,
             loadedAt: loadedAt,
@@ -263,8 +299,20 @@ public enum MarkdownDocumentLoader {
     }
 }
 
+public struct FrontMatterParseResult: Equatable, Sendable {
+    public let frontMatter: FrontMatter?
+    public let bodyText: String
+    public let diagnostics: [RenderDiagnostic]
+
+    public init(frontMatter: FrontMatter?, bodyText: String, diagnostics: [RenderDiagnostic] = []) {
+        self.frontMatter = frontMatter
+        self.bodyText = bodyText
+        self.diagnostics = diagnostics
+    }
+}
+
 public enum FrontMatterParser {
-    public static func parse(_ sourceText: String) -> (frontMatter: FrontMatter?, bodyText: String) {
+    public static func parse(_ sourceText: String) -> FrontMatterParseResult {
         if let parsed = parse(sourceText, delimiter: "---", format: .yaml) {
             return parsed
         }
@@ -273,17 +321,32 @@ public enum FrontMatterParser {
             return parsed
         }
 
-        return (nil, sourceText)
+        if let parsed = parse(sourceText, delimiter: ";;;", format: .json) {
+            return parsed
+        }
+
+        return FrontMatterParseResult(frontMatter: nil, bodyText: sourceText)
     }
 
-    private static func parse(_ sourceText: String, delimiter: String, format: FrontMatterFormat) -> (frontMatter: FrontMatter?, bodyText: String)? {
+    private static func parse(_ sourceText: String, delimiter: String, format: FrontMatterFormat) -> FrontMatterParseResult? {
         let lines = sourceText.components(separatedBy: "\n")
         guard lines.first == delimiter else {
             return nil
         }
 
         guard let closingIndex = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == delimiter }) else {
-            return nil
+            return FrontMatterParseResult(
+                frontMatter: nil,
+                bodyText: sourceText,
+                diagnostics: [
+                    RenderDiagnostic(
+                        severity: .warning,
+                        kind: .malformedFrontMatter,
+                        message: "Front matter opened with '\(delimiter)' but no closing delimiter was found.",
+                        source: delimiter
+                    )
+                ]
+            )
         }
 
         let raw = lines[1..<closingIndex].joined(separator: "\n")
@@ -294,23 +357,57 @@ public enum FrontMatterParser {
             bodyText = ""
         }
 
-        return (
-            FrontMatter(format: format, raw: raw, values: parseValues(raw, format: format)),
-            bodyText
+        let parsedValues = parseValues(raw, format: format)
+        return FrontMatterParseResult(
+            frontMatter: FrontMatter(format: format, raw: raw, values: parsedValues.values),
+            bodyText: bodyText,
+            diagnostics: parsedValues.diagnostics
         )
     }
 
-    private static func parseValues(_ raw: String, format: FrontMatterFormat) -> [String: String] {
+    private static func parseValues(_ raw: String, format: FrontMatterFormat) -> (values: [String: String], diagnostics: [RenderDiagnostic]) {
+        if format == .json {
+            return parseJSONValues(raw)
+        }
+
         var values: [String: String] = [:]
+        var diagnostics: [RenderDiagnostic] = []
+        var pendingNestedKey: String?
+        var pendingNestedLines: [String] = []
+
+        func flushNestedValue() {
+            guard let key = pendingNestedKey else {
+                return
+            }
+            values[key] = normalizedNestedValue(from: pendingNestedLines)
+            pendingNestedKey = nil
+            pendingNestedLines = []
+        }
 
         for line in raw.components(separatedBy: "\n") {
+            let isIndented = line.first?.isWhitespace == true
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty, !trimmed.hasPrefix("#") else {
                 continue
             }
 
+            if isIndented, pendingNestedKey != nil {
+                pendingNestedLines.append(trimmed)
+                continue
+            }
+
+            flushNestedValue()
+
             let separator = format == .yaml ? ":" : "="
-            guard let range = trimmed.range(of: separator) else {
+            guard let range = trimmed.range(of: separator), !trimmed.hasPrefix("[") else {
+                diagnostics.append(
+                    RenderDiagnostic(
+                        severity: .warning,
+                        kind: .malformedFrontMatter,
+                        message: "Front matter line '\(trimmed)' could not be parsed.",
+                        source: trimmed
+                    )
+                )
                 continue
             }
 
@@ -325,10 +422,147 @@ public enum FrontMatterParser {
                 continue
             }
 
-            values[key] = value
+            if value.isEmpty {
+                pendingNestedKey = key
+                pendingNestedLines = []
+            } else {
+                values[key] = value
+            }
         }
 
-        return values
+        flushNestedValue()
+
+        return (values, diagnostics)
+    }
+
+    private static func parseJSONValues(_ raw: String) -> (values: [String: String], diagnostics: [RenderDiagnostic]) {
+        do {
+            let object = try JSONSerialization.jsonObject(with: Data(raw.utf8), options: [])
+            guard let dictionary = object as? [String: Any] else {
+                return (
+                    [:],
+                    [
+                        RenderDiagnostic(
+                            severity: .warning,
+                            kind: .malformedFrontMatter,
+                            message: "JSON front matter must be an object.",
+                            source: "json"
+                        )
+                    ]
+                )
+            }
+
+            var values: [String: String] = [:]
+            for (key, value) in dictionary {
+                values[key.lowercased()] = stringifyJSONValue(value)
+            }
+            return (values, [])
+        } catch {
+            return (
+                [:],
+                [
+                    RenderDiagnostic(
+                        severity: .warning,
+                        kind: .malformedFrontMatter,
+                        message: "JSON front matter could not be parsed.",
+                        source: "json"
+                    )
+                ]
+            )
+        }
+    }
+
+    private static func normalizedNestedValue(from lines: [String]) -> String {
+        let values = lines.compactMap { line -> String? in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else {
+                return nil
+            }
+            if trimmed.hasPrefix("-") {
+                return trimmed
+                    .dropFirst()
+                    .trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            }
+            return trimmed
+        }
+
+        guard !values.isEmpty else {
+            return ""
+        }
+        if lines.allSatisfy({ $0.trimmingCharacters(in: .whitespaces).hasPrefix("-") }) {
+            return "[\(values.joined(separator: ", "))]"
+        }
+        return "{ \(values.joined(separator: "; ")) }"
+    }
+
+    private static func stringifyJSONValue(_ value: Any) -> String {
+        switch value {
+        case let string as String:
+            return string
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return number.boolValue ? "true" : "false"
+            }
+            return number.stringValue
+        case let array as [Any]:
+            return "[\(array.map(stringifyJSONValue).joined(separator: ", "))]"
+        case let dictionary as [String: Any]:
+            let body = dictionary
+                .sorted { $0.key < $1.key }
+                .map { "\($0.key): \(stringifyJSONValue($0.value))" }
+                .joined(separator: "; ")
+            return "{ \(body) }"
+        default:
+            return "\(value)"
+        }
+    }
+}
+
+private enum MarkdownDocumentTitleResolver {
+    static func firstHeadingTitle(in bodyText: String) -> String? {
+        var isInFence = false
+
+        for rawLine in bodyText.components(separatedBy: "\n") {
+            let trimmedLine = rawLine.trimmingCharacters(in: .whitespaces)
+            if trimmedLine.hasPrefix("```") || trimmedLine.hasPrefix("~~~") {
+                isInFence.toggle()
+                continue
+            }
+
+            guard !isInFence, trimmedLine.hasPrefix("#") else {
+                continue
+            }
+
+            let hashCount = trimmedLine.prefix(while: { $0 == "#" }).count
+            guard hashCount > 0, hashCount <= 6 else {
+                continue
+            }
+
+            let remainderStart = trimmedLine.index(trimmedLine.startIndex, offsetBy: hashCount)
+            guard remainderStart < trimmedLine.endIndex, trimmedLine[remainderStart].isWhitespace else {
+                continue
+            }
+
+            let rawTitle = String(trimmedLine[remainderStart...])
+                .trimmingCharacters(in: .whitespaces)
+                .replacingOccurrences(of: #"\s+#+\s*$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = normalizedHeadingTitle(rawTitle)
+            if !title.isEmpty {
+                return title
+            }
+        }
+
+        return nil
+    }
+
+    private static func normalizedHeadingTitle(_ title: String) -> String {
+        title
+            .replacingOccurrences(of: #"`([^`]*)`"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"[*_~]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -366,4 +600,3 @@ public enum DocumentStatisticsCalculator {
         return count
     }
 }
-

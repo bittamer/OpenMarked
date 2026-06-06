@@ -153,6 +153,7 @@ public enum RenderDiagnosticKind: String, CaseIterable, Equatable, Sendable {
     case missingLocalLink
     case missingHeadingFragment
     case malformedLink
+    case malformedFrontMatter
     case unsupportedLinkScheme
     case mermaidRenderFailure
     case mathRenderFailure
@@ -216,7 +217,8 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         }
         defer { cmark_parser_free(parser) }
 
-        var diagnostics = attachExtensions(to: parser, options: request.options)
+        var diagnostics = request.document.frontMatterDiagnostics
+        diagnostics.append(contentsOf: attachExtensions(to: parser, options: request.options))
         diagnostics.append(contentsOf: richMarkdownState.disabledFeatureDiagnostics)
 
         request.document.bodyText.withCString { pointer in
@@ -267,7 +269,7 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
             )
         )
         let fullHTML = HTMLDocumentAssembler.assemble(
-            title: request.document.displayTitle,
+            title: request.document.resolvedTitle,
             bodyHTML: policyHTML,
             baseURL: request.document.sourceURL.deletingLastPathComponent(),
             theme: request.theme,

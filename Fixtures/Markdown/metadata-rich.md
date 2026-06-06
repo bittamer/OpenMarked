@@ -6,8 +6,16 @@ date: 2026-06-05
 tags: [inspection, metadata, release]
 slug: workbench-metadata-fixture
 draft: false
+priority: 3
 layout: article
+aliases:
+  - Workbench
+  - Document Inspector
+options:
+  mode: compact
+  status: active
 custom-field: Ready for Phase 2 display tests
+long-description: This intentionally long metadata value gives the inspector a stable wrapping and copy target for polish checks.
 ---
 
 # Workbench Metadata Fixture
@@ -22,4 +30,3 @@ The body is intentionally small so metadata rows stand out in tests.
 
 - Standard fields should be grouped first.
 - Custom fields should remain visible and copyable.
-

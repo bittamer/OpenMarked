@@ -633,7 +633,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     private func suggestedExportFilename(for document: MarkdownDocument, extension fileExtension: String) -> String {
-        let baseName = document.displayTitle
+        let baseName = document.resolvedTitle
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)

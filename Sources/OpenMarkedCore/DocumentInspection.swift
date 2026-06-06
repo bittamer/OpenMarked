@@ -64,17 +64,13 @@ public struct DocumentMetadataInspection: Equatable, Sendable {
     )
 }
 
-public enum DocumentTitleSource: String, Equatable, Sendable {
-    case frontMatter
-    case firstHeading
-    case fileName
-}
-
 public struct MetadataField: Equatable, Identifiable, Sendable {
     public let id: String
     public let key: String
     public let label: String
     public let value: String
+    public let valueKind: MetadataValueKind
+    public let tokens: [String]
     public let source: MetadataFieldSource
     public let isStandard: Bool
 
@@ -82,16 +78,30 @@ public struct MetadataField: Equatable, Identifiable, Sendable {
         key: String,
         label: String,
         value: String,
+        valueKind: MetadataValueKind = .text,
+        tokens: [String] = [],
         source: MetadataFieldSource,
         isStandard: Bool
     ) {
         self.key = key
         self.label = label
         self.value = value
+        self.valueKind = valueKind
+        self.tokens = tokens
         self.source = source
         self.isStandard = isStandard
         self.id = "\(source.rawValue):\(key)"
     }
+}
+
+public enum MetadataValueKind: String, Equatable, Sendable {
+    case text
+    case list
+    case boolean
+    case number
+    case date
+    case object
+    case empty
 }
 
 public enum MetadataFieldSource: String, Equatable, Sendable {
@@ -313,7 +323,7 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func buildReport(document: MarkdownDocument, renderResult: RenderResult?) -> DocumentInspectionReport {
-        let diagnostics = renderResult?.diagnostics ?? []
+        let diagnostics = deduplicatedDiagnostics(document.frontMatterDiagnostics + (renderResult?.diagnostics ?? []))
         let bodyHTML = renderResult?.bodyHTML ?? ""
         let links = buildLinks(from: bodyHTML, diagnostics: diagnostics)
         let assets = buildAssets(from: bodyHTML, document: document, diagnostics: diagnostics)
@@ -341,22 +351,29 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func buildMetadata(document: MarkdownDocument) -> DocumentMetadataInspection {
-        let standardKeys: Set<String> = ["title", "description", "author", "date", "tags", "slug", "draft", "layout"]
+        let standardKeys = ["title", "description", "author", "date", "tags", "slug", "draft", "layout"]
+        let standardKeySet = Set(standardKeys)
         let fields = document.frontMatter?.values
-            .sorted { $0.key < $1.key }
+            .sorted { left, right in
+                let leftIndex = standardKeys.firstIndex(of: left.key) ?? Int.max
+                let rightIndex = standardKeys.firstIndex(of: right.key) ?? Int.max
+                if leftIndex == rightIndex {
+                    return left.key < right.key
+                }
+                return leftIndex < rightIndex
+            }
             .map { key, value in
-                MetadataField(
+                metadataField(
                     key: key,
-                    label: displayLabel(for: key),
-                    value: value,
                     source: .frontMatter,
-                    isStandard: standardKeys.contains(key)
+                    isStandard: standardKeySet.contains(key),
+                    value: value
                 )
             } ?? []
 
         return DocumentMetadataInspection(
-            displayTitle: document.displayTitle,
-            titleSource: (document.frontMatter?.title?.isEmpty == false) ? .frontMatter : .fileName,
+            displayTitle: document.resolvedTitle,
+            titleSource: document.resolvedTitleSource,
             frontMatterFormat: document.frontMatter?.format,
             fields: fields,
             fileFacts: fileFacts(for: document)
@@ -366,7 +383,10 @@ public enum DocumentInspectionBuilder {
     private static func fileFacts(for document: MarkdownDocument) -> [MetadataField] {
         let fileExtension = document.sourceURL.pathExtension.isEmpty ? "none" : document.sourceURL.pathExtension
         var fields = [
+            metadataField(key: "title", label: "Title", source: .file, isStandard: true, value: document.resolvedTitle),
+            metadataField(key: "titleSource", label: "Title Source", source: .file, isStandard: true, value: titleSourceLabel(document.resolvedTitleSource)),
             MetadataField(key: "fileName", label: "File Name", value: document.displayName, source: .file, isStandard: true),
+            MetadataField(key: "documentType", label: "Type", value: document.sourceURL.pathExtension.uppercased(), source: .file, isStandard: true),
             MetadataField(key: "fileExtension", label: "File Extension", value: fileExtension, source: .file, isStandard: true),
             MetadataField(key: "fileSize", label: "File Size", value: "\(document.metadata.fileSize) bytes", source: .file, isStandard: true),
             MetadataField(key: "path", label: "Path", value: document.sourceURL.standardizedFileURL.path, source: .file, isStandard: true),
@@ -383,6 +403,25 @@ public enum DocumentInspectionBuilder {
         }
 
         return fields
+    }
+
+    private static func metadataField(
+        key: String,
+        label: String? = nil,
+        source: MetadataFieldSource,
+        isStandard: Bool,
+        value: String
+    ) -> MetadataField {
+        let normalized = MetadataValueNormalizer.normalize(value)
+        return MetadataField(
+            key: key,
+            label: label ?? displayLabel(for: key),
+            value: normalized.value,
+            valueKind: normalized.kind,
+            tokens: normalized.tokens,
+            source: source,
+            isStandard: isStandard
+        )
     }
 
     private static func buildLinks(from html: String, diagnostics: [RenderDiagnostic]) -> [DocumentLinkReference] {
@@ -522,6 +561,8 @@ public enum DocumentInspectionBuilder {
             return ExportReadinessIssue(severity: .info, title: "Malformed callout", message: diagnostic.message, source: diagnostic.source)
         case .linkValidationSkipped:
             return ExportReadinessIssue(severity: .info, title: "Link validation skipped", message: diagnostic.message, source: diagnostic.source)
+        case .malformedFrontMatter:
+            return ExportReadinessIssue(severity: .warning, title: "Malformed front matter", message: diagnostic.message, source: diagnostic.source)
         case .unsupportedExtension, .renderFailure:
             return ExportReadinessIssue(severity: .warning, title: "Render issue", message: diagnostic.message, source: diagnostic.source)
         }
@@ -703,6 +744,17 @@ public enum DocumentInspectionBuilder {
             .joined(separator: " ")
     }
 
+    private static func titleSourceLabel(_ source: DocumentTitleSource) -> String {
+        switch source {
+        case .frontMatter:
+            return "Front matter"
+        case .firstHeading:
+            return "First heading"
+        case .fileName:
+            return "File name"
+        }
+    }
+
     private static func formatDate(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
@@ -754,5 +806,87 @@ public enum DocumentInspectionBuilder {
         return issues.filter { issue in
             seenIDs.insert(issue.id).inserted
         }
+    }
+
+    private static func deduplicatedDiagnostics(_ diagnostics: [RenderDiagnostic]) -> [RenderDiagnostic] {
+        var seenIDs = Set<String>()
+        return diagnostics.filter { diagnostic in
+            seenIDs.insert(diagnostic.id).inserted
+        }
+    }
+}
+
+private enum MetadataValueNormalizer {
+    struct Result: Equatable {
+        let value: String
+        let kind: MetadataValueKind
+        let tokens: [String]
+    }
+
+    static func normalize(_ rawValue: String) -> Result {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return Result(value: "Empty", kind: .empty, tokens: [])
+        }
+
+        if let listItems = listItems(from: trimmed) {
+            return Result(value: listItems.joined(separator: ", "), kind: .list, tokens: listItems)
+        }
+
+        let lowercased = trimmed.lowercased()
+        if ["true", "false", "yes", "no"].contains(lowercased) {
+            return Result(value: lowercased, kind: .boolean, tokens: [])
+        }
+
+        if isNumber(trimmed) {
+            return Result(value: trimmed, kind: .number, tokens: [])
+        }
+
+        if isDateLike(trimmed) {
+            return Result(value: trimmed, kind: .date, tokens: [])
+        }
+
+        if isObjectLike(trimmed) {
+            return Result(value: compactWhitespace(trimmed), kind: .object, tokens: [])
+        }
+
+        return Result(value: unquoted(trimmed), kind: .text, tokens: [])
+    }
+
+    private static func listItems(from value: String) -> [String]? {
+        guard value.hasPrefix("[") && value.hasSuffix("]") else {
+            return nil
+        }
+
+        let inner = value.dropFirst().dropLast()
+        let items = inner
+            .split(separator: ",")
+            .map { unquoted($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            .filter { !$0.isEmpty }
+
+        return items.isEmpty ? nil : items
+    }
+
+    private static func isNumber(_ value: String) -> Bool {
+        Double(value) != nil
+    }
+
+    private static func isDateLike(_ value: String) -> Bool {
+        value.range(
+            of: #"^\d{4}-\d{2}-\d{2}(?:[T ][0-9:.+-Z]*)?$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func isObjectLike(_ value: String) -> Bool {
+        (value.hasPrefix("{") && value.hasSuffix("}")) || value.contains(";")
+    }
+
+    private static func compactWhitespace(_ value: String) -> String {
+        value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+    }
+
+    private static func unquoted(_ value: String) -> String {
+        value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
     }
 }

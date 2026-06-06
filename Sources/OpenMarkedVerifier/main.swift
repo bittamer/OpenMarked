@@ -137,6 +137,8 @@ let frontMatterDocument = try MarkdownDocumentLoader.load(url: frontMatterURL, c
 verify(frontMatterDocument.frontMatter?.title == "Fixture With Front Matter", "front matter title should parse")
 verify(!frontMatterDocument.bodyText.contains("description: Metadata"), "body text should exclude front matter")
 verify(frontMatterDocument.displayTitle == "Fixture With Front Matter", "front matter title should become display title")
+verify(frontMatterDocument.resolvedTitle == "Fixture With Front Matter", "front matter title should become resolved title")
+verify(frontMatterDocument.resolvedTitleSource == .frontMatter, "front matter should be the resolved title source")
 
 let suiteName = "OpenMarkedVerifier-\(UUID().uuidString)"
 guard let userDefaults = UserDefaults(suiteName: suiteName) else {
@@ -249,7 +251,7 @@ verify(richMarkdownFeatures.containsLocalLinks, "rich feature detection should f
 verify(richMarkdownFeatures.containsHeadingLinks, "rich feature detection should find heading links")
 verify(richMarkdownFeatures.containsRemoteLinks, "rich feature detection should find remote links")
 verify(
-    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled, .malformedGitHubCallout, .linkValidationSkipped]),
+    Set(RenderDiagnosticKind.allCases).isSuperset(of: [.missingLocalLink, .missingHeadingFragment, .malformedLink, .malformedFrontMatter, .unsupportedLinkScheme, .mermaidRenderFailure, .mathRenderFailure, .richContentDisabled, .malformedGitHubCallout, .linkValidationSkipped]),
     "diagnostic kinds should include rich Markdown foundation cases"
 )
 
@@ -323,6 +325,9 @@ verify(richStatusState.richContentPreview == .failed("Rich content rendering fai
 let renderer = CMarkGFMRenderer()
 let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
 verify(renderResult.rendererName == "cmark-gfm", "renderer name should identify cmark-gfm")
+verify(markdownDocument.displayTitle == "readme.md", "display title should remain file-oriented without front matter")
+verify(markdownDocument.resolvedTitle == "OpenMarked Fixture README", "resolved title should fall back to the first heading")
+verify(markdownDocument.resolvedTitleSource == .firstHeading, "first heading should be the resolved title source")
 verify(renderResult.bodyHTML.contains("<h1 id=\"openmarked-fixture-readme\">"), "headings should receive stable ids")
 verify(renderResult.bodyHTML.contains("<table>"), "GFM tables should render")
 verify(renderResult.outline.first?.title == "OpenMarked Fixture README", "outline should include h1")
@@ -330,6 +335,7 @@ let filteredOutline = OutlineFilter.filter(renderResult.outline, query: "goals")
 verify(filteredOutline.count == 1 && filteredOutline.first?.title == "Goals", "outline filtering should match headings case-insensitively")
 verify(OutlineFilter.filter(renderResult.outline, query: "").count == renderResult.outline.count, "empty outline filter should return all headings")
 verify(renderResult.fullHTML.contains("<!doctype html>"), "full HTML document should be assembled")
+verify(renderResult.fullHTML.contains("<title>OpenMarked Fixture README</title>"), "preview HTML title should use resolved title")
 verify(renderResult.fullHTML.contains("--om-font-scale: 1.000"), "default font scale should be injected")
 verify(renderResult.fullHTML.contains("New York"), "default theme CSS should be injected")
 verify(renderResult.bodyHTML.contains("om-code-keyword"), "code highlighting should be applied")
@@ -361,6 +367,7 @@ let localImageAssetURLs = LocalAssetReferenceExtractor.imageURLs(from: localImag
 verify(localImageAssetURLs.contains { $0.lastPathComponent == "sample-mark.svg" }, "local image assets should be extractable for live watching")
 let exportedLocalImageHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: localImageResult, document: localImageDocument)
 verify(exportedLocalImageHTML.contains("<!doctype html>"), "standalone HTML export should include document structure")
+verify(exportedLocalImageHTML.contains("<title>Local Images</title>"), "standalone HTML export should use resolved title precedence")
 verify(exportedLocalImageHTML.contains("data:image/svg+xml;base64,"), "standalone HTML export should embed local image assets")
 let unstyledExportHTML = HTMLExportDocumentBuilder.standaloneHTML(
     renderResult: localImageResult,
@@ -396,6 +403,8 @@ let richFixturePaths = [
     "Fixtures/Markdown/broken-links.md",
     "Fixtures/Markdown/github-readme-compat.md",
     "Fixtures/Markdown/metadata-rich.md",
+    "Fixtures/Markdown/malformed-front-matter.md",
+    "Fixtures/Markdown/json-front-matter.md",
     "Fixtures/Markdown/inspection-links-assets.md",
     "Fixtures/Markdown/statistics-rich.md",
     "Fixtures/Markdown/print-readiness.md",
@@ -435,9 +444,31 @@ let metadataInspectionReport = DocumentInspectionBuilder.build(document: metadat
 verify(metadataInspectionReport.metadata.displayTitle == "Workbench Metadata Fixture", "inspection metadata should use front matter title")
 verify(metadataInspectionReport.metadata.titleSource == .frontMatter, "inspection metadata should record front matter title source")
 verify(metadataInspectionReport.metadata.frontMatterFormat == .yaml, "inspection metadata should record YAML front matter")
-verify(metadataInspectionReport.metadata.fields.contains { $0.key == "tags" }, "inspection metadata should include tags")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "tags" && $0.valueKind == .list && $0.tokens == ["inspection", "metadata", "release"] }, "inspection metadata should normalize list fields")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "draft" && $0.valueKind == .boolean && $0.value == "false" }, "inspection metadata should normalize booleans")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "date" && $0.valueKind == .date }, "inspection metadata should normalize date-like values")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "priority" && $0.valueKind == .number && $0.value == "3" }, "inspection metadata should normalize numbers")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "aliases" && $0.valueKind == .list && $0.tokens == ["Workbench", "Document Inspector"] }, "inspection metadata should normalize nested YAML lists")
+verify(metadataInspectionReport.metadata.fields.contains { $0.key == "options" && $0.valueKind == .object && $0.value.contains("mode: compact") }, "inspection metadata should keep nested YAML readable")
 verify(metadataInspectionReport.metadata.fields.contains { $0.key == "custom-field" && !$0.isStandard }, "inspection metadata should include custom fields")
+verify(metadataInspectionReport.metadata.fileFacts.contains { $0.key == "titleSource" && $0.value == "Front matter" }, "inspection metadata should include title source file fact")
 verify(metadataInspectionReport.metadata.fileFacts.contains { $0.key == "path" && $0.value.hasSuffix("metadata-rich.md") }, "inspection metadata should include file facts")
+
+let jsonMetadataURL = URL(fileURLWithPath: "Fixtures/Markdown/json-front-matter.md").standardizedFileURL
+let jsonMetadataDocument = try MarkdownDocumentLoader.load(url: jsonMetadataURL, createBookmark: false)
+let jsonMetadataReport = DocumentInspectionBuilder.build(document: jsonMetadataDocument)
+verify(jsonMetadataDocument.frontMatter?.format == .json, "JSON front matter should parse")
+verify(jsonMetadataReport.metadata.fields.contains { $0.key == "tags" && $0.valueKind == .list && $0.tokens == ["json", "metadata"] }, "JSON metadata lists should normalize")
+verify(jsonMetadataReport.metadata.fields.contains { $0.key == "draft" && $0.valueKind == .boolean && $0.value == "false" }, "JSON metadata booleans should normalize")
+
+let malformedMetadataURL = URL(fileURLWithPath: "Fixtures/Markdown/malformed-front-matter.md").standardizedFileURL
+let malformedMetadataDocument = try MarkdownDocumentLoader.load(url: malformedMetadataURL, createBookmark: false)
+let malformedMetadataResult = try renderer.render(RenderRequest(document: malformedMetadataDocument))
+let malformedMetadataReport = DocumentInspectionBuilder.build(document: malformedMetadataDocument, renderResult: malformedMetadataResult)
+verify(malformedMetadataDocument.frontMatter?.title == "Malformed Metadata Fixture", "malformed front matter should preserve readable fields")
+verify(!malformedMetadataDocument.bodyText.contains("broken field without separator"), "malformed front matter should stay out of body text")
+verify(malformedMetadataResult.diagnostics.contains { $0.kind == .malformedFrontMatter && $0.source == "broken field without separator" }, "malformed front matter should produce render diagnostics")
+verify(malformedMetadataReport.exportReadiness.issues.contains { $0.title == "Malformed front matter" }, "malformed front matter should affect export readiness")
 
 let statisticsInspectionURL = URL(fileURLWithPath: "Fixtures/Markdown/statistics-rich.md").standardizedFileURL
 let statisticsInspectionDocument = try MarkdownDocumentLoader.load(url: statisticsInspectionURL, createBookmark: false)

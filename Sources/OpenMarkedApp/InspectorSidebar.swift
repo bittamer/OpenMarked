@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import OpenMarkedCore
 
@@ -170,10 +171,39 @@ private struct MetadataInspectorSection: View {
                 subtitle: report.metadata.frontMatterFormat?.rawValue.uppercased() ?? "No front matter"
             )
 
-            if report.metadata.fields.isEmpty {
-                InlineEmptyState(systemImage: "tag", message: "No front matter fields.")
+            InspectorFieldGroup(
+                title: "Document Title",
+                fields: [
+                    MetadataField(key: "resolvedTitle", label: "Title", value: report.metadata.displayTitle, source: .file, isStandard: true),
+                    MetadataField(key: "titleSource", label: "Source", value: report.metadata.titleSource.title, source: .file, isStandard: true)
+                ]
+            )
+
+            let frontMatterDiagnostics = report.diagnostics.filter { $0.kind == .malformedFrontMatter }
+            if !frontMatterDiagnostics.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Front Matter Diagnostics")
+                        .font(.caption.weight(.semibold))
+                    ForEach(frontMatterDiagnostics) { diagnostic in
+                        InspectorDiagnosticRow(diagnostic: diagnostic)
+                    }
+                }
+            }
+
+            let standardFields = report.metadata.fields.filter(\.isStandard)
+            let customFields = report.metadata.fields.filter { !$0.isStandard }
+
+            if report.metadata.frontMatterFormat == nil {
+                InlineEmptyState(systemImage: "tag", message: "No front matter.")
+            } else if report.metadata.fields.isEmpty {
+                InlineEmptyState(systemImage: "tag", message: "No readable front matter fields.")
             } else {
-                InspectorFieldGroup(title: "Front Matter", fields: report.metadata.fields)
+                if !standardFields.isEmpty {
+                    InspectorFieldGroup(title: "Standard Fields", fields: standardFields)
+                }
+                if !customFields.isEmpty {
+                    InspectorFieldGroup(title: "Custom Fields", fields: customFields)
+                }
             }
 
             InspectorFieldGroup(title: "File", fields: report.metadata.fileFacts)
@@ -422,7 +452,7 @@ private struct InspectorFieldGroup: View {
 
             VStack(spacing: 0) {
                 ForEach(fields) { field in
-                    InspectorKeyValueRow(label: field.label, value: field.value)
+                    InspectorKeyValueRow(field: field)
                     if field.id != fields.last?.id {
                         InspectorDivider()
                     }
@@ -435,25 +465,72 @@ private struct InspectorFieldGroup: View {
 private struct InspectorKeyValueRow: View {
     @Environment(\.appChromeTheme) private var chrome
 
-    let label: String
-    let value: String
+    let field: MetadataField
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(label)
+        HStack(alignment: .top, spacing: 10) {
+            Text(field.label)
                 .font(.caption)
                 .foregroundStyle(chrome.secondaryText)
                 .frame(width: 82, alignment: .leading)
-                .lineLimit(1)
+                .lineLimit(2)
 
-            Text(value)
-                .font(.caption)
-                .foregroundStyle(chrome.text)
-                .lineLimit(3)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 5) {
+                if field.valueKind == .list, !field.tokens.isEmpty {
+                    MetadataTokenFlow(tokens: field.tokens)
+                } else {
+                    Text(field.value)
+                        .font(.caption)
+                        .foregroundStyle(chrome.text)
+                        .lineLimit(field.key == "path" || field.key == "directory" ? 4 : 3)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(field.value, forType: .string)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 10, weight: .medium))
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(chrome.tertiaryText)
+            .help("Copy \(field.label)")
+            .accessibilityLabel("Copy \(field.label)")
         }
         .padding(.vertical, 6)
+    }
+}
+
+private struct MetadataTokenFlow: View {
+    @Environment(\.appChromeTheme) private var chrome
+
+    let tokens: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(tokens, id: \.self) { token in
+                Text(token)
+                    .font(.caption2.weight(.medium))
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .foregroundStyle(chrome.text)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(chrome.controlBackground.opacity(0.75))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(chrome.separator, lineWidth: 1)
+                    )
+            }
+        }
     }
 }
 
@@ -719,4 +796,3 @@ private extension DocumentReferenceStatus {
         }
     }
 }
-

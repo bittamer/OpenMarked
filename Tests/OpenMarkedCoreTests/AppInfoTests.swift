@@ -138,7 +138,25 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(document.frontMatter?.format, .yaml)
         XCTAssertEqual(document.frontMatter?.title, "Fixture With Front Matter")
         XCTAssertEqual(document.displayTitle, "Fixture With Front Matter")
+        XCTAssertEqual(document.resolvedTitle, "Fixture With Front Matter")
+        XCTAssertEqual(document.resolvedTitleSource, .frontMatter)
         XCTAssertFalse(document.bodyText.contains("description: Metadata"))
+    }
+
+    func testTitleFallsBackToFirstHeadingForPreviewAndExport() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/readme.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let exportedHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: result, document: document)
+        let report = DocumentInspectionBuilder.build(document: document, renderResult: result)
+
+        XCTAssertEqual(document.displayTitle, "readme.md")
+        XCTAssertEqual(document.resolvedTitle, "OpenMarked Fixture README")
+        XCTAssertEqual(document.resolvedTitleSource, .firstHeading)
+        XCTAssertTrue(result.fullHTML.contains("<title>OpenMarked Fixture README</title>"))
+        XCTAssertTrue(exportedHTML.contains("<title>OpenMarked Fixture README</title>"))
+        XCTAssertEqual(report.metadata.displayTitle, "OpenMarked Fixture README")
+        XCTAssertEqual(report.metadata.titleSource, .firstHeading)
     }
 
     func testUnsupportedFilesAreRejected() {
@@ -554,11 +572,45 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(report.metadata.displayTitle, "Workbench Metadata Fixture")
         XCTAssertEqual(report.metadata.titleSource, .frontMatter)
         XCTAssertEqual(report.metadata.frontMatterFormat, .yaml)
-        XCTAssertTrue(report.metadata.fields.contains { $0.key == "tags" && $0.value == "[inspection, metadata, release]" })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "tags" && $0.value == "inspection, metadata, release" && $0.valueKind == .list && $0.tokens == ["inspection", "metadata", "release"] })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "draft" && $0.valueKind == .boolean && $0.value == "false" })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "date" && $0.valueKind == .date })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "priority" && $0.valueKind == .number && $0.value == "3" })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "aliases" && $0.valueKind == .list && $0.tokens == ["Workbench", "Document Inspector"] })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "options" && $0.valueKind == .object && $0.value.contains("mode: compact") })
         XCTAssertTrue(report.metadata.fields.contains { $0.key == "custom-field" && !$0.isStandard })
+        XCTAssertTrue(report.metadata.fileFacts.contains { $0.key == "titleSource" && $0.value == "Front matter" })
         XCTAssertTrue(report.metadata.fileFacts.contains { $0.key == "path" && $0.value.hasSuffix("metadata-rich.md") })
         XCTAssertEqual(report.statistics.words, document.statistics.wordCount)
         XCTAssertEqual(report.statistics.linkCount, 0)
+    }
+
+    func testJSONFrontMatterIsParsedForMetadataInspection() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/json-front-matter.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let report = DocumentInspectionBuilder.build(document: document)
+
+        XCTAssertEqual(document.frontMatter?.format, .json)
+        XCTAssertEqual(document.resolvedTitle, "JSON Metadata Fixture")
+        XCTAssertEqual(report.metadata.frontMatterFormat, .json)
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "tags" && $0.valueKind == .list && $0.tokens == ["json", "metadata"] })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "draft" && $0.valueKind == .boolean && $0.value == "false" })
+        XCTAssertTrue(report.metadata.fields.contains { $0.key == "priority" && $0.valueKind == .number && $0.value == "2" })
+    }
+
+    func testMalformedFrontMatterProducesDiagnosticsWithoutBlockingRender() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/malformed-front-matter.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+        let report = DocumentInspectionBuilder.build(document: document, renderResult: result)
+
+        XCTAssertEqual(document.frontMatter?.title, "Malformed Metadata Fixture")
+        XCTAssertFalse(document.bodyText.contains("broken field without separator"))
+        XCTAssertTrue(document.frontMatterDiagnostics.contains { $0.kind == .malformedFrontMatter && $0.source == "broken field without separator" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .malformedFrontMatter && $0.source == "broken field without separator" })
+        XCTAssertTrue(report.diagnostics.contains { $0.kind == .malformedFrontMatter })
+        XCTAssertFalse(report.exportReadiness.isReady)
+        XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Malformed front matter" })
     }
 
     func testDocumentInspectionReportsRichStatistics() throws {
@@ -608,6 +660,7 @@ final class AppInfoTests: XCTestCase {
             .missingLocalLink,
             .missingHeadingFragment,
             .malformedLink,
+            .malformedFrontMatter,
             .unsupportedLinkScheme,
             .mermaidRenderFailure,
             .mathRenderFailure,
@@ -644,7 +697,10 @@ final class AppInfoTests: XCTestCase {
             "Fixtures/Markdown/callouts.md",
             "Fixtures/Markdown/links.md",
             "Fixtures/Markdown/broken-links.md",
-            "Fixtures/Markdown/github-readme-compat.md"
+            "Fixtures/Markdown/github-readme-compat.md",
+            "Fixtures/Markdown/metadata-rich.md",
+            "Fixtures/Markdown/malformed-front-matter.md",
+            "Fixtures/Markdown/json-front-matter.md"
         ]
 
         let renderer = CMarkGFMRenderer()
@@ -1482,6 +1538,7 @@ struct AppInfoTests {
             .missingLocalLink,
             .missingHeadingFragment,
             .malformedLink,
+            .malformedFrontMatter,
             .unsupportedLinkScheme,
             .mermaidRenderFailure,
             .mathRenderFailure,
@@ -1542,7 +1599,10 @@ struct AppInfoTests {
             "Fixtures/Markdown/callouts.md",
             "Fixtures/Markdown/links.md",
             "Fixtures/Markdown/broken-links.md",
-            "Fixtures/Markdown/github-readme-compat.md"
+            "Fixtures/Markdown/github-readme-compat.md",
+            "Fixtures/Markdown/metadata-rich.md",
+            "Fixtures/Markdown/malformed-front-matter.md",
+            "Fixtures/Markdown/json-front-matter.md"
         ]
 
         let renderer = CMarkGFMRenderer()

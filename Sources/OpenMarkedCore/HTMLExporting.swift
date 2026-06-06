@@ -42,7 +42,10 @@ public enum HTMLExportDocumentBuilder {
         document: MarkdownDocument,
         options: HTMLExportOptions = HTMLExportOptions()
     ) -> String {
-        var html = PreviewHTMLSecurityPolicy.sanitize(renderResult.fullHTML)
+        var html = retitle(
+            PreviewHTMLSecurityPolicy.sanitize(renderResult.fullHTML),
+            title: document.resolvedTitle
+        )
 
         if options.embedsLocalImages {
             html = embedLocalImages(in: html, document: document)
@@ -56,6 +59,16 @@ public enum HTMLExportDocumentBuilder {
             html = embedTrustedRichContentRuntime(in: html, state: renderResult.richMarkdownState)
         }
 
+        return html
+    }
+
+    private static func retitle(_ html: String, title: String) -> String {
+        let escapedTitle = HTMLUtilities.escapeText(title)
+        if let titleRange = html.range(of: #"(?is)<title>.*?</title>"#, options: .regularExpression) {
+            var updatedHTML = html
+            updatedHTML.replaceSubrange(titleRange, with: "<title>\(escapedTitle)</title>")
+            return updatedHTML
+        }
         return html
     }
 

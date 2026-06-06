@@ -1133,6 +1133,8 @@ private struct DiagnosticsPopover: View {
             return "photo"
         case .missingLocalLink, .malformedLink, .unsupportedLinkScheme, .linkValidationSkipped:
             return "link"
+        case .malformedFrontMatter:
+            return "tag"
         case .missingHeadingFragment:
             return "number"
         default:
@@ -1170,6 +1172,8 @@ private struct DiagnosticsPopover: View {
             return "Heading Links"
         case .malformedLink:
             return "Malformed Links"
+        case .malformedFrontMatter:
+            return "Front Matter"
         case .unsupportedLinkScheme:
             return "Unsupported Links"
         case .linkValidationSkipped:

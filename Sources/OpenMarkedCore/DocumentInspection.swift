@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 public struct DocumentInspectionReport: Equatable, Sendable {
     public let metadata: DocumentMetadataInspection
@@ -242,6 +243,8 @@ public struct DocumentLinkReference: Equatable, Identifiable, Sendable {
     public let id: String
     public let text: String
     public let target: String
+    public let resolvedPath: String?
+    public let fragment: String?
     public let kind: DocumentReferenceKind
     public let status: DocumentReferenceStatus
     public let diagnostics: [RenderDiagnostic]
@@ -250,6 +253,8 @@ public struct DocumentLinkReference: Equatable, Identifiable, Sendable {
         id: String,
         text: String,
         target: String,
+        resolvedPath: String? = nil,
+        fragment: String? = nil,
         kind: DocumentReferenceKind,
         status: DocumentReferenceStatus,
         diagnostics: [RenderDiagnostic]
@@ -257,6 +262,8 @@ public struct DocumentLinkReference: Equatable, Identifiable, Sendable {
         self.id = id
         self.text = text
         self.target = target
+        self.resolvedPath = resolvedPath
+        self.fragment = fragment
         self.kind = kind
         self.status = status
         self.diagnostics = diagnostics
@@ -289,6 +296,7 @@ public struct DocumentAssetReference: Equatable, Identifiable, Sendable {
     public let source: String
     public let altText: String
     public let resolvedPath: String?
+    public let fileInfo: DocumentAssetFileInfo?
     public let kind: DocumentAssetKind
     public let status: DocumentReferenceStatus
     public let diagnostics: [RenderDiagnostic]
@@ -298,6 +306,7 @@ public struct DocumentAssetReference: Equatable, Identifiable, Sendable {
         source: String,
         altText: String,
         resolvedPath: String?,
+        fileInfo: DocumentAssetFileInfo? = nil,
         kind: DocumentAssetKind,
         status: DocumentReferenceStatus,
         diagnostics: [RenderDiagnostic]
@@ -306,6 +315,7 @@ public struct DocumentAssetReference: Equatable, Identifiable, Sendable {
         self.source = source
         self.altText = altText
         self.resolvedPath = resolvedPath
+        self.fileInfo = fileInfo
         self.kind = kind
         self.status = status
         self.diagnostics = diagnostics
@@ -317,6 +327,22 @@ public enum DocumentAssetKind: String, Equatable, Sendable {
     case remoteImage
     case dataImage
     case unknown
+}
+
+public struct DocumentAssetFileInfo: Equatable, Sendable {
+    public let byteSize: Int64?
+    public let pixelWidth: Int?
+    public let pixelHeight: Int?
+
+    public init(byteSize: Int64?, pixelWidth: Int?, pixelHeight: Int?) {
+        self.byteSize = byteSize
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+    }
+
+    public var hasDimensions: Bool {
+        pixelWidth != nil && pixelHeight != nil
+    }
 }
 
 public struct ExportReadinessReport: Equatable, Sendable {
@@ -384,7 +410,7 @@ public enum DocumentInspectionBuilder {
     ) -> DocumentInspectionReport {
         let diagnostics = deduplicatedDiagnostics(document.frontMatterDiagnostics + (renderResult?.diagnostics ?? []))
         let bodyHTML = renderResult?.bodyHTML ?? ""
-        let links = buildLinks(from: bodyHTML, diagnostics: diagnostics)
+        let links = buildLinks(from: bodyHTML, document: document, diagnostics: diagnostics)
         let assets = buildAssets(from: bodyHTML, document: document, diagnostics: diagnostics)
         let statistics = buildStatistics(
             document: document,
@@ -395,6 +421,7 @@ public enum DocumentInspectionBuilder {
             statisticsOptions: statisticsOptions
         )
         let exportReadiness = buildExportReadiness(
+            document: document,
             diagnostics: diagnostics,
             assets: assets,
             statistics: statistics
@@ -484,7 +511,11 @@ public enum DocumentInspectionBuilder {
         )
     }
 
-    private static func buildLinks(from html: String, diagnostics: [RenderDiagnostic]) -> [DocumentLinkReference] {
+    private static func buildLinks(
+        from html: String,
+        document: MarkdownDocument,
+        diagnostics: [RenderDiagnostic]
+    ) -> [DocumentLinkReference] {
         let references = LinkReferenceExtractor.linkReferences(from: html)
         return references.map { reference in
             let matchingDiagnostics = diagnostics.filter { $0.source == reference.source }
@@ -495,6 +526,8 @@ public enum DocumentInspectionBuilder {
                 id: reference.id,
                 text: reference.text,
                 target: reference.source,
+                resolvedPath: resolvedLocalLinkPath(for: reference.source, kind: kind, document: document),
+                fragment: linkFragment(for: reference.source),
                 kind: kind,
                 status: status,
                 diagnostics: matchingDiagnostics
@@ -518,6 +551,7 @@ public enum DocumentInspectionBuilder {
                 source: reference.source,
                 altText: reference.altText,
                 resolvedPath: resolvedURL?.path,
+                fileInfo: resolvedURL.flatMap(assetFileInfo),
                 kind: kind,
                 status: status,
                 diagnostics: matchingDiagnostics
@@ -584,11 +618,23 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func buildExportReadiness(
+        document: MarkdownDocument,
         diagnostics: [RenderDiagnostic],
         assets: [DocumentAssetReference],
         statistics: RichDocumentStatistics
     ) -> ExportReadinessReport {
         var issues: [ExportReadinessIssue] = diagnostics.compactMap(issue(for:))
+
+        if document.resolvedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append(
+                ExportReadinessIssue(
+                    severity: .warning,
+                    title: "Empty title",
+                    message: "Exports work best with a non-empty document title.",
+                    source: nil
+                )
+            )
+        }
 
         for asset in assets where asset.kind == .remoteImage && asset.status != .blocked {
             issues.append(
@@ -601,12 +647,34 @@ public enum DocumentInspectionBuilder {
             )
         }
 
+        for asset in assets where asset.kind == .remoteImage && asset.status == .blocked {
+            issues.append(
+                ExportReadinessIssue(
+                    severity: .warning,
+                    title: "Remote image blocked",
+                    message: "Remote image '\(asset.source)' is blocked by the current content setting.",
+                    source: asset.source
+                )
+            )
+        }
+
         if statistics.wideTableCandidateCount > 0 {
             issues.append(
                 ExportReadinessIssue(
                     severity: .warning,
                     title: "Wide table",
                     message: "\(statistics.wideTableCandidateCount) table row may need print layout review.",
+                    source: nil
+                )
+            )
+        }
+
+        if statistics.estimatedPageCount > 1 {
+            issues.append(
+                ExportReadinessIssue(
+                    severity: .info,
+                    title: "Multi-page export",
+                    message: "Estimated \(statistics.estimatedPageCount) PDF pages. Review page breaks in Print or PDF export.",
                     source: nil
                 )
             )
@@ -755,6 +823,82 @@ public enum DocumentInspectionBuilder {
             for: source,
             relativeTo: document.sourceURL.deletingLastPathComponent()
         )
+    }
+
+    private static func resolvedLocalLinkPath(
+        for source: String,
+        kind: DocumentReferenceKind,
+        document: MarkdownDocument
+    ) -> String? {
+        guard kind == .localFile else {
+            return nil
+        }
+
+        return LocalAssetReferenceExtractor.localFileURL(
+            for: source,
+            relativeTo: document.sourceURL.deletingLastPathComponent()
+        )?
+        .standardizedFileURL
+        .path
+    }
+
+    private static func linkFragment(for source: String) -> String? {
+        if source.hasPrefix("#") {
+            return String(source.dropFirst()).removingPercentEncoding
+        }
+
+        return URLComponents(string: source)?.fragment?.removingPercentEncoding
+    }
+
+    private static func assetFileInfo(for url: URL) -> DocumentAssetFileInfo? {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+
+        let byteSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?
+            .int64Value
+        let dimensions = imageDimensions(for: url)
+
+        return DocumentAssetFileInfo(
+            byteSize: byteSize,
+            pixelWidth: dimensions?.width,
+            pixelHeight: dimensions?.height
+        )
+    }
+
+    private static func imageDimensions(for url: URL) -> (width: Int, height: Int)? {
+        if let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
+           let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+           let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
+           let height = properties[kCGImagePropertyPixelHeight] as? NSNumber {
+            return (width.intValue, height.intValue)
+        }
+
+        return svgDimensions(for: url)
+    }
+
+    private static func svgDimensions(for url: URL) -> (width: Int, height: Int)? {
+        guard url.pathExtension.lowercased() == "svg",
+              let data = try? Data(contentsOf: url, options: [.mappedIfSafe]),
+              let text = String(data: data.prefix(4096), encoding: .utf8),
+              let width = svgNumericAttribute("width", in: text),
+              let height = svgNumericAttribute("height", in: text) else {
+            return nil
+        }
+
+        return (width, height)
+    }
+
+    private static func svgNumericAttribute(_ attribute: String, in text: String) -> Int? {
+        let pattern = #"\b\#(attribute)\s*=\s*["']([0-9]+)(?:\.[0-9]+)?(?:px)?["']"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
+              let range = Range(match.range(at: 1), in: text)
+        else {
+            return nil
+        }
+
+        return Int(text[range])
     }
 
     private struct ImageReference: Equatable {

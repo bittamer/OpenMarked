@@ -127,11 +127,11 @@ struct InspectorSidebar: View {
         case .metadata:
             MetadataInspectorSection(report: report)
         case .links:
-            LinksInspectorSection(report: report)
+            LinksInspectorSection(report: report, controller: controller)
         case .assets:
             AssetsInspectorSection(report: report)
         case .diagnostics:
-            DiagnosticsInspectorSection(report: report)
+            DiagnosticsInspectorSection(report: report, controller: controller)
         case .statistics:
             StatisticsInspectorSection(report: report)
         case .export:
@@ -226,60 +226,215 @@ private struct MetadataInspectorSection: View {
 
 private struct LinksInspectorSection: View {
     let report: DocumentInspectionReport
+    let controller: DocumentWindowController
+
+    @State private var typeFilter: InspectorLinkTypeFilter = .all
+    @State private var statusFilter: InspectorReferenceStatusFilter = .all
 
     var body: some View {
         InspectorSectionStack(title: "Links") {
+            InspectorFilterControls {
+                Picker("Type", selection: $typeFilter) {
+                    ForEach(InspectorLinkTypeFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Picker("Status", selection: $statusFilter) {
+                    ForEach(InspectorReferenceStatusFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             if report.links.isEmpty {
                 InlineEmptyState(systemImage: "link", message: "No rendered links.")
+            } else if filteredLinks.isEmpty {
+                InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No links match the filters.")
             } else {
-                ForEach(report.links) { link in
-                    InspectorReferenceRow(
-                        title: link.text.isEmpty ? link.target : link.text,
-                        subtitle: link.target,
-                        systemImage: link.kind.systemImage,
-                        status: link.status,
-                        diagnosticsCount: link.diagnostics.count
-                    )
+                VStack(spacing: 0) {
+                    ForEach(filteredLinks) { link in
+                        InspectorReferenceRow(
+                            title: link.text.isEmpty ? link.target : link.text,
+                            subtitle: linkSubtitle(link),
+                            systemImage: link.kind.systemImage,
+                            status: link.status,
+                            diagnosticsCount: link.diagnostics.count,
+                            kindTitle: link.kind.title,
+                            subtitleLineLimit: 3,
+                            actions: inspectorActions(for: link, controller: controller)
+                        )
+                        if link.id != filteredLinks.last?.id {
+                            InspectorDivider()
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var filteredLinks: [DocumentLinkReference] {
+        report.links.filter { link in
+            typeFilter.matches(link.kind) && statusFilter.matches(link.status)
+        }
+    }
+
+    private func linkSubtitle(_ link: DocumentLinkReference) -> String {
+        var lines = [link.target]
+        if let resolvedPath = link.resolvedPath {
+            lines.append("Resolved: \(resolvedPath)")
+        }
+        if link.kind == .remoteURL {
+            lines.append("Remote URL parsed; not crawled.")
+        }
+        return lines.joined(separator: "\n")
     }
 }
 
 private struct AssetsInspectorSection: View {
     let report: DocumentInspectionReport
+    @State private var typeFilter: InspectorAssetTypeFilter = .all
+    @State private var statusFilter: InspectorReferenceStatusFilter = .all
 
     var body: some View {
         InspectorSectionStack(title: "Assets") {
+            InspectorFilterControls {
+                Picker("Type", selection: $typeFilter) {
+                    ForEach(InspectorAssetTypeFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Picker("Status", selection: $statusFilter) {
+                    ForEach(InspectorReferenceStatusFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             if report.assets.isEmpty {
                 InlineEmptyState(systemImage: "photo", message: "No rendered images.")
+            } else if filteredAssets.isEmpty {
+                InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No assets match the filters.")
             } else {
-                ForEach(report.assets) { asset in
-                    InspectorReferenceRow(
-                        title: asset.altText.isEmpty ? asset.kind.title : asset.altText,
-                        subtitle: asset.source,
-                        systemImage: asset.kind.systemImage,
-                        status: asset.status,
-                        diagnosticsCount: asset.diagnostics.count
-                    )
+                VStack(spacing: 0) {
+                    ForEach(filteredAssets) { asset in
+                        InspectorReferenceRow(
+                            title: asset.altText.isEmpty ? asset.kind.title : asset.altText,
+                            subtitle: assetSubtitle(asset),
+                            systemImage: asset.kind.systemImage,
+                            status: asset.status,
+                            diagnosticsCount: asset.diagnostics.count,
+                            kindTitle: asset.kind.title,
+                            subtitleLineLimit: 4,
+                            actions: inspectorActions(for: asset)
+                        )
+                        if asset.id != filteredAssets.last?.id {
+                            InspectorDivider()
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var filteredAssets: [DocumentAssetReference] {
+        report.assets.filter { asset in
+            typeFilter.matches(asset) && statusFilter.matches(asset.status)
+        }
+    }
+
+    private func assetSubtitle(_ asset: DocumentAssetReference) -> String {
+        var lines = [asset.source]
+        if let resolvedPath = asset.resolvedPath {
+            lines.append("Resolved: \(resolvedPath)")
+        }
+        if let fileInfo = asset.fileInfo {
+            lines.append(fileInfo.displayTitle)
+        }
+        if asset.status == .blocked {
+            lines.append("Remote image blocked by content setting.")
+        }
+        return lines.joined(separator: "\n")
     }
 }
 
 private struct DiagnosticsInspectorSection: View {
     let report: DocumentInspectionReport
+    let controller: DocumentWindowController
+
+    @State private var searchQuery = ""
+    @State private var severityFilter: InspectorDiagnosticSeverityFilter = .all
 
     var body: some View {
         InspectorSectionStack(title: "Diagnostics") {
+            InspectorFilterControls {
+                TextField("Search diagnostics", text: $searchQuery)
+                    .textFieldStyle(.roundedBorder)
+
+                Picker("Severity", selection: $severityFilter) {
+                    ForEach(InspectorDiagnosticSeverityFilter.allCases) { filter in
+                        Text(filter.title).tag(filter)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
             if report.diagnostics.isEmpty {
                 InlineEmptyState(systemImage: "checkmark.circle", message: "No diagnostics.")
+            } else if groupedDiagnostics.isEmpty {
+                InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No diagnostics match the filters.")
             } else {
-                ForEach(report.diagnostics) { diagnostic in
-                    InspectorDiagnosticRow(diagnostic: diagnostic)
+                ForEach(groupedDiagnostics) { group in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(group.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(group.tint(chrome: chrome))
+                            .textCase(.uppercase)
+
+                        VStack(spacing: 0) {
+                            ForEach(group.diagnostics) { diagnostic in
+                                InspectorDiagnosticRow(
+                                    diagnostic: diagnostic,
+                                    actions: inspectorActions(
+                                        for: diagnostic,
+                                        report: report,
+                                        controller: controller
+                                    )
+                                )
+                                if diagnostic.id != group.diagnostics.last?.id {
+                                    InspectorDivider()
+                                }
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    @Environment(\.appChromeTheme) private var chrome
+
+    private var groupedDiagnostics: [InspectorDiagnosticGroup] {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredDiagnostics = report.diagnostics.filter { diagnostic in
+            severityFilter.matches(diagnostic.severity)
+                && (query.isEmpty || diagnostic.matches(query: query))
+        }
+
+        let groups = Dictionary(grouping: filteredDiagnostics) { diagnostic in
+            InspectorDiagnosticGroupKey(kind: diagnostic.kind, severity: diagnostic.severity)
+        }
+
+        return groups.keys.sorted().map { key in
+            InspectorDiagnosticGroup(
+                key: key,
+                diagnostics: groups[key]?.sorted { $0.id < $1.id } ?? []
+            )
         }
     }
 }
@@ -345,9 +500,18 @@ private struct ExportInspectorSection: View {
 
     var body: some View {
         InspectorSectionStack(title: "Export") {
+            InspectorMetricGrid(
+                metrics: [
+                    InspectorMetric(title: "Warnings", value: "\(warningCount)", systemImage: "exclamationmark.triangle", help: "Warnings likely to affect export or print."),
+                    InspectorMetric(title: "Notes", value: "\(infoCount)", systemImage: "info.circle", help: "Informational export notes."),
+                    InspectorMetric(title: "Pages", value: "\(report.statistics.estimatedPageCount)", systemImage: "doc.text", help: "Estimated PDF page count."),
+                    InspectorMetric(title: "Wide Tables", value: "\(report.statistics.wideTableCandidateCount)", systemImage: "tablecells", help: "Tables that may need print review.")
+                ]
+            )
+
             InspectorReferenceRow(
                 title: report.exportReadiness.isReady ? "Ready" : "Needs Review",
-                subtitle: report.exportReadiness.issues.isEmpty ? "No readiness issues." : "\(report.exportReadiness.issues.count) readiness issue\(report.exportReadiness.issues.count == 1 ? "" : "s").",
+                subtitle: report.exportReadiness.issues.isEmpty ? "No readiness issues." : "\(report.exportReadiness.issues.count) readiness issue\(report.exportReadiness.issues.count == 1 ? "" : "s"). Export remains available.",
                 systemImage: report.exportReadiness.isReady ? "checkmark.circle" : "exclamationmark.triangle",
                 status: report.exportReadiness.isReady ? .valid : .warning,
                 diagnosticsCount: 0
@@ -356,11 +520,241 @@ private struct ExportInspectorSection: View {
             if report.exportReadiness.issues.isEmpty {
                 InlineEmptyState(systemImage: "square.and.arrow.up", message: "No export readiness issues.")
             } else {
-                ForEach(report.exportReadiness.issues) { issue in
-                    InspectorIssueRow(issue: issue)
+                VStack(spacing: 0) {
+                    ForEach(sortedIssues) { issue in
+                        InspectorIssueRow(issue: issue)
+                        if issue.id != sortedIssues.last?.id {
+                            InspectorDivider()
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var warningCount: Int {
+        report.exportReadiness.issues.filter { $0.severity != .info }.count
+    }
+
+    private var infoCount: Int {
+        report.exportReadiness.issues.filter { $0.severity == .info }.count
+    }
+
+    private var sortedIssues: [ExportReadinessIssue] {
+        report.exportReadiness.issues.sorted { left, right in
+            if left.severity.sortPriority == right.severity.sortPriority {
+                return left.title < right.title
+            }
+            return left.severity.sortPriority < right.severity.sortPriority
+        }
+    }
+}
+
+private struct InspectorRowAction: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    static func copy(title: String, value: String) -> InspectorRowAction {
+        InspectorRowAction(id: "copy:\(value)", title: title, systemImage: "doc.on.doc") {
+            copyToPasteboard(value)
+        }
+    }
+}
+
+private enum InspectorReferenceStatusFilter: String, CaseIterable, Identifiable {
+    case all
+    case valid
+    case review
+    case skipped
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All Status"
+        case .valid:
+            return "Valid"
+        case .review:
+            return "Review"
+        case .skipped:
+            return "Skipped"
+        }
+    }
+
+    func matches(_ status: DocumentReferenceStatus) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .valid:
+            return status == .valid
+        case .review:
+            return [.warning, .missing, .malformed, .unsupported, .blocked].contains(status)
+        case .skipped:
+            return status == .skipped
+        }
+    }
+}
+
+private enum InspectorLinkTypeFilter: String, CaseIterable, Identifiable {
+    case all
+    case heading
+    case local
+    case remote
+    case contact
+    case other
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All Links"
+        case .heading:
+            return "Headings"
+        case .local:
+            return "Local"
+        case .remote:
+            return "Remote"
+        case .contact:
+            return "Contact"
+        case .other:
+            return "Other"
+        }
+    }
+
+    func matches(_ kind: DocumentReferenceKind) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .heading:
+            return kind == .sameDocumentHeading
+        case .local:
+            return kind == .localFile
+        case .remote:
+            return kind == .remoteURL
+        case .contact:
+            return kind == .email || kind == .telephone
+        case .other:
+            return [.unsupportedScheme, .malformed, .unknown].contains(kind)
+        }
+    }
+}
+
+private enum InspectorAssetTypeFilter: String, CaseIterable, Identifiable {
+    case all
+    case local
+    case remote
+    case embedded
+    case review
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All Assets"
+        case .local:
+            return "Local"
+        case .remote:
+            return "Remote"
+        case .embedded:
+            return "Embedded"
+        case .review:
+            return "Review"
+        }
+    }
+
+    func matches(_ asset: DocumentAssetReference) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .local:
+            return asset.kind == .localImage
+        case .remote:
+            return asset.kind == .remoteImage
+        case .embedded:
+            return asset.kind == .dataImage
+        case .review:
+            return [.missing, .blocked, .unsupported, .malformed, .warning].contains(asset.status)
+        }
+    }
+}
+
+private enum InspectorDiagnosticSeverityFilter: String, CaseIterable, Identifiable {
+    case all
+    case warning
+    case info
+    case error
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All Severity"
+        case .warning:
+            return "Warnings"
+        case .info:
+            return "Info"
+        case .error:
+            return "Errors"
+        }
+    }
+
+    func matches(_ severity: RenderDiagnosticSeverity) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .warning:
+            return severity == .warning
+        case .info:
+            return severity == .info
+        case .error:
+            return severity == .error
+        }
+    }
+}
+
+private struct InspectorDiagnosticGroupKey: Hashable, Comparable {
+    let kindRawValue: String
+    let kindTitle: String
+    let severityRawValue: String
+    let severityTitle: String
+    let severityPriority: Int
+
+    init(kind: RenderDiagnosticKind, severity: RenderDiagnosticSeverity) {
+        self.kindRawValue = kind.rawValue
+        self.kindTitle = kind.title
+        self.severityRawValue = severity.rawValue
+        self.severityTitle = severity.title
+        self.severityPriority = severity.sortPriority
+    }
+
+    static func < (left: InspectorDiagnosticGroupKey, right: InspectorDiagnosticGroupKey) -> Bool {
+        if left.severityPriority == right.severityPriority {
+            return left.kindTitle < right.kindTitle
+        }
+        return left.severityPriority < right.severityPriority
+    }
+}
+
+private struct InspectorDiagnosticGroup: Identifiable {
+    let key: InspectorDiagnosticGroupKey
+    let diagnostics: [RenderDiagnostic]
+
+    var id: String {
+        "\(key.severityRawValue):\(key.kindRawValue)"
+    }
+
+    var title: String {
+        "\(key.severityTitle) - \(key.kindTitle)"
+    }
+
+    func tint(chrome: ResolvedAppChromeTheme) -> Color {
+        key.severityRawValue == RenderDiagnosticSeverity.warning.rawValue ? chrome.warning : chrome.secondaryText
     }
 }
 
@@ -475,6 +869,22 @@ private struct InspectorMetricCell: View {
         .help(metric.help)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(metric.title), \(metric.value)")
+    }
+}
+
+private struct InspectorFilterControls<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            content
+        }
+        .controlSize(.small)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -684,6 +1094,9 @@ private struct InspectorReferenceRow: View {
     let systemImage: String
     let status: DocumentReferenceStatus
     let diagnosticsCount: Int
+    var kindTitle: String? = nil
+    var subtitleLineLimit = 2
+    var actions: [InspectorRowAction] = []
 
     var body: some View {
         HStack(alignment: .top, spacing: 9) {
@@ -699,13 +1112,28 @@ private struct InspectorReferenceRow: View {
                         .font(.system(size: 12.5, weight: .medium))
                         .lineLimit(2)
                     Spacer(minLength: 4)
+                    if let kindTitle {
+                        InspectorBadge(title: kindTitle, tint: chrome.secondaryText)
+                    }
                     InspectorBadge(title: status.title, tint: status.tint(chrome: chrome))
+                    ForEach(actions) { rowAction in
+                        Button(action: rowAction.action) {
+                            Image(systemName: rowAction.systemImage)
+                                .font(.system(size: 10.5, weight: .medium))
+                                .frame(width: 18, height: 18)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(chrome.tertiaryText)
+                        .help(rowAction.title)
+                        .accessibilityLabel(rowAction.title)
+                    }
                 }
 
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(chrome.secondaryText)
-                    .lineLimit(2)
+                    .lineLimit(subtitleLineLimit)
+                    .truncationMode(.middle)
                     .textSelection(.enabled)
 
                 if diagnosticsCount > 0 {
@@ -724,14 +1152,18 @@ private struct InspectorDiagnosticRow: View {
     @Environment(\.appChromeTheme) private var chrome
 
     let diagnostic: RenderDiagnostic
+    var actions: [InspectorRowAction] = []
 
     var body: some View {
         InspectorReferenceRow(
-            title: diagnostic.kind.rawValue,
+            title: diagnostic.kind.title,
             subtitle: diagnostic.source.map { "\(diagnostic.message) (\($0))" } ?? diagnostic.message,
             systemImage: diagnostic.severity == .warning ? "exclamationmark.triangle" : "info.circle",
             status: diagnostic.severity == .warning ? .warning : .skipped,
-            diagnosticsCount: 0
+            diagnosticsCount: 0,
+            kindTitle: diagnostic.severity.title,
+            subtitleLineLimit: 4,
+            actions: actions
         )
         .accessibilityLabel("\(diagnostic.severity.rawValue) diagnostic")
     }
@@ -746,7 +1178,12 @@ private struct InspectorIssueRow: View {
             subtitle: issue.source.map { "\(issue.message) (\($0))" } ?? issue.message,
             systemImage: issue.severity == .warning ? "exclamationmark.triangle" : "info.circle",
             status: issue.severity == .warning ? .warning : .skipped,
-            diagnosticsCount: 0
+            diagnosticsCount: 0,
+            kindTitle: issue.severity.title,
+            subtitleLineLimit: 4,
+            actions: issue.source.map {
+                [InspectorRowAction.copy(title: "Copy issue source", value: $0)]
+            } ?? []
         )
     }
 }
@@ -824,6 +1261,108 @@ private struct InspectorDivider: View {
     }
 }
 
+@MainActor
+private func inspectorActions(
+    for link: DocumentLinkReference,
+    controller: DocumentWindowController
+) -> [InspectorRowAction] {
+    var actions: [InspectorRowAction] = []
+
+    if let fragment = link.fragment,
+       let outlineItem = controller.state.currentRenderResult?.outline.first(where: { $0.id == fragment }) {
+        actions.append(
+            InspectorRowAction(id: "jump:\(outlineItem.id)", title: "Jump to heading", systemImage: "arrow.right.circle") {
+                Task { @MainActor in
+                    controller.scrollToOutlineItem(outlineItem)
+                }
+            }
+        )
+    }
+
+    switch link.kind {
+    case .remoteURL, .email, .telephone:
+        if let url = URL(string: link.target) {
+            actions.append(
+                InspectorRowAction(id: "open-url:\(link.target)", title: "Open link", systemImage: "arrow.up.right.square") {
+                    NSWorkspace.shared.open(url)
+                }
+            )
+        }
+    case .localFile:
+        if let path = link.resolvedPath, FileManager.default.fileExists(atPath: path) {
+            actions.append(contentsOf: localFileActions(path: path))
+        }
+    default:
+        break
+    }
+
+    actions.append(.copy(title: "Copy link target", value: link.target))
+    return uniqueActions(actions)
+}
+
+private func inspectorActions(for asset: DocumentAssetReference) -> [InspectorRowAction] {
+    var actions: [InspectorRowAction] = []
+
+    if asset.kind == .remoteImage, let url = URL(string: asset.source) {
+        actions.append(
+            InspectorRowAction(id: "open-asset-url:\(asset.source)", title: "Open image URL", systemImage: "arrow.up.right.square") {
+                NSWorkspace.shared.open(url)
+            }
+        )
+    }
+
+    if let path = asset.resolvedPath, FileManager.default.fileExists(atPath: path) {
+        actions.append(contentsOf: localFileActions(path: path))
+    }
+
+    actions.append(.copy(title: "Copy asset source", value: asset.source))
+    return uniqueActions(actions)
+}
+
+@MainActor
+private func inspectorActions(
+    for diagnostic: RenderDiagnostic,
+    report: DocumentInspectionReport,
+    controller: DocumentWindowController
+) -> [InspectorRowAction] {
+    guard let source = diagnostic.source else {
+        return []
+    }
+
+    var actions: [InspectorRowAction] = []
+    if let link = report.links.first(where: { $0.target == source }) {
+        actions.append(contentsOf: inspectorActions(for: link, controller: controller).filter { !$0.id.hasPrefix("copy:") })
+    }
+    if let asset = report.assets.first(where: { $0.source == source }) {
+        actions.append(contentsOf: inspectorActions(for: asset).filter { !$0.id.hasPrefix("copy:") })
+    }
+    actions.append(.copy(title: "Copy diagnostic source", value: source))
+    return uniqueActions(actions)
+}
+
+private func localFileActions(path: String) -> [InspectorRowAction] {
+    [
+        InspectorRowAction(id: "open-file:\(path)", title: "Open file", systemImage: "arrow.up.right.square") {
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        },
+        InspectorRowAction(id: "reveal-file:\(path)", title: "Reveal in Finder", systemImage: "magnifyingglass") {
+            NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        }
+    ]
+}
+
+private func uniqueActions(_ actions: [InspectorRowAction]) -> [InspectorRowAction] {
+    var seenIDs = Set<String>()
+    return actions.filter { action in
+        seenIDs.insert(action.id).inserted
+    }
+}
+
+private func copyToPasteboard(_ value: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(value, forType: .string)
+}
+
 private extension DocumentInspectorSection {
     var systemImage: String {
         switch self {
@@ -859,6 +1398,27 @@ private extension DocumentTitleSource {
 }
 
 private extension DocumentReferenceKind {
+    var title: String {
+        switch self {
+        case .sameDocumentHeading:
+            return "Heading"
+        case .localFile:
+            return "Local"
+        case .remoteURL:
+            return "Remote"
+        case .email:
+            return "Email"
+        case .telephone:
+            return "Phone"
+        case .unsupportedScheme:
+            return "Unsupported"
+        case .malformed:
+            return "Malformed"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .sameDocumentHeading:
@@ -878,6 +1438,19 @@ private extension DocumentReferenceKind {
         case .unknown:
             return "link"
         }
+    }
+}
+
+private extension DocumentAssetFileInfo {
+    var displayTitle: String {
+        var values: [String] = []
+        if let byteSize {
+            values.append(ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file))
+        }
+        if let pixelWidth, let pixelHeight {
+            values.append("\(pixelWidth)x\(pixelHeight) px")
+        }
+        return values.isEmpty ? "File details unavailable" : values.joined(separator: " - ")
     }
 }
 
@@ -903,6 +1476,102 @@ private extension DocumentAssetKind {
             return "globe"
         case .unknown:
             return "questionmark.diamond"
+        }
+    }
+}
+
+private extension RenderDiagnostic {
+    func matches(query: String) -> Bool {
+        let haystack = [
+            kind.title,
+            kind.rawValue,
+            severity.title,
+            message,
+            source ?? ""
+        ]
+        .joined(separator: " ")
+
+        return haystack.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+}
+
+private extension RenderDiagnosticKind {
+    var title: String {
+        switch self {
+        case .missingLocalImage:
+            return "Missing Images"
+        case .missingLocalLink:
+            return "Missing Links"
+        case .missingHeadingFragment:
+            return "Heading Links"
+        case .malformedLink:
+            return "Malformed Links"
+        case .malformedFrontMatter:
+            return "Front Matter"
+        case .unsupportedLinkScheme:
+            return "Unsupported Links"
+        case .mermaidRenderFailure:
+            return "Mermaid"
+        case .mathRenderFailure:
+            return "Math"
+        case .richContentDisabled:
+            return "Disabled Features"
+        case .malformedGitHubCallout:
+            return "Callouts"
+        case .linkValidationSkipped:
+            return "Skipped Link Checks"
+        case .unsupportedExtension:
+            return "Unsupported Files"
+        case .renderFailure:
+            return "Rendering"
+        }
+    }
+}
+
+private extension RenderDiagnosticSeverity {
+    var title: String {
+        switch self {
+        case .info:
+            return "Info"
+        case .warning:
+            return "Warning"
+        case .error:
+            return "Error"
+        }
+    }
+
+    var sortPriority: Int {
+        switch self {
+        case .error:
+            return 0
+        case .warning:
+            return 1
+        case .info:
+            return 2
+        }
+    }
+}
+
+private extension ExportReadinessSeverity {
+    var title: String {
+        switch self {
+        case .info:
+            return "Info"
+        case .warning:
+            return "Warning"
+        case .error:
+            return "Error"
+        }
+    }
+
+    var sortPriority: Int {
+        switch self {
+        case .error:
+            return 0
+        case .warning:
+            return 1
+        case .info:
+            return 2
         }
     }
 }

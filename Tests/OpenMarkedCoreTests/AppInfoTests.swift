@@ -696,10 +696,31 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(report.assets.contains { $0.source == "../Assets/sample-mark.svg" && $0.status == .valid })
         XCTAssertTrue(report.assets.contains { $0.source == "../Assets/missing-image.png" && $0.status == .missing })
         XCTAssertTrue(report.assets.contains { $0.source == "https://example.com/openmarked.png" && $0.kind == .remoteImage && $0.status == .skipped })
+        XCTAssertTrue(report.links.contains { $0.target == "README.md" && $0.resolvedPath?.hasSuffix("Fixtures/Markdown/README.md") == true })
+        let localAsset = try XCTUnwrap(report.assets.first { $0.source == "../Assets/sample-mark.svg" })
+        XCTAssertTrue(localAsset.resolvedPath?.hasSuffix("Fixtures/Assets/sample-mark.svg") == true)
+        XCTAssertGreaterThan(localAsset.fileInfo?.byteSize ?? 0, 0)
+        XCTAssertEqual(localAsset.fileInfo?.pixelWidth, 640)
+        XCTAssertEqual(localAsset.fileInfo?.pixelHeight, 360)
         XCTAssertFalse(report.exportReadiness.isReady)
         XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Missing local link" && $0.source == "missing-guide.md" })
         XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Missing image" && $0.source == "../Assets/missing-image.png" })
         XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Remote image" && $0.source == "https://example.com/openmarked.png" })
+    }
+
+    func testExportReadinessReportsBlockedRemoteImages() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("openmarked-blocked-remote-image-\(UUID().uuidString).md")
+        try "# Remote\n\n![Remote](https://example.com/image.png)\n".write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document, allowsRemoteImages: false))
+        let report = DocumentInspectionBuilder.build(document: document, renderResult: result)
+
+        XCTAssertTrue(report.assets.contains { $0.source == "https://example.com/image.png" && $0.status == .blocked })
+        XCTAssertFalse(report.exportReadiness.isReady)
+        XCTAssertTrue(report.exportReadiness.issues.contains { $0.title == "Remote image blocked" && $0.source == "https://example.com/image.png" })
     }
 
     func testRenderDiagnosticKindsIncludeRichMarkdownFoundationKinds() {

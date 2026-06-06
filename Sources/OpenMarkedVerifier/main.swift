@@ -547,10 +547,26 @@ verify(referenceInspectionReport.links.contains { $0.target == "javascript:alert
 verify(referenceInspectionReport.assets.contains { $0.source == "../Assets/sample-mark.svg" && $0.status == .valid }, "inspection should mark existing local images valid")
 verify(referenceInspectionReport.assets.contains { $0.source == "../Assets/missing-image.png" && $0.status == .missing }, "inspection should mark missing local images")
 verify(referenceInspectionReport.assets.contains { $0.source == "https://example.com/openmarked.png" && $0.kind == .remoteImage && $0.status == .skipped }, "inspection should mark remote images as skipped")
+verify(referenceInspectionReport.links.contains { $0.target == "README.md" && $0.resolvedPath?.hasSuffix("Fixtures/Markdown/README.md") == true }, "inspection should resolve local link paths")
+let referenceLocalAsset = referenceInspectionReport.assets.first { $0.source == "../Assets/sample-mark.svg" }
+verify(referenceLocalAsset?.resolvedPath?.hasSuffix("Fixtures/Assets/sample-mark.svg") == true, "inspection should resolve local asset paths")
+verify((referenceLocalAsset?.fileInfo?.byteSize ?? 0) > 0, "inspection should include local asset byte size")
+verify(referenceLocalAsset?.fileInfo?.pixelWidth == 640, "inspection should include SVG asset width")
+verify(referenceLocalAsset?.fileInfo?.pixelHeight == 360, "inspection should include SVG asset height")
 verify(!referenceInspectionReport.exportReadiness.isReady, "inspection should block readiness for missing references")
 verify(referenceInspectionReport.exportReadiness.issues.contains { $0.title == "Missing local link" && $0.source == "missing-guide.md" }, "readiness should include missing local links")
 verify(referenceInspectionReport.exportReadiness.issues.contains { $0.title == "Missing image" && $0.source == "../Assets/missing-image.png" }, "readiness should include missing images")
 verify(referenceInspectionReport.exportReadiness.issues.contains { $0.title == "Remote image" && $0.source == "https://example.com/openmarked.png" }, "readiness should include remote images as informational")
+
+let blockedRemoteImageURL = URL(fileURLWithPath: NSTemporaryDirectory())
+    .appendingPathComponent("openmarked-blocked-remote-image-\(UUID().uuidString).md")
+try "# Remote\n\n![Remote](https://example.com/image.png)\n".write(to: blockedRemoteImageURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: blockedRemoteImageURL) }
+let blockedRemoteImageDocument = try MarkdownDocumentLoader.load(url: blockedRemoteImageURL, createBookmark: false)
+let blockedRemoteImageResult = try renderer.render(RenderRequest(document: blockedRemoteImageDocument, allowsRemoteImages: false))
+let blockedRemoteImageReport = DocumentInspectionBuilder.build(document: blockedRemoteImageDocument, renderResult: blockedRemoteImageResult)
+verify(blockedRemoteImageReport.assets.contains { $0.source == "https://example.com/image.png" && $0.status == .blocked }, "inspection should mark blocked remote images")
+verify(blockedRemoteImageReport.exportReadiness.issues.contains { $0.title == "Remote image blocked" && $0.source == "https://example.com/image.png" }, "readiness should warn about blocked remote images")
 
 let mermaidURL = URL(fileURLWithPath: "Fixtures/Markdown/mermaid.md").standardizedFileURL
 let mermaidDocument = try MarkdownDocumentLoader.load(url: mermaidURL, createBookmark: false)

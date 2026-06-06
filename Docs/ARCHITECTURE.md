@@ -123,6 +123,17 @@ Link validation behavior:
 - Cross-document Markdown heading fragments are inspected only for local, readable, size-limited target files.
 - Remote HTTP(S) links are parsed but not crawled during normal rendering.
 - Unsupported schemes and malformed URLs produce diagnostics without interrupting preview.
+- The 0.4 inspector keeps link references actionable without adding background network work: rows expose type/status filters, diagnostics, resolved local paths, copy/open/reveal actions, and heading jumps when the rendered outline has a matching fragment.
+
+## Inspector Readiness Direction
+
+Phase 4 expands document inspection into native links, assets, diagnostics, and export-readiness panels.
+
+Inspector behavior:
+
+- Asset references are extracted from rendered images and include resolved local paths, status, file size, and dimensions when available. Remote images reflect the current content policy as skipped or blocked.
+- Diagnostics are grouped by severity and kind in the inspector while the status-bar popover remains available for quick warning review.
+- Export readiness is advisory. It summarizes missing local links, missing images, blocked remote images, remote-image notes, rich-content render failures, wide tables, unsupported schemes, malformed front matter, and page-count/page-break review notes without disabling export commands.
 
 ## Rich Content Resource Direction
 

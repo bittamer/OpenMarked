@@ -27,11 +27,25 @@ strict_hashes = sys.argv[3] == "1"
 
 work = json.loads(work_manifest.read_text())
 entries = work.get("snapshots", [])
-if len(entries) < 22:
-    raise SystemExit("Expected at least 23 visual snapshots")
+if len(entries) < 32:
+    raise SystemExit(f"Expected at least 32 visual snapshots, found {len(entries)}")
 
 palette_theme_ids = {"catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"}
-required_ids = {"github-rich-markdown-light", "github-rich-markdown-dark", "github-broken-links-light", "user-fixture-theme-gfm-light"}
+required_ids = {
+    "github-rich-markdown-light",
+    "github-rich-markdown-dark",
+    "github-broken-links-light",
+    "user-fixture-theme-gfm-light",
+    "inspector-summary-light",
+    "inspector-metadata-light",
+    "inspector-statistics-light",
+    "inspector-links-light",
+    "inspector-assets-light",
+    "inspector-diagnostics-dark",
+    "inspector-export-readiness-light",
+    "settings-theme-manager-light",
+    "settings-print-controls-light",
+}
 for theme_id in palette_theme_ids:
     required_ids.add(f"{theme_id}-gfm-light")
     required_ids.add(f"{theme_id}-rich-dark")
@@ -53,6 +67,27 @@ required_broken_link_kinds = {"missingHeadingFragment", "missingLocalLink", "uns
 missing_broken_link_kinds = sorted(required_broken_link_kinds - broken_link_kinds)
 if missing_broken_link_kinds:
     raise SystemExit(f"Broken link snapshot did not record diagnostics: {', '.join(missing_broken_link_kinds)}")
+
+expected_inspector_sections = {
+    "inspector-summary-light": "summary",
+    "inspector-metadata-light": "metadata",
+    "inspector-statistics-light": "statistics",
+    "inspector-links-light": "links",
+    "inspector-assets-light": "assets",
+    "inspector-diagnostics-dark": "diagnostics",
+    "inspector-export-readiness-light": "export",
+}
+entries_by_id = {entry["id"]: entry for entry in entries}
+for snapshot_id, expected_section in expected_inspector_sections.items():
+    entry = entries_by_id[snapshot_id]
+    if entry.get("surface") != "inspector":
+        raise SystemExit(f"{snapshot_id} should be recorded as an inspector snapshot")
+    if entry.get("inspectorSection") != expected_section:
+        raise SystemExit(f"{snapshot_id} should record inspectorSection={expected_section}")
+
+for snapshot_id in ["settings-theme-manager-light", "settings-print-controls-light"]:
+    if entries_by_id[snapshot_id].get("surface") != "settings":
+        raise SystemExit(f"{snapshot_id} should be recorded as a settings snapshot")
 
 if baseline_manifest.exists():
     baseline = json.loads(baseline_manifest.read_text())

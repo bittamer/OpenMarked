@@ -1,7 +1,7 @@
 {
-  "appBuild" : "3",
-  "appVersion" : "0.3.0",
-  "schemaVersion" : 2,
+  "appBuild" : "4",
+  "appVersion" : "0.4.0",
+  "schemaVersion" : 3,
   "snapshots" : [
     {
       "appearance" : "light",
@@ -15,6 +15,7 @@
       "height" : 720,
       "id" : "default-readme-light",
       "sha256" : "826f7059bd92eadf1d194370e48f4d58525c3356cd43bb1e2195ee4663f8369d",
+      "surface" : "preview",
       "themeID" : "default",
       "width" : 960
     },
@@ -30,6 +31,7 @@
       "height" : 720,
       "id" : "github-gfm-light",
       "sha256" : "01249e341970df487ac4a41beec179019ce571b0b7af9264e1fbb40c7457b498",
+      "surface" : "preview",
       "themeID" : "github",
       "width" : 960
     },
@@ -45,6 +47,7 @@
       "height" : 720,
       "id" : "minimal-prose-light",
       "sha256" : "3983a44acdbab19f0e3bc9b22273d27c78a6479ee8fd7df2f72888a3eb490062",
+      "surface" : "preview",
       "themeID" : "minimal",
       "width" : 960
     },
@@ -60,6 +63,7 @@
       "height" : 720,
       "id" : "github-rich-markdown-light",
       "sha256" : "5225e05786f68b3f0d77dd573aa1a1d37b0d926d0535113e68af0d82c23b8981",
+      "surface" : "preview",
       "themeID" : "github",
       "width" : 960
     },
@@ -75,6 +79,7 @@
       "height" : 720,
       "id" : "github-rich-markdown-dark",
       "sha256" : "82b5a677b6d540f31bf9d8d68eee29df1bb9d7808b7006e9a9c173f2ad1dbd02",
+      "surface" : "preview",
       "themeID" : "github",
       "width" : 960
     },
@@ -94,6 +99,7 @@
       "height" : 720,
       "id" : "github-broken-links-light",
       "sha256" : "19faeeccd21af1e625fc45acff4d25efd6a0b7fa81714af9e6ecd97e5095aaf1",
+      "surface" : "preview",
       "themeID" : "github",
       "width" : 960
     },
@@ -109,6 +115,7 @@
       "height" : 720,
       "id" : "default-local-images-light",
       "sha256" : "6d4886e8baadd6c35ae9ab5f54b8ad87e0bd6c9e23db03b703841dbb48470c03",
+      "surface" : "preview",
       "themeID" : "default",
       "width" : 960
     },
@@ -124,6 +131,7 @@
       "height" : 720,
       "id" : "github-long-document-dark",
       "sha256" : "b150573e95e95d6b3fa8780b4839b185b235ee95fd68dad2db40ac34c933a9e5",
+      "surface" : "preview",
       "themeID" : "github",
       "width" : 960
     },
@@ -139,8 +147,170 @@
       "height" : 720,
       "id" : "user-fixture-theme-gfm-light",
       "sha256" : "0e3469b7347e5467474533536aa8cec5bbc2adaf7855057460018aa69cef0f4f",
+      "surface" : "preview",
       "themeID" : "user.fixture",
       "width" : 960
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 277319,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "inspector-summary-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/metadata-rich.md",
+      "height" : 760,
+      "id" : "inspector-summary-light",
+      "inspectorSection" : "summary",
+      "sha256" : "8963b16e4f5e2e81edc3c46b73b102c54d4df926c5d5518baca5f3c4ff48543b",
+      "surface" : "inspector",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 269037,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "inspector-metadata-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/metadata-rich.md",
+      "height" : 760,
+      "id" : "inspector-metadata-light",
+      "inspectorSection" : "metadata",
+      "sha256" : "a9b66d417262d870ac4a4f1608ba4a5050f92dde9d37c4f7ddec64dcf3ba7390",
+      "surface" : "inspector",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 263041,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "inspector-statistics-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/statistics-rich.md",
+      "height" : 760,
+      "id" : "inspector-statistics-light",
+      "inspectorSection" : "statistics",
+      "sha256" : "14895893d3feb3fc0b6cac970d05dd76384353f04b46a428df69ea0aa34a7e87",
+      "surface" : "inspector",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 262439,
+      "diagnosticCount" : 4,
+      "diagnosticKinds" : [
+        "malformedLink",
+        "missingLocalImage",
+        "missingLocalLink",
+        "unsupportedLinkScheme"
+      ],
+      "file" : "inspector-links-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/inspection-links-assets.md",
+      "height" : 760,
+      "id" : "inspector-links-light",
+      "inspectorSection" : "links",
+      "sha256" : "4a089e6b7db682c133c2a3916e0fa863d2c5e63741c0198874052d9f0b5cd064",
+      "surface" : "inspector",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 232885,
+      "diagnosticCount" : 4,
+      "diagnosticKinds" : [
+        "malformedLink",
+        "missingLocalImage",
+        "missingLocalLink",
+        "unsupportedLinkScheme"
+      ],
+      "file" : "inspector-assets-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/inspection-links-assets.md",
+      "height" : 760,
+      "id" : "inspector-assets-light",
+      "inspectorSection" : "assets",
+      "sha256" : "0c4e26ab56e091f00e168503f1b1f5559a0ff3d24c7ae7a2817a85ee2e8285ac",
+      "surface" : "inspector",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "dark",
+      "bytes" : 286232,
+      "diagnosticCount" : 6,
+      "diagnosticKinds" : [
+        "malformedLink",
+        "missingHeadingFragment",
+        "missingLocalImage",
+        "missingLocalLink",
+        "unsupportedLinkScheme"
+      ],
+      "file" : "inspector-diagnostics-dark.png",
+      "fixturePath" : "Fixtures\/Markdown\/broken-links.md",
+      "height" : 760,
+      "id" : "inspector-diagnostics-dark",
+      "inspectorSection" : "diagnostics",
+      "sha256" : "c15fa3470c1d24273c1e4324cec67627ce802985ad1a00d84acc24f0e626d52a",
+      "surface" : "inspector",
+      "themeID" : "github",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 257808,
+      "diagnosticCount" : 1,
+      "diagnosticKinds" : [
+        "missingLocalImage"
+      ],
+      "file" : "inspector-export-readiness-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/print-readiness.md",
+      "height" : 760,
+      "id" : "inspector-export-readiness-light",
+      "inspectorSection" : "export",
+      "sha256" : "ee1e7d77bf15364876cb78457949d158ce9964de7a18f7a9d868b692deff7672",
+      "surface" : "inspector",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 530956,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "settings-theme-manager-light.png",
+      "fixturePath" : "Fixtures\/Themes\/user-fixture.css",
+      "height" : 760,
+      "id" : "settings-theme-manager-light",
+      "sha256" : "c1f3171a97ffd0aa280530642d77273e9ad705cd795adf51b98457c9411a6100",
+      "surface" : "settings",
+      "themeID" : "default",
+      "width" : 1120
+    },
+    {
+      "appearance" : "light",
+      "bytes" : 210207,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "settings-print-controls-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/print-readiness.md",
+      "height" : 760,
+      "id" : "settings-print-controls-light",
+      "sha256" : "8f73e68e1ec75af4ce7cd8b45f5e83210f120e5710e1cb41ea27f11c2d7f8893",
+      "surface" : "settings",
+      "themeID" : "default",
+      "width" : 1120
     },
     {
       "appearance" : "light",
@@ -154,6 +324,7 @@
       "height" : 720,
       "id" : "catppuccin-gfm-light",
       "sha256" : "91ad5ea80c67e96b79eea8f8fe712e8c58aa1f1586b53a3b413c1f78d47337b9",
+      "surface" : "preview",
       "themeID" : "catppuccin",
       "width" : 960
     },
@@ -169,6 +340,7 @@
       "height" : 720,
       "id" : "catppuccin-rich-dark",
       "sha256" : "c2753ffcdaee3a9e63c6713927db5c4766a763d07675cff790c8f715afc149e2",
+      "surface" : "preview",
       "themeID" : "catppuccin",
       "width" : 960
     },
@@ -184,6 +356,7 @@
       "height" : 720,
       "id" : "tokyo-night-gfm-light",
       "sha256" : "2b47dde5114fbd134d208d2f527fbf41dcfa4f36df4f7ec42c5d0a95abd7cb2a",
+      "surface" : "preview",
       "themeID" : "tokyo-night",
       "width" : 960
     },
@@ -199,6 +372,7 @@
       "height" : 720,
       "id" : "tokyo-night-rich-dark",
       "sha256" : "7ae45b07a1fb8f1c74b30a5623e43a24f5bd97ef77569e84189d21ec69d14e17",
+      "surface" : "preview",
       "themeID" : "tokyo-night",
       "width" : 960
     },
@@ -214,6 +388,7 @@
       "height" : 720,
       "id" : "everforest-gfm-light",
       "sha256" : "c7ca3d7bbefba77584654b81b4aa92044f893c2dd74fbec48956d0a17bbc1506",
+      "surface" : "preview",
       "themeID" : "everforest",
       "width" : 960
     },
@@ -229,6 +404,7 @@
       "height" : 720,
       "id" : "everforest-rich-dark",
       "sha256" : "ea2b3742db909e555483a53edb6af60d5e6458124b6f640c702b21cd600b2d31",
+      "surface" : "preview",
       "themeID" : "everforest",
       "width" : 960
     },
@@ -244,6 +420,7 @@
       "height" : 720,
       "id" : "nord-gfm-light",
       "sha256" : "bb7a24275de8278606730edff0e62b8ef5cd4532e1bdb1b9e42b00acfbd08230",
+      "surface" : "preview",
       "themeID" : "nord",
       "width" : 960
     },
@@ -259,6 +436,7 @@
       "height" : 720,
       "id" : "nord-rich-dark",
       "sha256" : "4a9b6432c60a0b55be8cec0ec5c2c022c4cd38342576c67eb0492c2bcee939b6",
+      "surface" : "preview",
       "themeID" : "nord",
       "width" : 960
     },
@@ -274,6 +452,7 @@
       "height" : 720,
       "id" : "rose-pine-gfm-light",
       "sha256" : "06c33548b689b48d74cb0a4fd1bb62c6f592767cd1f45fde12596b51b8246042",
+      "surface" : "preview",
       "themeID" : "rose-pine",
       "width" : 960
     },
@@ -289,6 +468,7 @@
       "height" : 720,
       "id" : "rose-pine-rich-dark",
       "sha256" : "e5b417914e6fe93d9e5e2ad8c7304978580fcfc4e87b1ed31eef8033e16bbb80",
+      "surface" : "preview",
       "themeID" : "rose-pine",
       "width" : 960
     },
@@ -304,6 +484,7 @@
       "height" : 720,
       "id" : "dracula-gfm-light",
       "sha256" : "470c5079e387e4224f5992b3ec4ed591cf9df6a177ad905b5afb3c450ae7321a",
+      "surface" : "preview",
       "themeID" : "dracula",
       "width" : 960
     },
@@ -319,6 +500,7 @@
       "height" : 720,
       "id" : "dracula-rich-dark",
       "sha256" : "4b2387531981b6f710d0db6d6150870454ad40c8bccec093d052bf7d111ca4d9",
+      "surface" : "preview",
       "themeID" : "dracula",
       "width" : 960
     },
@@ -334,6 +516,7 @@
       "height" : 720,
       "id" : "gruvbox-gfm-light",
       "sha256" : "8fc804c57098328763dfba6aebfe38e55d37c9408d05d2f8f1f42c28c5054e08",
+      "surface" : "preview",
       "themeID" : "gruvbox",
       "width" : 960
     },
@@ -349,6 +532,7 @@
       "height" : 720,
       "id" : "gruvbox-rich-dark",
       "sha256" : "19338d6b8b3ff1ae8e6329daf43e883ab63e4f4c2c179478e82e0f5b5ebcdbc7",
+      "surface" : "preview",
       "themeID" : "gruvbox",
       "width" : 960
     }

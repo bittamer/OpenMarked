@@ -1,4 +1,4 @@
-# OpenMarked 0.3.0 QA Checklist
+# OpenMarked 0.4.0 QA Checklist
 
 Use this checklist for release manual QA. Run it on macOS 13 or newer from a clean checkout after `Scripts/verify_release.sh` passes.
 
@@ -6,11 +6,11 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 
 1. Run `Scripts/verify_release.sh`.
    Expected result: debug build, release build, verifier, performance smoke, visual snapshots, PDF/export artifacts, tests, package description, diff hygiene, ASCII scan, app bundle creation, signing, ZIP creation, and DMG creation all complete.
-2. Confirm `dist/OpenMarked-0.3.0/OpenMarked.app` exists.
+2. Confirm `dist/OpenMarked-0.4.0/OpenMarked.app` exists.
    Expected result: the app bundle launches.
-3. Confirm `dist/OpenMarked-0.3.0-macOS.zip` exists.
+3. Confirm `dist/OpenMarked-0.4.0-macOS.zip` exists.
    Expected result: the ZIP expands to `OpenMarked.app`.
-4. Confirm `dist/OpenMarked-0.3.0-macOS.dmg` exists.
+4. Confirm `dist/OpenMarked-0.4.0-macOS.dmg` exists.
    Expected result: the DMG mounts and contains `OpenMarked.app`.
 5. Open About OpenMarked.
    Expected result: the About panel shows OpenMarked, current version/build, license, and project URL.
@@ -21,8 +21,8 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 
 1. Launch OpenMarked with no arguments.
    Expected result: an empty window appears with a clear open action.
-2. Use File > Open to open `Fixtures/Markdown/readme.md`.
-   Expected result: the document renders and the window title changes to `readme.md`.
+2. Use File > Open to open `Fixtures/Markdown/README.md`.
+   Expected result: the document renders and the window title changes to `README.md`.
 3. Drag `Fixtures/Markdown/gfm.md` into the preview area.
    Expected result: the dropped document replaces the current empty/active target or opens cleanly.
 4. Open multiple fixtures at once from the open panel.
@@ -44,14 +44,22 @@ Open every file in `Fixtures/Markdown`:
 - `front-matter.md`
 - `gfm.md`
 - `github-readme-compat.md`
+- `heading-depth.md`
+- `inspection-links-assets.md`
+- `json-front-matter.md`
 - `links.md`
 - `local-images.md`
 - `long-document.md`
+- `malformed-front-matter.md`
 - `math.md`
 - `mermaid.md`
+- `metadata-rich.md`
+- `print-readiness.md`
 - `prose.md`
 - `raw-html.md`
 - `rich-markdown.md`
+- `statistics-rich.md`
+- `wide-table.md`
 
 Expected result: no crash, no blank preview, headings render, code blocks keep spacing, tables fit the content width, task lists show checkboxes, footnotes are usable, and front matter is hidden from the rendered body.
 
@@ -87,6 +95,21 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
 5. Use zoom in, zoom out, and actual size.
    Expected result: rendered text scales between supported bounds.
 
+## Document Inspector
+
+1. Open `Fixtures/Markdown/metadata-rich.md` and show the inspector.
+   Expected result: the Summary and Metadata sections show the front matter title, YAML format, standard fields, custom fields, and file facts.
+2. Switch to the Statistics section with `Fixtures/Markdown/statistics-rich.md`.
+   Expected result: counts include headings, sections, links, images, code blocks, tables, callouts, Mermaid, and math.
+3. Switch to Links and Assets with `Fixtures/Markdown/inspection-links-assets.md`.
+   Expected result: valid local references, missing references, remote references, malformed links, unsupported schemes, and local image metadata are visible.
+4. Switch to Diagnostics with `Fixtures/Markdown/broken-links.md`.
+   Expected result: diagnostics are readable and match the popover kinds.
+5. Switch to Export with `Fixtures/Markdown/print-readiness.md`.
+   Expected result: missing local image, remote image, wide table, and multi-page review notes are visible when applicable.
+6. Scroll a long document with the outline visible.
+   Expected result: the current outline item and status breadcrumb update as the preview section changes.
+
 ## Link Validation
 
 1. Open `Fixtures/Markdown/links.md`.
@@ -100,7 +123,7 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
 
 ## Themes, Appearance, And Accessibility
 
-1. Switch through Default, GitHub, and Minimal themes.
+1. Switch through Default, GitHub, Minimal, Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, and Gruvbox themes.
    Expected result: typography, tables, code blocks, links, callouts, diagrams, and math remain readable.
 2. In Settings > Theme Manager, import `Fixtures/Themes/user-fixture.css`, preview it, apply it, rename it, reveal the managed theme folder, and delete it.
    Expected result: the user theme appears beside built-ins, drives the active preview, persists in Settings while present, reveals only app-managed CSS files, and falls back cleanly after deletion.
@@ -109,8 +132,8 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
 4. Enable reduced motion in System Settings.
    Expected result: preview navigation/search uses immediate scrolling instead of smooth scrolling.
 5. Navigate primary controls with keyboard.
-   Expected result: open, reload, outline, theme, search, source, export, and settings controls are reachable.
-6. Run a VoiceOver smoke pass on the toolbar, empty state, error state, outline, find bar, and settings.
+   Expected result: open, reload, outline, inspector, theme, search, source, export, and settings controls are reachable.
+6. Run a VoiceOver smoke pass on the toolbar, empty state, error state, outline, inspector, find bar, and settings.
    Expected result: controls and states have meaningful labels.
 
 ## Settings

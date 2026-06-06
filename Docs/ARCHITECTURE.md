@@ -209,7 +209,7 @@ Phase 10 keeps distribution lightweight and reproducible while the project is st
 Distribution behavior:
 
 - `Scripts/verify_release.sh` runs the automated release gate: debug build, app product build, release build, verifier, performance smoke, visual snapshots, PDF/export artifact checks, SwiftPM tests, package metadata, diff hygiene, ASCII scan, packaging, signing, ZIP creation, and DMG creation.
-- `Scripts/package_release.sh` wraps the SwiftPM release executable into `dist/OpenMarked-0.3.0/OpenMarked.app`, copies the SwiftPM resource bundle under `Contents/Resources`, verifies bundled rich-content resources are present, writes Info.plist metadata from `Packaging/Info.plist.template`, signs the bundle, and creates `dist/OpenMarked-0.3.0-macOS.zip` plus `dist/OpenMarked-0.3.0-macOS.dmg`.
+- `Scripts/package_release.sh` reads version metadata from `AppInfo`, wraps the SwiftPM release executable into `dist/OpenMarked-<version>/OpenMarked.app`, copies the SwiftPM resource bundle under `Contents/Resources`, verifies bundled rich-content resources are present, writes Info.plist metadata from `Packaging/Info.plist.template`, signs the bundle, and creates `dist/OpenMarked-<version>-macOS.zip` plus `dist/OpenMarked-<version>-macOS.dmg`.
 - Release notes live in `RELEASE_NOTES.md`; the owner gate and tag instructions live in `Docs/RELEASE.md`; the manual pass lives in `Docs/QA.md`.
 - Artifacts are ad hoc signed by default and not notarized unless Developer ID credentials are supplied through environment variables.
 

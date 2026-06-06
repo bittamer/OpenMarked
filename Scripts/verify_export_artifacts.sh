@@ -27,10 +27,25 @@ pdf_dir = pathlib.Path(sys.argv[3])
 manifest = json.loads(manifest_path.read_text())
 entries = manifest.get("snapshots", [])
 
-if len(entries) < 23:
-    raise SystemExit(f"Expected at least 23 export fixture entries, found {len(entries)}")
+if len(entries) < 32:
+    raise SystemExit(f"Expected at least 32 export fixture entries, found {len(entries)}")
 
 required_ids = {entry["id"] for entry in entries}
+required_surface_ids = {
+    "inspector-summary-light",
+    "inspector-metadata-light",
+    "inspector-statistics-light",
+    "inspector-links-light",
+    "inspector-assets-light",
+    "inspector-diagnostics-dark",
+    "inspector-export-readiness-light",
+    "settings-theme-manager-light",
+    "settings-print-controls-light",
+}
+missing_surface_ids = sorted(required_surface_ids - required_ids)
+if missing_surface_ids:
+    raise SystemExit(f"Missing inspector/settings export fixtures: {', '.join(missing_surface_ids)}")
+
 palette_theme_ids = {"catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"}
 required_palette_ids = set()
 for theme_id in palette_theme_ids:
@@ -70,6 +85,27 @@ required_broken_link_kinds = {"missingHeadingFragment", "missingLocalLink", "uns
 missing_broken_link_kinds = sorted(required_broken_link_kinds - broken_link_kinds)
 if missing_broken_link_kinds:
     raise SystemExit(f"Broken link export fixture did not record diagnostics: {', '.join(missing_broken_link_kinds)}")
+
+entries_by_id = {entry["id"]: entry for entry in entries}
+expected_inspector_sections = {
+    "inspector-summary-light": "summary",
+    "inspector-metadata-light": "metadata",
+    "inspector-statistics-light": "statistics",
+    "inspector-links-light": "links",
+    "inspector-assets-light": "assets",
+    "inspector-diagnostics-dark": "diagnostics",
+    "inspector-export-readiness-light": "export",
+}
+for snapshot_id, expected_section in expected_inspector_sections.items():
+    entry = entries_by_id[snapshot_id]
+    if entry.get("surface") != "inspector":
+        raise SystemExit(f"{snapshot_id} should be recorded as an inspector export fixture")
+    if entry.get("inspectorSection") != expected_section:
+        raise SystemExit(f"{snapshot_id} should record inspectorSection={expected_section}")
+
+for snapshot_id in ["settings-theme-manager-light", "settings-print-controls-light"]:
+    if entries_by_id[snapshot_id].get("surface") != "settings":
+        raise SystemExit(f"{snapshot_id} should be recorded as a settings export fixture")
 
 print("Export artifact verification passed.")
 PY

@@ -4,7 +4,7 @@
 
 The MVP is a native macOS Markdown previewer that can open local Markdown files, render them beautifully, follow edits from external editors, navigate long documents, and export HTML/PDF.
 
-Current state: 0.1.0 and 0.2.0 are tagged. 0.3.0 adds the Markdown Power Pack on top of the hardened MVP.
+Current state: 0.4.0 adds the Document Workbench on top of the hardened MVP and Markdown Power Pack.
 
 ### 0.1.0-alpha.1: Foundation
 
@@ -73,7 +73,7 @@ Dependency policy: `Docs/RICH_CONTENT_DEPENDENCIES.md`.
 - Local heading/link validation diagnostics.
 - GitHub README compatibility mode.
 
-## 0.4.0 Document Inspection And Themes
+## 0.4.0 Document Workbench
 
 Build the tools that make OpenMarked more than a passive previewer.
 
@@ -83,6 +83,8 @@ Build the tools that make OpenMarked more than a passive previewer.
 - Current section highlight in the outline.
 - Theme manager and custom CSS import.
 - Print-specific CSS controls.
+- Export readiness checks.
+- Repeat HTML/PDF export.
 
 ## 0.5.0 Publishing Workflows
 

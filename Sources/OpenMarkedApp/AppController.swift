@@ -328,12 +328,17 @@ final class AppController: ObservableObject {
             ]
         )
 
-        NSApplication.shared.orderFrontStandardAboutPanel(options: [
+        var options: [NSApplication.AboutPanelOptionKey: Any] = [
             .applicationName: AppInfo.name,
             .applicationVersion: AppInfo.version,
             .version: "Build \(AppInfo.build)",
             .credits: credits
-        ])
+        ]
+        if let icon = OpenMarkedAppIcon.image() {
+            options[.applicationIcon] = icon
+        }
+
+        NSApplication.shared.orderFrontStandardAboutPanel(options: options)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 

@@ -10,6 +10,8 @@
     <string>OpenMarked</string>
     <key>CFBundleIdentifier</key>
     <string>{{BUNDLE_IDENTIFIER}}</string>
+    <key>CFBundleIconFile</key>
+    <string>OpenMarkedIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

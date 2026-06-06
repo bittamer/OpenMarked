@@ -798,14 +798,9 @@ private struct EmptyDocumentView: View {
 
     var body: some View {
         VStack(spacing: 22) {
-            ZStack {
-                Circle()
-                    .fill(chrome.accent.opacity(0.10))
-                    .frame(width: 112, height: 112)
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 46, weight: .regular))
-                    .foregroundStyle(chrome.accent)
-            }
+            OpenMarkedLogoView()
+                .frame(width: 112, height: 112)
+                .accessibilityLabel("OpenMarked logo")
 
             VStack(spacing: 8) {
                 Text(AppInfo.name)

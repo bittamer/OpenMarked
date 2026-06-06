@@ -30,6 +30,8 @@ APP_DIR="$PACKAGE_DIR/$APP_NAME"
 ZIP_PATH="$DIST_DIR/OpenMarked-${VERSION}-macOS.zip"
 DMG_PATH="$DIST_DIR/OpenMarked-${VERSION}-macOS.dmg"
 RESOURCE_BUNDLE="$BIN_DIR/OpenMarked_OpenMarkedCore.bundle"
+APP_ICON_SOURCE="$ROOT_DIR/Packaging/Assets/OpenMarkedIcon.icns"
+APP_ICON_NAME="OpenMarkedIcon.icns"
 SIGN_IDENTITY="${OPENMARKED_SIGN_IDENTITY:--}"
 
 if [[ ! -x "$BIN_DIR/OpenMarked" ]]; then
@@ -42,11 +44,17 @@ if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$APP_ICON_SOURCE" ]]; then
+  echo "App icon was not found at $APP_ICON_SOURCE" >&2
+  exit 1
+fi
+
 rm -rf "$PACKAGE_DIR" "$ZIP_PATH" "$DMG_PATH"
 install -d "$APP_DIR/Contents/MacOS"
 install -d "$APP_DIR/Contents/Resources"
 
 install -m 755 "$BIN_DIR/OpenMarked" "$APP_DIR/Contents/MacOS/OpenMarked"
+install -m 644 "$APP_ICON_SOURCE" "$APP_DIR/Contents/Resources/$APP_ICON_NAME"
 cp -R "$RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
 
 PACKAGED_RESOURCE_BUNDLE="$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
@@ -83,6 +91,12 @@ sed \
 
 /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_DIR/Contents/Info.plist" >/dev/null
 /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_DIR/Contents/Info.plist" >/dev/null
+/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$APP_DIR/Contents/Info.plist" >/dev/null
+
+if [[ ! -f "$APP_DIR/Contents/Resources/$APP_ICON_NAME" ]]; then
+  echo "Packaged app icon is missing: $APP_ICON_NAME" >&2
+  exit 1
+fi
 
 if [[ "${OPENMARKED_SKIP_CODESIGN:-0}" != "1" ]]; then
   codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_DIR"

@@ -1,5 +1,7 @@
 # OpenMarked
 
+![OpenMarked logo](Packaging/Assets/OpenMarkedLogo.svg)
+
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
 The project is currently at `0.4.0`: OpenMarked is now a Document Workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks.
@@ -9,6 +11,7 @@ The project is currently at `0.4.0`: OpenMarked is now a Document Workbench with
 This repository currently contains:
 
 - Product design: `DESIGN.md`.
+- Logo SVG and packaged macOS app icon: `Packaging/Assets/OpenMarkedLogo.svg` and `Packaging/Assets/OpenMarkedIcon.icns`.
 - MVP implementation plan: `Docs/MVP_IMPLEMENTATION_PLAN.md`.
 - 0.3.0 Markdown Power Pack plan: `Docs/0.3.0_IMPLEMENTATION_PLAN.md`.
 - 0.3.0 backlog tracker: `Docs/0.3.0_BACKLOG.md`.

@@ -129,6 +129,21 @@
     },
     {
       "appearance" : "light",
+      "bytes" : 154577,
+      "diagnosticCount" : 0,
+      "diagnosticKinds" : [
+
+      ],
+      "file" : "user-fixture-theme-gfm-light.png",
+      "fixturePath" : "Fixtures\/Markdown\/gfm.md",
+      "height" : 720,
+      "id" : "user-fixture-theme-gfm-light",
+      "sha256" : "0e3469b7347e5467474533536aa8cec5bbc2adaf7855057460018aa69cef0f4f",
+      "themeID" : "user.fixture",
+      "width" : 960
+    },
+    {
+      "appearance" : "light",
       "bytes" : 162108,
       "diagnosticCount" : 0,
       "diagnosticKinds" : [

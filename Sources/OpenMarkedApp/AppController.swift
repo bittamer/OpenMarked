@@ -9,14 +9,17 @@ final class AppController: ObservableObject {
 
     @Published private(set) var activeWindowController: DocumentWindowController?
     @Published private(set) var settings: ApplicationSettings
+    @Published private(set) var userPreviewThemes: [UserPreviewTheme]
 
     private var retainedWindows: [UUID: NSWindow] = [:]
     private var retainedWindowDelegates: [UUID: WindowLifecycleDelegate] = [:]
     private let settingsStore = ApplicationSettingsStore.shared
+    private let userPreviewThemeStore = UserPreviewThemeStore.shared
     private var didAttemptSessionRestore = false
 
     private init() {
         self.settings = settingsStore.load()
+        self.userPreviewThemes = userPreviewThemeStore.load()
     }
 
     var activeCanReloadPreview: Bool {
@@ -37,6 +40,22 @@ final class AppController: ObservableObject {
 
     var activeIsInspectorVisible: Bool {
         activeWindowController?.state.layout.isInspectorVisible ?? false
+    }
+
+    var availablePreviewThemes: [PreviewTheme] {
+        PreviewThemeStore.allBuiltInThemes + userPreviewThemes.map(userPreviewThemeStore.previewTheme(for:))
+    }
+
+    var userPreviewThemesDirectoryURL: URL {
+        userPreviewThemeStore.themesDirectoryURL
+    }
+
+    func previewTheme(id: String) -> PreviewTheme {
+        if PreviewThemeStore.isBuiltInThemeID(id) {
+            return PreviewThemeStore.builtInTheme(id: id)
+        }
+
+        return userPreviewThemeStore.previewTheme(id: id) ?? PreviewThemeStore.defaultTheme
     }
 
     func registerWindowController(_ controller: DocumentWindowController) {
@@ -139,6 +158,85 @@ final class AppController: ObservableObject {
 
     func setTheme(id: String) {
         activeWindowController?.setTheme(id: id)
+    }
+
+    @discardableResult
+    func importPreviewTheme() -> UserPreviewTheme? {
+        let panel = NSOpenPanel()
+        panel.title = "Import CSS Theme"
+        panel.prompt = "Import"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.resolvesAliases = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "css")].compactMap { $0 }
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return nil
+        }
+
+        do {
+            let theme = try userPreviewThemeStore.importTheme(from: url)
+            reloadUserPreviewThemes()
+            setDefaultAndActivePreviewTheme(id: theme.id)
+            return theme
+        } catch {
+            presentThemeError(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    func duplicateBuiltInPreviewTheme(id: String) -> UserPreviewTheme? {
+        do {
+            let theme = try userPreviewThemeStore.duplicateBuiltInTheme(id: id)
+            reloadUserPreviewThemes()
+            setDefaultAndActivePreviewTheme(id: theme.id)
+            return theme
+        } catch {
+            presentThemeError(error)
+            return nil
+        }
+    }
+
+    @discardableResult
+    func renameUserPreviewTheme(id: String, name: String) -> UserPreviewTheme? {
+        do {
+            let theme = try userPreviewThemeStore.renameTheme(id: id, name: name)
+            reloadUserPreviewThemes()
+            return theme
+        } catch {
+            presentThemeError(error)
+            return nil
+        }
+    }
+
+    func deleteUserPreviewTheme(id: String) {
+        do {
+            try userPreviewThemeStore.deleteTheme(id: id)
+            reloadUserPreviewThemes()
+
+            if settings.defaultThemeID == id {
+                updateSettings { settings in
+                    settings.defaultThemeID = PreviewThemeStore.defaultThemeID
+                }
+            }
+
+            if activeWindowController?.state.layout.selectedThemeID == id {
+                setTheme(id: PreviewThemeStore.defaultThemeID)
+            }
+        } catch {
+            presentThemeError(error)
+        }
+    }
+
+    func revealUserPreviewThemesFolder() {
+        do {
+            try userPreviewThemeStore.ensureThemesDirectory()
+            NSWorkspace.shared.activateFileViewerSelecting([userPreviewThemeStore.themesDirectoryURL])
+        } catch {
+            presentThemeError(error)
+        }
     }
 
     func updateSettings(_ transform: (inout ApplicationSettings) -> Void) {
@@ -273,6 +371,26 @@ final class AppController: ObservableObject {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         controller.open(url: url)
+    }
+
+    private func reloadUserPreviewThemes() {
+        userPreviewThemes = userPreviewThemeStore.load()
+    }
+
+    private func setDefaultAndActivePreviewTheme(id: String) {
+        updateSettings { settings in
+            settings.defaultThemeID = id
+        }
+        setTheme(id: id)
+    }
+
+    private func presentThemeError(_ error: Error) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Theme Error"
+        alert.informativeText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 }
 

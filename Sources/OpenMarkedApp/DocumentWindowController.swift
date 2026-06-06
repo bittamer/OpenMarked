@@ -127,7 +127,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func setTheme(id: String) {
-        let theme = PreviewThemeStore.theme(id: id)
+        let theme = AppController.shared.previewTheme(id: id)
         state.setTheme(id: theme.id)
         if let markdownDocument = state.currentMarkdownDocument {
             render(markdownDocument)
@@ -478,7 +478,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                         renderProfile: settings.renderProfile,
                         richMarkdownOptions: settings.richMarkdownOptions
                     ),
-                    theme: PreviewThemeStore.theme(id: state.layout.selectedThemeID),
+                    theme: AppController.shared.previewTheme(id: state.layout.selectedThemeID),
                     fontScale: state.layout.fontScale,
                     allowsRemoteImages: settings.allowsRemoteImages
                 )

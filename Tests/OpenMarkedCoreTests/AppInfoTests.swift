@@ -1080,6 +1080,66 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(result.fullHTML.contains("Segoe UI"))
     }
 
+    func testUserPreviewThemeStoreImportsValidatesAndPersistsThemes() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-theme-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let suiteName = "OpenMarkedUserThemeTests-\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let importURL = rootURL.appendingPathComponent("Fixture.css")
+        try "body { color: #123456; }\n".write(to: importURL, atomically: true, encoding: .utf8)
+        let managedURL = rootURL.appendingPathComponent("Managed", isDirectory: true)
+        let store = UserPreviewThemeStore(userDefaults: userDefaults, metadataKey: "Themes", themesDirectoryURL: managedURL)
+
+        let imported = try store.importTheme(from: importURL, name: "Fixture Theme")
+        XCTAssertTrue(imported.id.hasPrefix(UserPreviewTheme.idPrefix))
+        XCTAssertEqual(store.load(), [imported])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imported.screenCSSPath))
+        XCTAssertTrue(store.previewTheme(for: imported).screenCSS.contains("#123456"))
+
+        let reloadedStore = UserPreviewThemeStore(userDefaults: userDefaults, metadataKey: "Themes", themesDirectoryURL: managedURL)
+        XCTAssertEqual(reloadedStore.load(), [imported])
+
+        try "body { background-image: url(javascript:alert(1)); }\n".write(
+            to: URL(fileURLWithPath: imported.screenCSSPath),
+            atomically: true,
+            encoding: .utf8
+        )
+        XCTAssertEqual(store.previewTheme(for: imported).screenCSS, PreviewThemeStore.defaultTheme.screenCSS)
+
+        let remoteImportURL = rootURL.appendingPathComponent("Remote.css")
+        try "@import url(\"https://example.com/theme.css\");\n".write(to: remoteImportURL, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try store.importTheme(from: remoteImportURL)) { error in
+            XCTAssertEqual(error as? UserPreviewThemeError, .importRulesUnsupported)
+        }
+
+        let renamed = try store.renameTheme(id: imported.id, name: "Renamed Fixture")
+        XCTAssertEqual(renamed.name, "Renamed Fixture")
+
+        let duplicate = try store.duplicateBuiltInTheme(id: "github", name: "GitHub Fork")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: duplicate.screenCSSPath))
+        XCTAssertNotNil(duplicate.codeCSSPath)
+        XCTAssertNotNil(duplicate.printCSSPath)
+
+        try store.deleteTheme(id: renamed.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: renamed.screenCSSPath))
+        XCTAssertEqual(store.load().map(\.id), [duplicate.id])
+    }
+
+    func testUserThemeIDsSurviveSettingsNormalization() {
+        let userThemeID = "\(UserPreviewTheme.idPrefix)fixture"
+        let settings = ApplicationSettings(defaultThemeID: userThemeID, defaultFontScale: 1.25)
+        let normalized = settings.normalized()
+
+        XCTAssertEqual(normalized.defaultThemeID, userThemeID)
+        XCTAssertEqual(normalized.defaultLayout.selectedThemeID, userThemeID)
+        XCTAssertEqual(ApplicationSettings(defaultThemeID: "missing").normalized().defaultThemeID, "default")
+    }
+
     func testCodeHighlighterLeavesUnknownLanguagesPlain() {
         let html = #"<pre><code class="language-ruby">puts &quot;hello&quot;</code></pre>"#
         let highlighted = CodeHighlighter.highlight(html)
@@ -2122,6 +2182,74 @@ struct AppInfoTests {
         #expect(PreviewThemeStore.theme(id: "missing").id == "default")
         #expect(result.fullHTML.contains("--om-font-scale: 1.300"))
         #expect(result.fullHTML.contains("Segoe UI"))
+    }
+
+    @Test("User preview theme store imports, validates, and persists themes")
+    func userPreviewThemeStoreImportsValidatesAndPersistsThemes() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-theme-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let suiteName = "OpenMarkedUserThemeTests-\(UUID().uuidString)"
+        guard let userDefaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Expected a test UserDefaults suite")
+            return
+        }
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let importURL = rootURL.appendingPathComponent("Fixture.css")
+        try "body { color: #123456; }\n".write(to: importURL, atomically: true, encoding: .utf8)
+        let managedURL = rootURL.appendingPathComponent("Managed", isDirectory: true)
+        let store = UserPreviewThemeStore(userDefaults: userDefaults, metadataKey: "Themes", themesDirectoryURL: managedURL)
+
+        let imported = try store.importTheme(from: importURL, name: "Fixture Theme")
+        #expect(imported.id.hasPrefix(UserPreviewTheme.idPrefix))
+        #expect(store.load() == [imported])
+        #expect(FileManager.default.fileExists(atPath: imported.screenCSSPath))
+        #expect(store.previewTheme(for: imported).screenCSS.contains("#123456"))
+
+        let reloadedStore = UserPreviewThemeStore(userDefaults: userDefaults, metadataKey: "Themes", themesDirectoryURL: managedURL)
+        #expect(reloadedStore.load() == [imported])
+
+        try "body { background-image: url(javascript:alert(1)); }\n".write(
+            to: URL(fileURLWithPath: imported.screenCSSPath),
+            atomically: true,
+            encoding: .utf8
+        )
+        #expect(store.previewTheme(for: imported).screenCSS == PreviewThemeStore.defaultTheme.screenCSS)
+
+        let remoteImportURL = rootURL.appendingPathComponent("Remote.css")
+        try "@import url(\"https://example.com/theme.css\");\n".write(to: remoteImportURL, atomically: true, encoding: .utf8)
+        do {
+            _ = try store.importTheme(from: remoteImportURL)
+            Issue.record("Expected remote CSS import to be rejected")
+        } catch {
+            #expect(error as? UserPreviewThemeError == .importRulesUnsupported)
+        }
+
+        let renamed = try store.renameTheme(id: imported.id, name: "Renamed Fixture")
+        #expect(renamed.name == "Renamed Fixture")
+
+        let duplicate = try store.duplicateBuiltInTheme(id: "github", name: "GitHub Fork")
+        #expect(FileManager.default.fileExists(atPath: duplicate.screenCSSPath))
+        #expect(duplicate.codeCSSPath != nil)
+        #expect(duplicate.printCSSPath != nil)
+
+        try store.deleteTheme(id: renamed.id)
+        #expect(!FileManager.default.fileExists(atPath: renamed.screenCSSPath))
+        #expect(store.load().map(\.id) == [duplicate.id])
+    }
+
+    @Test("User theme IDs survive settings normalization")
+    func userThemeIDsSurviveSettingsNormalization() {
+        let userThemeID = "\(UserPreviewTheme.idPrefix)fixture"
+        let settings = ApplicationSettings(defaultThemeID: userThemeID, defaultFontScale: 1.25)
+        let normalized = settings.normalized()
+
+        #expect(normalized.defaultThemeID == userThemeID)
+        #expect(normalized.defaultLayout.selectedThemeID == userThemeID)
+        #expect(ApplicationSettings(defaultThemeID: "missing").normalized().defaultThemeID == "default")
     }
 
     @Test("Unknown code languages stay unhighlighted")

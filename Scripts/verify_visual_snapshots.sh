@@ -28,10 +28,10 @@ strict_hashes = sys.argv[3] == "1"
 work = json.loads(work_manifest.read_text())
 entries = work.get("snapshots", [])
 if len(entries) < 22:
-    raise SystemExit("Expected at least 22 visual snapshots")
+    raise SystemExit("Expected at least 23 visual snapshots")
 
 palette_theme_ids = {"catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"}
-required_ids = {"github-rich-markdown-light", "github-rich-markdown-dark", "github-broken-links-light"}
+required_ids = {"github-rich-markdown-light", "github-rich-markdown-dark", "github-broken-links-light", "user-fixture-theme-gfm-light"}
 for theme_id in palette_theme_ids:
     required_ids.add(f"{theme_id}-gfm-light")
     required_ids.add(f"{theme_id}-rich-dark")

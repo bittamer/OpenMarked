@@ -52,7 +52,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
 
     public func normalized() -> ApplicationSettings {
         var settings = self
-        settings.defaultThemeID = PreviewThemeStore.theme(id: defaultThemeID).id
+        settings.defaultThemeID = PreviewThemeStore.normalizedThemeID(defaultThemeID)
         settings.appChromeThemeID = AppChromeThemeStore.theme(id: appChromeThemeID).id
         settings.defaultFontScale = min(2.0, max(0.6, defaultFontScale))
         settings.statisticsWordsPerMinute = DocumentStatisticsOptions(
@@ -75,7 +75,7 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var defaultLayout: WindowLayoutState {
         WindowLayoutState(
             isOutlineVisible: true,
-            selectedThemeID: PreviewThemeStore.theme(id: defaultThemeID).id,
+            selectedThemeID: PreviewThemeStore.normalizedThemeID(defaultThemeID),
             fontScale: min(2.0, max(0.6, defaultFontScale))
         )
     }

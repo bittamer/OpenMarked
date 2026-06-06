@@ -188,7 +188,8 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             SnapshotCase(id: "github-rich-markdown-dark", fixturePath: "Fixtures/Markdown/rich-markdown.md", themeID: "github", appearance: "dark", width: 960, height: 720),
             SnapshotCase(id: "github-broken-links-light", fixturePath: "Fixtures/Markdown/broken-links.md", themeID: "github", appearance: "light", width: 960, height: 720, requiredDiagnosticKinds: [.missingHeadingFragment, .missingLocalLink, .unsupportedLinkScheme, .malformedLink]),
             SnapshotCase(id: "default-local-images-light", fixturePath: "Fixtures/Markdown/local-images.md", themeID: "default", appearance: "light", width: 960, height: 720),
-            SnapshotCase(id: "github-long-document-dark", fixturePath: "Fixtures/Markdown/long-document.md", themeID: "github", appearance: "dark", width: 960, height: 720)
+            SnapshotCase(id: "github-long-document-dark", fixturePath: "Fixtures/Markdown/long-document.md", themeID: "github", appearance: "dark", width: 960, height: 720),
+            SnapshotCase(id: "user-fixture-theme-gfm-light", fixturePath: "Fixtures/Markdown/gfm.md", themeID: "user.fixture", appearance: "light", width: 960, height: 720)
         ] + paletteThemeCases
     }
 
@@ -200,7 +201,7 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
     ) async throws -> SnapshotManifestEntry {
         let documentURL = URL(fileURLWithPath: snapshotCase.fixturePath).standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: documentURL, createBookmark: false)
-        let theme = PreviewThemeStore.theme(id: snapshotCase.themeID)
+        let theme = try previewTheme(for: snapshotCase)
         let result = try renderer.render(RenderRequest(document: document, theme: theme))
         let diagnosticKinds = result.diagnostics.map(\.kind.rawValue).sorted()
         let diagnosticKindSet = Set(diagnosticKinds)
@@ -282,6 +283,26 @@ final class SnapshotRunner: NSObject, WKNavigationDelegate {
             sha256: SHA256.hash(data: pngData).hexString,
             diagnosticCount: result.diagnostics.count,
             diagnosticKinds: Array(Set(diagnosticKinds)).sorted()
+        )
+    }
+
+    private func previewTheme(for snapshotCase: SnapshotCase) throws -> PreviewTheme {
+        guard snapshotCase.themeID == "user.fixture" else {
+            return PreviewThemeStore.theme(id: snapshotCase.themeID)
+        }
+
+        let cssURL = URL(fileURLWithPath: "Fixtures/Themes/user-fixture.css").standardizedFileURL
+        let css = try String(contentsOf: cssURL, encoding: .utf8)
+        try UserPreviewThemeStore.validateCSS(css)
+        let fallbackTheme = PreviewThemeStore.defaultTheme
+        return PreviewTheme(
+            id: snapshotCase.themeID,
+            name: "Fixture User Theme",
+            screenCSS: css,
+            printCSS: fallbackTheme.printCSS,
+            codeHighlightingCSS: fallbackTheme.codeHighlightingCSS,
+            supportsDarkMode: true,
+            defaultMaxWidth: fallbackTheme.defaultMaxWidth
         )
     }
 

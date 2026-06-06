@@ -27,6 +27,7 @@ This repository currently contains:
 - Offline Mermaid diagram and KaTeX math rendering using bundled local assets rather than CDN dependencies.
 - WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
 - Ten built-in preview themes - Default, GitHub, Minimal, plus popular palettes (Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, Gruvbox), each with light and dark variants - alongside print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
+- Custom preview themes through a native Theme Manager, with local CSS import, built-in theme duplication, rename/delete/reveal actions, a live preview gallery, safe CSS validation, and fallback behavior for missing or unsafe user CSS.
 - Separate app chrome themes for the OpenMarked window shell, with palette choices for Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, and Gruvbox.
 - Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
 - Outline filtering, rendered-preview search, richer status statistics, diagnostics popover, and source file actions.
@@ -52,6 +53,8 @@ Signing credentials, notarization, Homebrew Cask, and strict hash-based visual r
 ![GitHub rich Markdown dark](Docs/Screenshots/visual-qa/github-rich-markdown-dark.png)
 
 ![Minimal prose theme](Docs/Screenshots/visual-qa/minimal-prose-light.png)
+
+![Fixture user CSS theme](Docs/Screenshots/visual-qa/user-fixture-theme-gfm-light.png)
 
 ## Platform
 

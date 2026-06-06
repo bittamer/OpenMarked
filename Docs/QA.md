@@ -102,13 +102,15 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
 
 1. Switch through Default, GitHub, and Minimal themes.
    Expected result: typography, tables, code blocks, links, callouts, diagrams, and math remain readable.
-2. Repeat a fixture check in light appearance and dark appearance.
+2. In Settings > Theme Manager, import `Fixtures/Themes/user-fixture.css`, preview it, apply it, rename it, reveal the managed theme folder, and delete it.
+   Expected result: the user theme appears beside built-ins, drives the active preview, persists in Settings while present, reveals only app-managed CSS files, and falls back cleanly after deletion.
+3. Repeat a fixture check in light appearance and dark appearance.
    Expected result: chrome and preview are readable in both appearances.
-3. Enable reduced motion in System Settings.
+4. Enable reduced motion in System Settings.
    Expected result: preview navigation/search uses immediate scrolling instead of smooth scrolling.
-4. Navigate primary controls with keyboard.
+5. Navigate primary controls with keyboard.
    Expected result: open, reload, outline, theme, search, source, export, and settings controls are reachable.
-5. Run a VoiceOver smoke pass on the toolbar, empty state, error state, outline, find bar, and settings.
+6. Run a VoiceOver smoke pass on the toolbar, empty state, error state, outline, find bar, and settings.
    Expected result: controls and states have meaningful labels.
 
 ## Settings

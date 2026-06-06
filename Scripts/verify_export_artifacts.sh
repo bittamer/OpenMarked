@@ -27,8 +27,8 @@ pdf_dir = pathlib.Path(sys.argv[3])
 manifest = json.loads(manifest_path.read_text())
 entries = manifest.get("snapshots", [])
 
-if len(entries) < 22:
-    raise SystemExit(f"Expected at least 22 export fixture entries, found {len(entries)}")
+if len(entries) < 23:
+    raise SystemExit(f"Expected at least 23 export fixture entries, found {len(entries)}")
 
 required_ids = {entry["id"] for entry in entries}
 palette_theme_ids = {"catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"}

@@ -254,6 +254,10 @@ verify(decodedOldSettings.richMarkdownOptions == .default, "old settings payload
 verify(decodedOldSettings.renderProfile == .openMarked, "old settings payloads should decode with the OpenMarked render profile")
 verify(decodedOldSettings.statisticsWordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute, "old settings payloads should decode with default reading speed")
 verify(!decodedOldSettings.includesFrontMatterInStatistics, "old settings payloads should keep front matter excluded from statistics")
+let verifierUserThemeID = "\(UserPreviewTheme.idPrefix)verifier"
+let customThemeSettings = ApplicationSettings(defaultThemeID: verifierUserThemeID).normalized()
+verify(customThemeSettings.defaultThemeID == verifierUserThemeID, "user preview theme ids should survive settings normalization")
+verify(customThemeSettings.defaultLayout.selectedThemeID == verifierUserThemeID, "default layout should preserve user preview theme ids")
 
 verify(
     AppChromeThemeStore.allBuiltInThemes.map(\.id) == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
@@ -398,6 +402,47 @@ let githubThemeResult = try renderer.render(RenderRequest(document: markdownDocu
 verify(githubThemeResult.fullHTML.contains("--om-font-scale: 1.300"), "custom font scale should be injected")
 verify(githubThemeResult.fullHTML.contains("Segoe UI"), "GitHub theme CSS should be injected")
 verify(PreviewThemeStore.theme(id: "missing").id == "default", "unknown themes should fall back to default")
+let userThemeRootURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("openmarked-verifier-user-themes-\(UUID().uuidString)", isDirectory: true)
+try FileManager.default.createDirectory(at: userThemeRootURL, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: userThemeRootURL) }
+let importCSSURL = userThemeRootURL.appendingPathComponent("Verifier.css")
+try "body { color: #123456; }\n".write(to: importCSSURL, atomically: true, encoding: .utf8)
+let userThemeStore = UserPreviewThemeStore(
+    userDefaults: userDefaults,
+    metadataKey: "VerifierUserThemes",
+    themesDirectoryURL: userThemeRootURL.appendingPathComponent("Managed", isDirectory: true)
+)
+let importedUserTheme = try userThemeStore.importTheme(from: importCSSURL, name: "Verifier Theme")
+verify(importedUserTheme.id.hasPrefix(UserPreviewTheme.idPrefix), "imported user theme should use the user id namespace")
+verify(userThemeStore.load() == [importedUserTheme], "user theme metadata should persist")
+verify(userThemeStore.previewTheme(for: importedUserTheme).screenCSS.contains("#123456"), "user theme CSS should load from managed storage")
+let reloadedUserThemeStore = UserPreviewThemeStore(
+    userDefaults: userDefaults,
+    metadataKey: "VerifierUserThemes",
+    themesDirectoryURL: userThemeRootURL.appendingPathComponent("Managed", isDirectory: true)
+)
+verify(reloadedUserThemeStore.load() == [importedUserTheme], "user theme metadata should survive store reload")
+try "body { background-image: url(javascript:alert(1)); }\n".write(
+    to: URL(fileURLWithPath: importedUserTheme.screenCSSPath),
+    atomically: true,
+    encoding: .utf8
+)
+verify(userThemeStore.previewTheme(for: importedUserTheme).screenCSS == PreviewThemeStore.defaultTheme.screenCSS, "unsafe edited user CSS should fall back safely")
+let blockedImportCSSURL = userThemeRootURL.appendingPathComponent("Blocked.css")
+try "@import url(\"https://example.com/theme.css\");\n".write(to: blockedImportCSSURL, atomically: true, encoding: .utf8)
+do {
+    _ = try userThemeStore.importTheme(from: blockedImportCSSURL)
+    verify(false, "CSS import rules should be rejected for user themes")
+} catch let error as UserPreviewThemeError {
+    verify(error == .importRulesUnsupported, "CSS import rejection should identify import rules")
+}
+let duplicatedUserTheme = try userThemeStore.duplicateBuiltInTheme(id: "github", name: "Verifier GitHub Fork")
+verify(FileManager.default.fileExists(atPath: duplicatedUserTheme.screenCSSPath), "duplicated built-in themes should copy screen CSS")
+verify(duplicatedUserTheme.codeCSSPath != nil && duplicatedUserTheme.printCSSPath != nil, "duplicated built-in themes should copy optional code and print CSS")
+try userThemeStore.deleteTheme(id: importedUserTheme.id)
+verify(!FileManager.default.fileExists(atPath: importedUserTheme.screenCSSPath), "deleting a user theme should remove its managed CSS file")
+verify(userThemeStore.load().map(\.id) == [duplicatedUserTheme.id], "deleting one user theme should leave other user themes intact")
 
 let gfmURL = URL(fileURLWithPath: "Fixtures/Markdown/gfm.md").standardizedFileURL
 let gfmDocument = try MarkdownDocumentLoader.load(url: gfmURL, createBookmark: false)

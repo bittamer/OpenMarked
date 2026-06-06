@@ -95,6 +95,16 @@ struct OpenMarkedCommands: Commands {
                     appController.setTheme(id: theme.id)
                 }
             }
+
+            if !appController.userPreviewThemes.isEmpty {
+                Divider()
+
+                ForEach(appController.userPreviewThemes) { theme in
+                    Button(theme.name) {
+                        appController.setTheme(id: theme.id)
+                    }
+                }
+            }
         }
 
         CommandMenu("Source") {

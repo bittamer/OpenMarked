@@ -87,6 +87,8 @@ Built-in themes:
 
 The renderer injects screen CSS, code CSS, print CSS, `--om-font-scale`, and `--om-content-max-width` into the assembled HTML. Code blocks are pre-highlighted in Swift for common MVP languages so preview and future exports work offline without remote scripts.
 
+0.4.0 adds user preview themes through `UserPreviewThemeStore`. Imported themes are copied into `~/Library/Application Support/OpenMarked/Themes`, with metadata persisted separately in user defaults. Built-in themes remain immutable; user themes can be duplicated from built-ins, renamed, deleted, and revealed in Finder. Custom CSS is local CSS only: imports reject empty CSS, `@import`, `javascript:` URLs, and embedded HTML/style/script tags, and runtime loading falls back to the Default theme CSS if a managed user CSS file is missing or later becomes unsafe. User theme IDs are preserved in settings/window state and resolved at render time so deleted themes fall back safely without corrupting persisted layout data.
+
 ## Live Preview Direction
 
 Phase 6 uses `FileSystemWatcher` in `OpenMarkedCore` for debounced file-system events.

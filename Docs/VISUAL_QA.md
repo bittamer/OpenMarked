@@ -26,9 +26,10 @@ Tracked baselines:
 - `github-broken-links-light.png`: link-diagnostic fixture coverage; manifest records missing heading, missing local link, unsupported scheme, and malformed URL diagnostics.
 - `default-local-images-light.png`: local image rendering.
 - `github-long-document-dark.png`: dark appearance coverage for a longer document.
+- `user-fixture-theme-gfm-light.png`: fixture user CSS theme coverage for the custom-theme rendering path.
 - Palette theme snapshots: Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, and Gruvbox each have a light GFM snapshot for tables/code/task lists and a dark rich Markdown snapshot for callouts, diagrams, math, and links.
 
-`Scripts/verify_visual_snapshots.sh` checks that the generated case set matches the baseline, files exist, snapshots are nontrivial, all palette theme cases are present, and the broken-link fixture records expected diagnostics. Set `OPENMARKED_STRICT_VISUAL_HASHES=1` to enforce exact PNG hashes when running on a stable visual environment.
+`Scripts/verify_visual_snapshots.sh` checks that the generated case set matches the baseline, files exist, snapshots are nontrivial, the fixture user CSS theme is present, all palette theme cases are present, and the broken-link fixture records expected diagnostics. Set `OPENMARKED_STRICT_VISUAL_HASHES=1` to enforce exact PNG hashes when running on a stable visual environment.
 
 ## Export Artifact Coverage
 

@@ -76,8 +76,7 @@ public enum PreviewThemeStore {
     }
 
     public static func theme(id: String) -> PreviewTheme {
-        let knownIDs = Set(allBuiltInThemes.map(\.id))
-        guard knownIDs.contains(id) else {
+        guard isBuiltInThemeID(id) else {
             return defaultTheme
         }
 

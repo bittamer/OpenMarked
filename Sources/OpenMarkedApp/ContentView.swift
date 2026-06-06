@@ -121,13 +121,13 @@ private struct AppToolbar: View {
             ToolbarSeparator()
 
             Picker("Theme", selection: themeBinding) {
-                ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
+                ForEach(appController.availablePreviewThemes) { theme in
                     Text(theme.name).tag(theme.id)
                 }
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .frame(width: 132)
+            .frame(width: 150)
             .help("Preview theme")
             .accessibilityLabel("Preview theme")
 
@@ -1015,7 +1015,7 @@ private struct StatusBar: View {
                     tint: chrome.secondaryText
                 )
             }
-            Label(PreviewThemeStore.theme(id: controller.state.layout.selectedThemeID).name, systemImage: "paintpalette")
+            Label(appController.previewTheme(id: controller.state.layout.selectedThemeID).name, systemImage: "paintpalette")
                 .labelStyle(.titleAndIcon)
             Text("\(Int((controller.state.layout.fontScale * 100).rounded()))%")
                 .monospacedDigit()
@@ -1317,7 +1317,7 @@ struct SettingsView: View {
                 .accessibilityLabel("Markdown render profile")
 
                 Picker("Default Theme", selection: settingBinding(\.defaultThemeID)) {
-                    ForEach(PreviewThemeStore.allBuiltInThemes) { theme in
+                    ForEach(appController.availablePreviewThemes) { theme in
                         Text(theme.name).tag(theme.id)
                     }
                 }
@@ -1366,6 +1366,10 @@ struct SettingsView: View {
                 Toggle("GitHub callouts", isOn: richMarkdownBinding(\.rendersGitHubCallouts))
             }
 
+            Section("Theme Manager") {
+                ThemeManagerView()
+            }
+
             Section("Link Validation") {
                 Toggle("Local links", isOn: richMarkdownBinding(\.validatesLocalLinks))
                 Toggle("Heading links", isOn: richMarkdownBinding(\.validatesHeadingFragments))
@@ -1380,7 +1384,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 560)
+        .frame(width: 680)
         .background(chrome.windowBackground)
         .accessibilityLabel("OpenMarked settings")
     }

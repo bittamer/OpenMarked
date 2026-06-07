@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 import WebKit
 import OpenMarkedCore
 
@@ -13,6 +14,7 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
     private var job: Job?
     private var richMarkdownState: RichMarkdownRenderState = .empty
     private var printConfiguration: PrintConfiguration = .default
+    private var isFinishingJob = false
 
     func exportPDF(
         html: String,
@@ -57,6 +59,7 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
         self.job = job
         self.richMarkdownState = richMarkdownState
         self.printConfiguration = printConfiguration.normalized()
+        isFinishingJob = false
 
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = richMarkdownState.requiresRichContentRuntime
@@ -118,23 +121,30 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
     private func runPDFExport(
         webView: WKWebView,
         destinationURL: URL,
-        completion: (Result<Void, ExportError>) -> Void
+        completion: @escaping (Result<Void, ExportError>) -> Void
     ) {
-        let printInfo = configuredPrintInfo()
-        printInfo.dictionary()[NSPrintInfo.AttributeKey.jobDisposition] = NSPrintInfo.JobDisposition.save
-        printInfo.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = destinationURL
-
-        let operation = webView.printOperation(with: printInfo)
-        operation.showsPrintPanel = false
-        operation.showsProgressPanel = false
-
-        if operation.run() {
-            completion(.success(()))
-        } else {
-            completion(.failure(.pdfFailed(path: destinationURL.path, reason: "The print operation did not complete.")))
+        guard !isFinishingJob else {
+            return
         }
+        isFinishingJob = true
 
-        finish()
+        Task { @MainActor [weak self, weak webView] in
+            guard let self, let webView else {
+                return
+            }
+
+            do {
+                let data = try await self.pdfData(from: webView)
+                try self.writePDFData(data, to: destinationURL)
+                completion(.success(()))
+            } catch let error as ExportError {
+                completion(.failure(error))
+            } catch {
+                completion(.failure(.pdfFailed(path: destinationURL.path, reason: error.localizedDescription)))
+            }
+
+            self.finish()
+        }
     }
 
     private func runPrint(webView: WKWebView, completion: (Result<Void, ExportError>) -> Void) {
@@ -166,7 +176,105 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
         return printInfo
     }
 
+    private func pdfData(from webView: WKWebView) async throws -> Data {
+        let pageRect = CGRect(origin: .zero, size: webView.bounds.size)
+        let contentHeight = try await measuredContentHeight(in: webView)
+        let pageCount = max(1, Int(ceil(contentHeight / pageRect.height)))
+        let document = PDFDocument()
+
+        for pageIndex in 0..<pageCount {
+            let pageY = CGFloat(pageIndex) * pageRect.height
+            let remainingHeight = max(1, contentHeight - pageY)
+            let pageHeight = min(pageRect.height, remainingHeight)
+            let configuration = WKPDFConfiguration()
+            configuration.rect = CGRect(
+                x: pageRect.minX,
+                y: pageY,
+                width: pageRect.width,
+                height: pageHeight
+            )
+            let pageData = try await createPDFData(in: webView, configuration: configuration)
+            guard let pageDocument = PDFDocument(data: pageData), pageDocument.pageCount > 0 else {
+                throw PDFExportDataError.unreadablePage
+            }
+
+            for sourcePageIndex in 0..<pageDocument.pageCount {
+                guard let page = pageDocument.page(at: sourcePageIndex) else {
+                    continue
+                }
+                document.insert(page, at: document.pageCount)
+            }
+        }
+
+        guard let data = document.dataRepresentation(), data.isOpenMarkedPDFData else {
+            throw PDFExportDataError.unreadableDocument
+        }
+
+        return data
+    }
+
+    private func measuredContentHeight(in webView: WKWebView) async throws -> CGFloat {
+        let script = """
+        Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.body ? document.body.offsetHeight : 0,
+          document.documentElement ? document.documentElement.clientHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0,
+          document.documentElement ? document.documentElement.offsetHeight : 0
+        );
+        """
+        let result = try await webView.evaluateJavaScript(script)
+        let measuredHeight: Double
+        if let number = result as? NSNumber {
+            measuredHeight = number.doubleValue
+        } else if let value = result as? Double {
+            measuredHeight = value
+        } else {
+            measuredHeight = Double(webView.bounds.height)
+        }
+
+        return max(webView.bounds.height, CGFloat(measuredHeight.rounded(.up)))
+    }
+
+    private func createPDFData(in webView: WKWebView, configuration: WKPDFConfiguration) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            webView.createPDF(configuration: configuration) { result in
+                switch result {
+                case .success(let data):
+                    continuation.resume(returning: data)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func writePDFData(_ data: Data, to destinationURL: URL) throws {
+        guard data.isOpenMarkedPDFData else {
+            throw ExportError.pdfFailed(path: destinationURL.path, reason: "The generated file was not valid PDF data.")
+        }
+
+        do {
+            try data.write(to: destinationURL, options: .atomic)
+        } catch {
+            throw ExportError.pdfFailed(path: destinationURL.path, reason: error.localizedDescription)
+        }
+
+        guard
+            let writtenData = try? Data(contentsOf: destinationURL),
+            writtenData.isOpenMarkedPDFData,
+            PDFDocument(data: writtenData)?.pageCount ?? 0 > 0
+        else {
+            throw ExportError.pdfFailed(path: destinationURL.path, reason: "The generated file could not be reopened as a PDF.")
+        }
+    }
+
     private func finishWithFailure(_ error: Error) {
+        guard !isFinishingJob else {
+            return
+        }
+        isFinishingJob = true
+
         switch job {
         case .pdf(let destinationURL, let completion):
             completion(.failure(.pdfFailed(path: destinationURL.path, reason: error.localizedDescription)))
@@ -184,6 +292,31 @@ final class WebKitPrintExporter: NSObject, WKNavigationDelegate {
         job = nil
         richMarkdownState = .empty
         printConfiguration = .default
+        isFinishingJob = false
+    }
+}
+
+private extension Data {
+    var isOpenMarkedPDFData: Bool {
+        guard count >= 8 else {
+            return false
+        }
+
+        return starts(with: Data("%PDF-".utf8)) && suffix(1024).contains(Data("%%EOF".utf8))
+    }
+}
+
+private enum PDFExportDataError: Error, LocalizedError {
+    case unreadablePage
+    case unreadableDocument
+
+    var errorDescription: String? {
+        switch self {
+        case .unreadablePage:
+            return "WebKit produced an unreadable PDF page."
+        case .unreadableDocument:
+            return "WebKit produced unreadable PDF data."
+        }
     }
 }
 

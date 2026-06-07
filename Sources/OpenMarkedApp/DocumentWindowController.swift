@@ -228,13 +228,16 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         let panel = NSSavePanel()
         panel.title = "Export PDF"
         panel.prompt = "Export"
-        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.message = "Choose where to save the PDF."
         panel.nameFieldStringValue = suggestedExportFilename(for: context.document, extension: "pdf")
 
-        guard panel.runModal() == .OK, let destinationURL = panel.url else {
+        guard panel.runModal() == .OK, let panelURL = panel.url else {
             return
         }
 
+        let destinationURL = normalizedExportURL(panelURL, extension: "pdf")
         exportPDF(context: context, to: destinationURL)
     }
 
@@ -265,7 +268,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         let html = HTMLExportDocumentBuilder.standaloneHTML(
             renderResult: context.renderResult,
             document: context.document,
-            options: HTMLExportOptions(printConfiguration: AppController.shared.settings.printConfiguration)
+            options: HTMLExportOptions(
+                embedsRichContentRuntime: false,
+                printConfiguration: AppController.shared.settings.printConfiguration
+            )
         )
         let exporter = WebKitPrintExporter()
         activePrintExporter = exporter
@@ -677,7 +683,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         let html = HTMLExportDocumentBuilder.standaloneHTML(
             renderResult: context.renderResult,
             document: context.document,
-            options: HTMLExportOptions(printConfiguration: AppController.shared.settings.printConfiguration)
+            options: HTMLExportOptions(
+                embedsRichContentRuntime: false,
+                printConfiguration: AppController.shared.settings.printConfiguration
+            )
         )
         let exporter = WebKitPrintExporter()
         activePrintExporter = exporter
@@ -731,6 +740,14 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let safeBaseName = baseName.isEmpty ? "OpenMarked Export" : baseName
         return "\(safeBaseName).\(fileExtension)"
+    }
+
+    private func normalizedExportURL(_ url: URL, extension fileExtension: String) -> URL {
+        guard url.pathExtension.lowercased() != fileExtension.lowercased() else {
+            return url
+        }
+
+        return url.deletingPathExtension().appendingPathExtension(fileExtension)
     }
 
     private func presentExportError(_ error: ExportError) {

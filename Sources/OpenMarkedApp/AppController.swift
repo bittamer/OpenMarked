@@ -84,7 +84,7 @@ final class AppController: ObservableObject {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
         panel.resolvesAliases = true
-        panel.allowedContentTypes = AppInfo.supportedFileExtensions.compactMap { UTType(filenameExtension: $0) }
+        panel.message = "Choose Markdown or plain text files."
 
         guard panel.runModal() == .OK else {
             return

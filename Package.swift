@@ -55,6 +55,10 @@ let package = Package(
         .testTarget(
             name: "OpenMarkedCoreTests",
             dependencies: ["OpenMarkedCore"]
+        ),
+        .testTarget(
+            name: "OpenMarkedAppTests",
+            dependencies: ["OpenMarkedApp", "OpenMarkedCore"]
         )
     ]
 )

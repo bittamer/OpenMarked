@@ -1,11 +1,11 @@
 # OpenMarked Visual QA
 
 Date: 2026-06-08
-Version: 0.4.1
-Build: 5
-Artifact: `dist/OpenMarked-0.4.1/OpenMarked.app`
+Version: 0.5.0
+Build: 6
+Artifact: `dist/OpenMarked-0.5.0/OpenMarked.app`
 
-This record covers the 0.4.1 release snapshot fixtures.
+This record covers the 0.5.0 release snapshot fixtures and native tab QA.
 
 ## Automated Snapshot Coverage
 
@@ -79,9 +79,10 @@ Remaining human checks before public release:
 
 ## 0.5.0 Native Tab Pass
 
-Computer Use inspected the packaged developer app built from the 0.5.0 Phase 6 worktree. Because release metadata is intentionally updated in Phase 7, the local artifact path still used the current `0.4.1` version metadata:
+Computer Use inspected the packaged developer app built from the 0.5.0 Phase 6 worktree before the Phase 7 metadata bump, then Phase 7 rebuilt the final `0.5.0` artifacts through the release gate.
 
-- Artifact inspected: `dist/OpenMarked-0.4.1/OpenMarked.app`
+- Native tab artifact inspected during Phase 6: `dist/OpenMarked-0.4.1/OpenMarked.app`
+- Final Phase 7 artifact path: `dist/OpenMarked-0.5.0/OpenMarked.app`
 - Files opened together: `Fixtures/Markdown/readme.md` and `Fixtures/Markdown/gfm.md`
 
 Observed pass:
@@ -97,5 +98,5 @@ Observed pass:
 Remaining human checks before publishing `v0.5.0`:
 
 - Repeat the native tab checklist in `Docs/QA.md` on a clean user account.
-- Confirm Finder/Dock multi-file open behavior on the final `0.5.0` artifact after Phase 7 version metadata is updated.
+- Confirm Finder/Dock multi-file open behavior on the final `0.5.0` artifact.
 - Confirm selected-tab export and native print panel behavior on the final `0.5.0` artifact.

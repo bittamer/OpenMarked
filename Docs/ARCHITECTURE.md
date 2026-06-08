@@ -75,9 +75,9 @@ Lifecycle behavior:
 - The delegate explicitly sets the activation policy to `.regular` and activates the app at launch so SwiftPM and packaged builds behave like normal foreground Mac apps with a visible menu bar.
 - SwiftUI commands preserve standard macOS app/window behavior while adding Markdown-specific menu items for open, reload, search, outline, theme, source actions, export, print, settings, and About.
 
-## Native Document Tabbing Direction
+## Native Document Tabbing
 
-0.5.0 adds native macOS document tabs using AppKit `NSWindow` tabbing rather than a custom tab strip.
+OpenMarked 0.5.0 uses native macOS document tabs through AppKit `NSWindow` tabbing rather than a custom tab strip.
 
 Tabbing behavior:
 

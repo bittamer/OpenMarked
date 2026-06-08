@@ -4,7 +4,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently at `0.4.1`: OpenMarked is now a Document Workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks. The 0.4.1 patch adds the app icon/logo release polish and hardens PDF export.
+The project is currently at `0.5.0`: OpenMarked is now a native tabbed Markdown document workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks. The 0.5.0 release adds native macOS document tabs, tab-aware open routing, active-tab command routing, tab-safe cleanup, and tab-aware session restoration.
 
 ## Current Status
 
@@ -17,6 +17,8 @@ This repository currently contains:
 - 0.3.0 backlog tracker: `Docs/0.3.0_BACKLOG.md`.
 - 0.4.0 Document Workbench plan: `Docs/0.4.0_IMPLEMENTATION_PLAN.md`.
 - 0.4.0 backlog tracker: `Docs/0.4.0_BACKLOG.md`.
+- 0.5.0 Native Tabbed Documents plan: `Docs/0.5.0_IMPLEMENTATION_PLAN.md`.
+- 0.5.0 backlog tracker: `Docs/0.5.0_BACKLOG.md`.
 - Document inspector guide: `Docs/DOCUMENT_INSPECTOR.md`.
 - Custom themes guide: `Docs/CUSTOM_THEMES.md`.
 - Print and export guide: `Docs/PRINT_AND_EXPORT.md`.
@@ -27,6 +29,7 @@ This repository currently contains:
 - Swift Package based native macOS app shell.
 - App/window state models for empty, loading, loaded, and error states.
 - File open panel, drag/drop file opening, Dock file opening, and recent-document registration.
+- Native macOS document tabs for Markdown windows, with tab-aware File > Open, toolbar open, drag/drop, Finder/Dock, Open Recent, and session restoration behavior.
 - Native macOS menu bar, standard app/window commands such as Quit, document commands, keyboard shortcuts, and a compact toolbar.
 - Markdown document loading with UTF-8 decoding, line-ending normalization, front matter parsing, source statistics, security-scoped bookmark helpers, and per-document window state persistence.
 - Markdown rendering core backed by the system `libcmark-gfm` library, with GFM extensions, footnotes, heading IDs, outline extraction, full HTML assembly, and render diagnostics.
@@ -53,7 +56,7 @@ This repository currently contains:
 - Markdown fixture corpus.
 - CI workflow for Swift build, verifier, visual snapshots, export artifacts, and tests.
 
-Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.4.1`. The packaging script supports Developer ID signing and notarization when credentials are available.
+Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.5.0`. The packaging script supports Developer ID signing and notarization when credentials are available.
 
 ## Screenshots
 
@@ -113,7 +116,7 @@ Create a local developer artifact with:
 Scripts/package_release.sh
 ```
 
-The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.4.1/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.4.1-macOS.zip` plus `dist/OpenMarked-0.4.1-macOS.dmg`.
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.5.0/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.5.0-macOS.zip` plus `dist/OpenMarked-0.5.0-macOS.dmg`.
 
 By default the app is ad hoc signed. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID certificate. Set `OPENMARKED_NOTARIZE=1` with `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD` to submit the DMG for notarization.
 
@@ -121,7 +124,7 @@ These artifacts are not notarized by default. Gatekeeper behavior is documented 
 
 ## Usage
 
-Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
+Launch the app from Xcode, SwiftPM, or the packaged app. Open one or more Markdown files with File > Open, the toolbar open button, drag and drop, Dock file opening, or Open Recent. When a document window is active, additional supported files open as native macOS tabs in the active document window group. Use File > Open in New Window... when you explicitly want standalone document windows, and use the macOS Window menu to show the tab bar, show all tabs, switch tabs, detach a tab, or merge document windows. When OpenMarked is focused, macOS shows the OpenMarked menu bar with standard commands such as About, Settings, Hide, Quit, Window actions, and the app's Markdown-specific commands. Supported source extensions are `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn`, `.txt`, and `.text`.
 
 OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethrough, task lists, autolinks, footnotes, GitHub alert/callout blockquotes, Mermaid diagrams, and KaTeX math through `cmark-gfm` plus OpenMarked postprocessing. It adds stable heading IDs, an outline sidebar, local-image and link diagnostics, document statistics, and offline code highlighting for common MVP languages.
 
@@ -135,13 +138,13 @@ Export supports standalone HTML, copying the rendered HTML fragment, PDF export,
 
 ## Settings And Privacy
 
-Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover render profile, default theme, custom user themes, app chrome theme, default font scale, reading statistics, live updates, scroll preservation, remote image loading, raw HTML rendering, Mermaid, KaTeX, GitHub callouts, local/heading/remote link reporting, print controls, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents.
+Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover render profile, default theme, custom user themes, app chrome theme, default font scale, reading statistics, live updates, scroll preservation, remote image loading, raw HTML rendering, Mermaid, KaTeX, GitHub callouts, local/heading/remote link reporting, print controls, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents as native tabs where possible.
 
 OpenMarked is designed as a local-first viewer. It does not send document contents to a service. Remote images are loaded only when the setting is enabled; remote scripts and inline event handlers are blocked in preview HTML. Link validation does not crawl remote URLs during normal rendering. Custom themes are local CSS only, with `@import`, `javascript:` URLs, and embedded script/style tags blocked. Last opened document paths are saved only when session restoration is enabled by the user.
 
 ## Known Limitations
 
-The `0.4.1` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Folder workspaces, backlinks, plugin processors, DOCX/EPUB export, grammar tools, browser integrations, and AI features are intentionally deferred.
+The `0.5.0` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Opening the same source file more than once may create duplicate tabs, and session restoration reopens documents as tabs where possible rather than restoring exact tab order or previous tab groups. Folder workspaces, backlinks, plugin processors, DOCX/EPUB export, grammar tools, browser integrations, and AI features are intentionally deferred.
 
 ## Feedback
 

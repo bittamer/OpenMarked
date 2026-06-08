@@ -1,11 +1,11 @@
-# OpenMarked 0.5.0 Draft
+# OpenMarked 0.5.0
 
 OpenMarked 0.5.0 is the Native Tabbed Documents release.
 
 ## Highlights
 
 - Adds native macOS document tabs for Markdown document windows.
-- Opens additional documents into the active native tab group instead of scattering separate top-level windows.
+- Opens additional documents from File > Open, the toolbar open button, drag/drop, Finder/Dock, Open Recent, and session restore into the active native tab group instead of scattering separate top-level windows.
 - Keeps each tab backed by its own `DocumentWindowController`, preserving per-document preview state, live preview, outline, inspector, theme, zoom, search, and export destinations.
 - Routes active-tab changes through native key/main window notifications so toolbar and menu commands follow the selected tab.
 - Cleans up closed tabs through native window close notifications, stopping only the closed document's watchers and preserving other tabs.
@@ -13,6 +13,18 @@ OpenMarked 0.5.0 is the Native Tabbed Documents release.
 - Adds File > Open in New Window... for opening selected Markdown files outside the current tab group.
 - Improves session restore by saving the current open document list across tab opens/closes and filtering missing or unsupported files before launch restore.
 - Expands QA coverage for native tabs, tab command routing, session restore, and export/print behavior from selected tabs.
+
+## Installation
+
+Developer artifacts are created by:
+
+```sh
+Scripts/package_release.sh
+```
+
+The resulting files are `dist/OpenMarked-0.5.0-macOS.zip` and `dist/OpenMarked-0.5.0-macOS.dmg`.
+
+These developer artifacts are ad hoc signed by default but not notarized unless Apple signing credentials are supplied. On macOS, Gatekeeper may require opening them from Finder's context menu. Only run local developer artifacts from sources you trust.
 
 ## Known Limitations
 

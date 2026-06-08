@@ -93,6 +93,7 @@ Observed pass:
 - Switching to the `readme.md` tab updated the selected tab, document title, rendered content, outline, and status bar to the README fixture.
 - The first Window menu inspection exposed duplicate custom tab commands. Phase 6 fixed this by letting AppKit keep the native Show Previous Tab, Show Next Tab, Move Tab to New Window, and Merge All Windows commands while OpenMarked adds only Show Tab Bar and Show All Tabs.
 - The final Window menu pass showed one set of native tab switching, move, and merge commands plus the two OpenMarked-supplied tab presentation commands.
+- A follow-up Finder-style `open -a` pass on the rebuilt `0.5.0` artifact opened `readme.md`, then opened `gfm.md` through the OS while OpenMarked was already running. The result was one top-level window with two native tabs and no extra empty document windows.
 - No toolbar, tab bar, preview, outline, or status bar overlap was visible in the two-tab developer artifact.
 
 Remaining human checks before publishing `v0.5.0`:

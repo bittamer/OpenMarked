@@ -208,6 +208,27 @@ final class AppController: ObservableObject {
         persistOpenDocumentURLsForSessionRestore()
     }
 
+    func openURLsFromExternalEvent(_ urls: [URL]) {
+        let preservedEmptyWindowIDs = Set(
+            documentWindowDescriptors()
+                .filter(\.canReplaceWithOpenedDocument)
+                .map(\.id)
+        )
+
+        Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+
+            reconcileActiveWindowController()
+            let preferredController = preferredControllerForExternalOpen()
+            openURLs(urls, preferredController: preferredController)
+            closeTransientEmptyDocumentWindows(preserving: preservedEmptyWindowIDs)
+
+            await Task.yield()
+            closeTransientEmptyDocumentWindows(preserving: preservedEmptyWindowIDs)
+        }
+    }
+
     func openDroppedURLs(_ urls: [URL], into controller: DocumentWindowController) {
         openURLs(urls, preferredController: controller)
     }
@@ -514,8 +535,59 @@ final class AppController: ObservableObject {
 
         return DocumentWindowDescriptor(
             id: controller.id,
-            canReplaceWithOpenedDocument: controller.shouldReplaceWithOpenedDocument
+            canReplaceWithOpenedDocument: controller.shouldReplaceWithOpenedDocument,
+            hasOpenedDocument: controller.state.hasDocument
         )
+    }
+
+    private func documentWindowDescriptors() -> [DocumentWindowDescriptor] {
+        registeredWindowControllers.values.compactMap { descriptor(for: $0) }
+    }
+
+    private func documentWindowDescriptorsInActivityOrder() -> [DocumentWindowDescriptor] {
+        var descriptors: [DocumentWindowDescriptor] = []
+        var seenControllerIDs = Set<UUID>()
+
+        for controllerID in documentWindowActivity.controllerIDsInActivityOrder {
+            seenControllerIDs.insert(controllerID)
+            if let descriptor = descriptor(for: controller(for: controllerID)) {
+                descriptors.append(descriptor)
+            }
+        }
+
+        for controller in registeredWindowControllers.values where !seenControllerIDs.contains(controller.id) {
+            if let descriptor = descriptor(for: controller) {
+                descriptors.append(descriptor)
+            }
+        }
+
+        return descriptors
+    }
+
+    private func preferredControllerForExternalOpen() -> DocumentWindowController? {
+        let preferredWindow = ExternalDocumentOpenPlanner.preferredWindow(
+            activeWindow: descriptor(for: activeWindowController),
+            windowsInActivityOrder: documentWindowDescriptorsInActivityOrder()
+        )
+
+        return controller(for: preferredWindow?.id)
+    }
+
+    private func closeTransientEmptyDocumentWindows(preserving preservedEmptyWindowIDs: Set<UUID>) {
+        let transientEmptyWindowIDs = ExternalDocumentOpenPlanner.transientEmptyWindowIDs(
+            windows: documentWindowDescriptors(),
+            preservedEmptyWindowIDs: preservedEmptyWindowIDs
+        )
+
+        for controllerID in transientEmptyWindowIDs {
+            guard let window = controller(for: controllerID)?.window else {
+                continue
+            }
+
+            window.close()
+        }
+
+        reconcileActiveWindowController()
     }
 
     private func controller(

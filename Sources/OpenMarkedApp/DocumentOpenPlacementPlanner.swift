@@ -3,11 +3,46 @@ import Foundation
 struct DocumentWindowDescriptor: Equatable, Identifiable {
     let id: UUID
     var canReplaceWithOpenedDocument: Bool
+    var hasOpenedDocument = false
 }
 
 enum DocumentOpenAnchor: Equatable {
     case existing(UUID)
     case firstOpenedWindow
+}
+
+enum ExternalDocumentOpenPlanner {
+    static func preferredWindow(
+        activeWindow: DocumentWindowDescriptor?,
+        windowsInActivityOrder: [DocumentWindowDescriptor]
+    ) -> DocumentWindowDescriptor? {
+        if let activeWindow, activeWindow.hasOpenedDocument {
+            return activeWindow
+        }
+
+        if let mostRecentLoadedWindow = windowsInActivityOrder.reversed().first(where: \.hasOpenedDocument) {
+            return mostRecentLoadedWindow
+        }
+
+        if let activeWindow {
+            return activeWindow
+        }
+
+        return windowsInActivityOrder.last
+    }
+
+    static func transientEmptyWindowIDs(
+        windows: [DocumentWindowDescriptor],
+        preservedEmptyWindowIDs: Set<UUID>
+    ) -> Set<UUID> {
+        Set(
+            windows
+                .filter { window in
+                    window.canReplaceWithOpenedDocument && !preservedEmptyWindowIDs.contains(window.id)
+                }
+                .map(\.id)
+        )
+    }
 }
 
 enum PlannedDocumentOpenPlacement: Equatable {

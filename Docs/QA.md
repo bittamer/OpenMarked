@@ -43,7 +43,7 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 4. Drag `Fixtures/Markdown/links.md` and `Fixtures/Markdown/local-images.md` onto a loaded document tab.
    Expected result: both dropped files open as tabs in the drop target's native tab group.
 5. Open a Markdown fixture from Finder or with `open -a OpenMarked Fixtures/Markdown/front-matter.md`.
-   Expected result: the file opens into the current document tab group when OpenMarked is running.
+   Expected result: the file opens into the current document tab group when OpenMarked is running, without creating a separate file window or extra empty document window.
 6. Use Window > Show Next Tab and Window > Show Previous Tab, plus Control-Tab and Control-Shift-Tab.
    Expected result: the selected native tab changes and toolbar/menu commands apply to that selected document.
 7. Use Window > Show Tab Bar and Window > Show All Tabs.

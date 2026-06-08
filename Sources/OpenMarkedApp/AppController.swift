@@ -232,7 +232,7 @@ final class AppController: ObservableObject {
     }
 
     @discardableResult
-    func performDocumentWindowTabCommand(_ command: DocumentWindowTabCommand) -> Bool {
+    func performDocumentWindowTabPresentationCommand(_ command: DocumentWindowTabPresentationCommand) -> Bool {
         guard let window = activeWindowController?.window else {
             return false
         }

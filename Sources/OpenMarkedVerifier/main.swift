@@ -264,8 +264,13 @@ verify(restoredSettings.printConfiguration.startsHeadingOneOnNewPage, "settings 
 verify(restoredSettings.printConfiguration.startsHeadingTwoOnNewPage, "settings should persist print H2 page breaks")
 verify(restoredSettings.printConfiguration.includesDocumentTitle, "settings should persist print title preference")
 verify(restoredSettings.printConfiguration.themeMode == .defaultPrint, "settings should persist print theme mode")
-settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL])
-verify(settingsStore.loadLastDocumentURLs().first?.path == markdownDocument.sourceURL.path, "settings store should persist last document paths")
+let gfmFixtureURL = URL(fileURLWithPath: "Fixtures/Markdown/gfm.md").standardizedFileURL
+settingsStore.saveLastDocumentURLs([markdownDocument.sourceURL, gfmFixtureURL])
+let restoredLastDocumentURLs = settingsStore.loadLastDocumentURLs()
+verify(
+    restoredLastDocumentURLs.map(\.path) == [markdownDocument.sourceURL.path, gfmFixtureURL.path],
+    "settings store should persist multiple last document paths in order"
+)
 
 let oldSettingsPayload = Data(
     """

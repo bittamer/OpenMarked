@@ -9,9 +9,10 @@ OpenMarked 0.5.0 is the Native Tabbed Documents release.
 - Keeps each tab backed by its own `DocumentWindowController`, preserving per-document preview state, live preview, outline, inspector, theme, zoom, search, and export destinations.
 - Routes active-tab changes through native key/main window notifications so toolbar and menu commands follow the selected tab.
 - Cleans up closed tabs through native window close notifications, stopping only the closed document's watchers and preserving other tabs.
-- Adds explicit Window menu commands for native tab actions: Show Tab Bar, Show All Tabs, Merge All Windows, Move Tab to New Window, Select Next Tab, and Select Previous Tab.
+- Uses macOS native Window menu tab commands for tab switching, Move Tab to New Window, and Merge All Windows, with OpenMarked-supplied Show Tab Bar and Show All Tabs menu items.
 - Adds File > Open in New Window... for opening selected Markdown files outside the current tab group.
 - Improves session restore by saving the current open document list across tab opens/closes and filtering missing or unsupported files before launch restore.
+- Expands QA coverage for native tabs, tab command routing, session restore, and export/print behavior from selected tabs.
 
 ## Known Limitations
 

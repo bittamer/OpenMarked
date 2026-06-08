@@ -1,4 +1,4 @@
-# OpenMarked 0.4.1 QA Checklist
+# OpenMarked 0.5.0 QA Checklist
 
 Use this checklist for release manual QA. Run it on macOS 13 or newer from a clean checkout after `Scripts/verify_release.sh` passes.
 
@@ -6,11 +6,11 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 
 1. Run `Scripts/verify_release.sh`.
    Expected result: debug build, release build, verifier, performance smoke, visual snapshots, PDF/export artifacts, tests, package description, diff hygiene, ASCII scan, app bundle creation, signing, ZIP creation, and DMG creation all complete.
-2. Confirm `dist/OpenMarked-0.4.1/OpenMarked.app` exists.
+2. Confirm the packaged `OpenMarked.app` exists under `dist/`.
    Expected result: the app bundle launches.
-3. Confirm `dist/OpenMarked-0.4.1-macOS.zip` exists.
+3. Confirm the packaged macOS ZIP exists under `dist/`.
    Expected result: the ZIP expands to `OpenMarked.app`.
-4. Confirm `dist/OpenMarked-0.4.1-macOS.dmg` exists.
+4. Confirm the packaged macOS DMG exists under `dist/`.
    Expected result: the DMG mounts and contains `OpenMarked.app`.
 5. Open About OpenMarked.
    Expected result: the About panel shows OpenMarked, current version/build, license, and project URL.
@@ -26,11 +26,36 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
 3. Drag `Fixtures/Markdown/gfm.md` into the preview area.
    Expected result: the dropped document replaces the current empty/active target or opens cleanly.
 4. Open multiple fixtures at once from the open panel.
-   Expected result: each supported file opens in a document window.
+   Expected result: supported files open as native tabs in one document window group when a document window is active.
 5. Open an unsupported file such as `Package.swift`.
    Expected result: the app shows a readable unsupported-file error.
 6. Press Command-Q.
    Expected result: OpenMarked quits through the standard macOS Quit command.
+
+## Native Tabbed Documents
+
+1. Launch OpenMarked and open `Fixtures/Markdown/readme.md`.
+   Expected result: the first document renders in the active document window.
+2. Use File > Open to select `Fixtures/Markdown/gfm.md` and `Fixtures/Markdown/rich-markdown.md` together.
+   Expected result: both files open as native tabs in the active document window group.
+3. Use File > Open in New Window... to open `Fixtures/Markdown/prose.md`.
+   Expected result: the document opens in a separate top-level document window rather than joining the active tab group.
+4. Drag `Fixtures/Markdown/links.md` and `Fixtures/Markdown/local-images.md` onto a loaded document tab.
+   Expected result: both dropped files open as tabs in the drop target's native tab group.
+5. Open a Markdown fixture from Finder or with `open -a OpenMarked Fixtures/Markdown/front-matter.md`.
+   Expected result: the file opens into the current document tab group when OpenMarked is running.
+6. Use Window > Show Next Tab and Window > Show Previous Tab, plus Control-Tab and Control-Shift-Tab.
+   Expected result: the selected native tab changes and toolbar/menu commands apply to that selected document.
+7. Use Window > Show Tab Bar and Window > Show All Tabs.
+   Expected result: macOS shows the native tab bar or tab overview for document windows.
+8. Use Window > Merge All Windows with two separate document windows open.
+   Expected result: document windows merge into one native tab group.
+9. Use Window > Move Tab to New Window.
+   Expected result: the selected tab detaches into its own document window.
+10. Close one tab in a group with live preview enabled on another tab.
+    Expected result: only the closed tab is removed; the remaining tab continues to render and respond to reload/search/export commands.
+11. Open Settings and About while document tabs are open.
+    Expected result: utility windows do not join the document tab group.
 
 ## Rendering Fixtures
 
@@ -162,6 +187,8 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
    Expected result: exported HTML omits embedded style blocks.
 12. Enable and disable session restoration.
    Expected result: last-opened paths are retained only while the setting is enabled.
+13. With session restoration enabled, open several document tabs, close one tab, quit, and relaunch.
+   Expected result: the remaining open document list is restored into native tabs where possible; missing or unsupported saved files are ignored.
 
 ## Rich Content Status
 
@@ -186,6 +213,19 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
    Expected result: a PDF is created, print CSS keeps the document readable, and rich content has rendered before capture.
 7. Print.
    Expected result: the native print panel opens and preview output is readable, including diagrams and equations.
+
+## Export And Print From Tabs
+
+1. Open `Fixtures/Markdown/readme.md` and `Fixtures/Markdown/rich-markdown.md` as tabs.
+   Expected result: both tabs render their own document content.
+2. Select the README tab and export HTML.
+   Expected result: the exported file contains README content and not rich-markdown fixture content.
+3. Select the rich Markdown tab and export PDF.
+   Expected result: the exported PDF contains rich Markdown content for the selected tab.
+4. Use Export HTML Again or Export PDF Again from each tab after a successful export.
+   Expected result: repeat export destinations remain per document and prompt before overwrite.
+5. Close the README tab and export from the rich Markdown tab again.
+   Expected result: export still operates on the remaining selected tab.
 
 ## Release Gate
 

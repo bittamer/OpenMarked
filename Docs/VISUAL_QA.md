@@ -76,3 +76,26 @@ Remaining human checks before public release:
 - Native print panel workflow on a clean user account.
 - Clean user account or second-Mac launch.
 - Notarized Developer ID build, once credentials are available.
+
+## 0.5.0 Native Tab Pass
+
+Computer Use inspected the packaged developer app built from the 0.5.0 Phase 6 worktree. Because release metadata is intentionally updated in Phase 7, the local artifact path still used the current `0.4.1` version metadata:
+
+- Artifact inspected: `dist/OpenMarked-0.4.1/OpenMarked.app`
+- Files opened together: `Fixtures/Markdown/readme.md` and `Fixtures/Markdown/gfm.md`
+
+Observed pass:
+
+- The packaged app launched directly from the `dist/` bundle, not from the command-line build product.
+- Opening two Markdown fixtures created a single native macOS tab group with two document tabs.
+- The selected `gfm.md` tab showed the expected document title, represented file URL, rendered GitHub Flavored Markdown content, outline entries, toolbar controls, and status bar metadata.
+- Switching to the `readme.md` tab updated the selected tab, document title, rendered content, outline, and status bar to the README fixture.
+- The first Window menu inspection exposed duplicate custom tab commands. Phase 6 fixed this by letting AppKit keep the native Show Previous Tab, Show Next Tab, Move Tab to New Window, and Merge All Windows commands while OpenMarked adds only Show Tab Bar and Show All Tabs.
+- The final Window menu pass showed one set of native tab switching, move, and merge commands plus the two OpenMarked-supplied tab presentation commands.
+- No toolbar, tab bar, preview, outline, or status bar overlap was visible in the two-tab developer artifact.
+
+Remaining human checks before publishing `v0.5.0`:
+
+- Repeat the native tab checklist in `Docs/QA.md` on a clean user account.
+- Confirm Finder/Dock multi-file open behavior on the final `0.5.0` artifact after Phase 7 version metadata is updated.
+- Confirm selected-tab export and native print panel behavior on the final `0.5.0` artifact.

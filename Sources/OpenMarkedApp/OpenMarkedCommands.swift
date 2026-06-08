@@ -172,38 +172,14 @@ struct OpenMarkedCommands: Commands {
         CommandGroup(after: .windowArrangement) {
             Divider()
 
-            Button(DocumentWindowTabCommand.showTabBar.title) {
-                appController.performDocumentWindowTabCommand(.showTabBar)
+            Button(DocumentWindowTabPresentationCommand.showTabBar.title) {
+                appController.performDocumentWindowTabPresentationCommand(.showTabBar)
             }
             .disabled(!appController.activeHasDocumentWindow)
 
-            Button(DocumentWindowTabCommand.showAllTabs.title) {
-                appController.performDocumentWindowTabCommand(.showAllTabs)
+            Button(DocumentWindowTabPresentationCommand.showAllTabs.title) {
+                appController.performDocumentWindowTabPresentationCommand(.showAllTabs)
             }
-            .disabled(!appController.activeHasDocumentWindow)
-
-            Button(DocumentWindowTabCommand.mergeAllWindows.title) {
-                appController.performDocumentWindowTabCommand(.mergeAllWindows)
-            }
-            .disabled(!appController.activeHasDocumentWindow)
-
-            Button(DocumentWindowTabCommand.moveTabToNewWindow.title) {
-                appController.performDocumentWindowTabCommand(.moveTabToNewWindow)
-            }
-            .disabled(!appController.activeHasDocumentWindow)
-
-            Divider()
-
-            Button(DocumentWindowTabCommand.selectNextTab.title) {
-                appController.performDocumentWindowTabCommand(.selectNextTab)
-            }
-            .keyboardShortcut(.tab, modifiers: [.control])
-            .disabled(!appController.activeHasDocumentWindow)
-
-            Button(DocumentWindowTabCommand.selectPreviousTab.title) {
-                appController.performDocumentWindowTabCommand(.selectPreviousTab)
-            }
-            .keyboardShortcut(.tab, modifiers: [.control, .shift])
             .disabled(!appController.activeHasDocumentWindow)
         }
 

@@ -4,7 +4,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently at `0.4.0`: OpenMarked is now a Document Workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks.
+The project is currently at `0.4.1`: OpenMarked is now a Document Workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks. The 0.4.1 patch adds the app icon/logo release polish and hardens PDF export.
 
 ## Current Status
 
@@ -53,7 +53,7 @@ This repository currently contains:
 - Markdown fixture corpus.
 - CI workflow for Swift build, verifier, visual snapshots, export artifacts, and tests.
 
-Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.4.0`. The packaging script supports Developer ID signing and notarization when credentials are available.
+Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.4.1`. The packaging script supports Developer ID signing and notarization when credentials are available.
 
 ## Screenshots
 
@@ -113,7 +113,7 @@ Create a local developer artifact with:
 Scripts/package_release.sh
 ```
 
-The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.4.0/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.4.0-macOS.zip` plus `dist/OpenMarked-0.4.0-macOS.dmg`.
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.4.1/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.4.1-macOS.zip` plus `dist/OpenMarked-0.4.1-macOS.dmg`.
 
 By default the app is ad hoc signed. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID certificate. Set `OPENMARKED_NOTARIZE=1` with `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD` to submit the DMG for notarization.
 
@@ -141,7 +141,7 @@ OpenMarked is designed as a local-first viewer. It does not send document conten
 
 ## Known Limitations
 
-The `0.4.0` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Folder workspaces, backlinks, plugin processors, DOCX/EPUB export, grammar tools, browser integrations, and AI features are intentionally deferred.
+The `0.4.1` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Folder workspaces, backlinks, plugin processors, DOCX/EPUB export, grammar tools, browser integrations, and AI features are intentionally deferred.
 
 ## Feedback
 

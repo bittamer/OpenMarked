@@ -1,11 +1,11 @@
 # OpenMarked Visual QA
 
-Date: 2026-06-07
-Version: 0.4.0
-Build: 4
-Artifact: `dist/OpenMarked-0.4.0/OpenMarked.app`
+Date: 2026-06-08
+Version: 0.4.1
+Build: 5
+Artifact: `dist/OpenMarked-0.4.1/OpenMarked.app`
 
-This record covers the 0.4.0 release snapshot fixtures.
+This record covers the 0.4.1 release snapshot fixtures.
 
 ## Automated Snapshot Coverage
 
@@ -53,7 +53,7 @@ Scripts/verify_export_artifacts.sh
 
 The export verifier renders the same visual fixture matrix and writes PDF artifacts through WebKit. Each PDF must exist and exceed the minimum size threshold; the rich Markdown PDFs use a higher threshold to catch missing Mermaid or KaTeX rendering. The verifier also checks inspector/settings surface metadata in the manifest.
 
-## 0.4.0 Document Workbench Pass
+## 0.4.1 Document Workbench Pass
 
 For Phase 8, `swift run OpenMarkedSnapshotter --output Docs/Screenshots/visual-qa` refreshed the baseline matrix with preview, palette, inspector, Theme Manager, and print controls snapshots. `Scripts/verify_visual_snapshots.sh` and `Scripts/verify_export_artifacts.sh` gate the same 32-case matrix during release verification.
 

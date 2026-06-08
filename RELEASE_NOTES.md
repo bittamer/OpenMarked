@@ -1,4 +1,27 @@
-# OpenMarked 0.4.0
+# OpenMarked 0.4.1
+
+OpenMarked 0.4.1 is a polish and reliability patch for the Document Workbench release.
+
+## Highlights
+
+- Adds the OpenMarked SVG logo to the README and the app's empty-state chrome.
+- Packages a native macOS app icon so Finder, Dock, and the app bundle show the OpenMarked identity.
+- Hardens PDF export by using WebKit PDF generation, validating the resulting PDF data, and preventing repeated export attempts from leaving WebKit work running.
+- Keeps the repository and packaged app metadata aligned under the GNU General Public License v3.0.
+
+## Installation
+
+Developer artifacts are created by:
+
+```sh
+Scripts/package_release.sh
+```
+
+The resulting files are `dist/OpenMarked-0.4.1-macOS.zip` and `dist/OpenMarked-0.4.1-macOS.dmg`.
+
+These developer artifacts are ad hoc signed by default but not notarized unless Apple signing credentials are supplied. On macOS, Gatekeeper may require opening them from Finder's context menu. Only run local developer artifacts from sources you trust.
+
+## OpenMarked 0.4.0
 
 OpenMarked 0.4.0 is the Document Workbench release. It keeps the native Markdown previewer from earlier releases and adds the tools needed to inspect a document, understand its metadata, review references and assets, manage themes, and prepare output for export or print.
 

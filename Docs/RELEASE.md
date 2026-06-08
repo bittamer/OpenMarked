@@ -1,4 +1,4 @@
-# OpenMarked 0.4.0 Release Gate
+# OpenMarked 0.4.1 Release Gate
 
 This document captures the current release process. Do not tag a release until `Scripts/verify_release.sh` passes, the checklist in `Docs/QA.md` has been run by a person, and the project owner has approved the release.
 
@@ -15,29 +15,29 @@ The command builds debug and release products, runs the verifier, runs the perfo
 The local developer artifact is:
 
 ```text
-dist/OpenMarked-0.4.0-macOS.zip
-dist/OpenMarked-0.4.0-macOS.dmg
+dist/OpenMarked-0.4.1-macOS.zip
+dist/OpenMarked-0.4.1-macOS.dmg
 ```
 
 The app bundle is ad hoc signed by default for local developer distribution. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID identity. Set `OPENMARKED_NOTARIZE=1` with Apple notarization credentials to submit and staple the DMG. Without notarization, Gatekeeper may require users to open through Finder's context menu or remove quarantine after they understand the risk.
 
 ## Final Manual Gate
 
-- Automated release gate: passed on 2026-06-07 with `Scripts/verify_release.sh`
+- Automated release gate: passed on 2026-06-08 with `Scripts/verify_release.sh`
 - QA runner: Codex on macOS 26.5.1
-- Artifact path: `dist/OpenMarked-0.4.0/OpenMarked.app`, `dist/OpenMarked-0.4.0-macOS.zip`, and `dist/OpenMarked-0.4.0-macOS.dmg`
+- Artifact path: `dist/OpenMarked-0.4.1/OpenMarked.app`, `dist/OpenMarked-0.4.1-macOS.zip`, and `dist/OpenMarked-0.4.1-macOS.dmg`
 - QA checklist: `Docs/QA.md`
 - Fixture visual QA: screenshot baseline and manifest coverage recorded in `Docs/VISUAL_QA.md`
 - PDF/export artifact QA: automated through `Scripts/verify_export_artifacts.sh`, including preview, palette, inspector, settings, and rich Markdown PDFs
 - Print panel QA: owner-recorded manual pass recommended before public distribution
 - Second Mac or clean-account launch: owner-recorded manual pass recommended before public distribution
 - Owner approval: accepted through the Phase 8 release request
-- Release tag: `0.4.0`
+- Release tag: `0.4.1`
 
 Use this command only after approval and after all release changes are committed:
 
 ```sh
-git tag -a 0.4.0 -m "OpenMarked 0.4.0"
+git tag -a 0.4.1 -m "OpenMarked 0.4.1"
 ```
 
 ## P1 Deferrals

@@ -18,8 +18,8 @@ final class AppInfoTests: XCTestCase {
     }
 
     func testVersionIsCurrentReleaseVersion() {
-        XCTAssertEqual(AppInfo.version, "0.4.0")
-        XCTAssertEqual(AppInfo.build, "4")
+        XCTAssertEqual(AppInfo.version, "0.4.1")
+        XCTAssertEqual(AppInfo.build, "5")
     }
 
     func testWindowStateTransitions() throws {
@@ -1387,8 +1387,8 @@ struct AppInfoTests {
 
     @Test("Current release version is exposed")
     func versionIsCurrentReleaseVersion() {
-        #expect(AppInfo.version == "0.4.0")
-        #expect(AppInfo.build == "4")
+        #expect(AppInfo.version == "0.4.1")
+        #expect(AppInfo.build == "5")
     }
 
     @Test("Window state transitions from empty to loaded")

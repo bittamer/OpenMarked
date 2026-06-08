@@ -1,6 +1,6 @@
 {
-  "appBuild" : "4",
-  "appVersion" : "0.4.0",
+  "appBuild" : "5",
+  "appVersion" : "0.4.1",
   "schemaVersion" : 3,
   "snapshots" : [
     {
@@ -282,7 +282,7 @@
     },
     {
       "appearance" : "light",
-      "bytes" : 530956,
+      "bytes" : 530574,
       "diagnosticCount" : 0,
       "diagnosticKinds" : [
 
@@ -291,14 +291,14 @@
       "fixturePath" : "Fixtures\/Themes\/user-fixture.css",
       "height" : 760,
       "id" : "settings-theme-manager-light",
-      "sha256" : "c1f3171a97ffd0aa280530642d77273e9ad705cd795adf51b98457c9411a6100",
+      "sha256" : "660ad7345d90740284107dd918fd0dc9b9f641479ddb7948665934282bd7198f",
       "surface" : "settings",
       "themeID" : "default",
       "width" : 1120
     },
     {
       "appearance" : "light",
-      "bytes" : 210207,
+      "bytes" : 209816,
       "diagnosticCount" : 0,
       "diagnosticKinds" : [
 
@@ -307,7 +307,7 @@
       "fixturePath" : "Fixtures\/Markdown\/print-readiness.md",
       "height" : 760,
       "id" : "settings-print-controls-light",
-      "sha256" : "8f73e68e1ec75af4ce7cd8b45f5e83210f120e5710e1cb41ea27f11c2d7f8893",
+      "sha256" : "87fbe081ecf3c359509e979940e5a22a2cf0eeef96e31a11e5231a88846ec617",
       "surface" : "settings",
       "themeID" : "default",
       "width" : 1120

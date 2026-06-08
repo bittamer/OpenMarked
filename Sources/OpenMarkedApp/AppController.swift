@@ -372,6 +372,7 @@ final class AppController: ObservableObject {
             backing: .buffered,
             defer: false
         )
+        DocumentWindowTabbing.configureDocumentWindow(window)
 
         let delegate = WindowLifecycleDelegate { [weak self, weak controller] in
             controller?.close()

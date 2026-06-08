@@ -1,7 +1,9 @@
 import AppKit
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        DocumentWindowTabbing.enableAutomaticWindowTabbing()
         NSApplication.shared.setActivationPolicy(.regular)
     }
 

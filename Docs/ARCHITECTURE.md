@@ -75,6 +75,23 @@ Lifecycle behavior:
 - The delegate explicitly sets the activation policy to `.regular` and activates the app at launch so SwiftPM and packaged builds behave like normal foreground Mac apps with a visible menu bar.
 - SwiftUI commands preserve standard macOS app/window behavior while adding Markdown-specific menu items for open, reload, search, outline, theme, source actions, export, print, settings, and About.
 
+## Native Document Tabbing Direction
+
+0.5.0 adds native macOS document tabs using AppKit `NSWindow` tabbing rather than a custom tab strip.
+
+Tabbing behavior:
+
+- Each Markdown file remains backed by its own `DocumentWindowController`, `ContentView`, and native document `NSWindow`.
+- Document windows share the `OpenMarkedDocument` tabbing identifier and prefer native tabbing.
+- Settings, About, save panels, open panels, and other utility windows are not part of the document tab group.
+- `AppController` owns open placement. It decides whether the first supported file replaces an empty active document window, opens a standalone first document window, or creates a native tab in the active document window group.
+- File > Open, toolbar open, drag/drop, Finder/Dock open events, Open Recent, and session restore should all route through the same `openURLs` policy.
+- `WindowAccessor` configures SwiftUI-created document windows once their `NSWindow` is available. Programmatic document windows created by `AppController` use the same tabbing helper.
+- `AppController.activeWindowController` remains the command-routing source. Native tab selection must update it so toolbar and menu actions operate on the selected tab.
+- Closing a tab must run the same cleanup as closing a standalone document window: persist window/document state, stop live preview watchers, and release retained window/delegate references.
+
+Exact native tab group restoration is deferred. Session restoration reopens the saved document list and groups those documents into native tabs where possible.
+
 ## Theme Direction
 
 Phase 5 theme assets live under `Sources/OpenMarkedCore/Resources/Themes`. During SwiftPM development they load through `Bundle.module`; packaged app builds copy the resource bundle under `Contents/Resources`, and `PreviewThemeStore` checks that conventional app-bundle location first.

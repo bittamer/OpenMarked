@@ -42,6 +42,7 @@ struct ContentView: View {
         .appChromeTheme(appController.settings.appChromeThemeID)
         .background(
             WindowAccessor { window in
+                DocumentWindowTabbing.configureDocumentWindow(window)
                 controller.window = window
                 appController.registerWindowController(controller)
             }

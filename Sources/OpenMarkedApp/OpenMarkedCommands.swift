@@ -16,6 +16,11 @@ struct OpenMarkedCommands: Commands {
                 appController.presentOpenPanel()
             }
             .keyboardShortcut("o", modifiers: [.command])
+
+            Button("Open in New Window...") {
+                appController.presentOpenInNewWindowPanel()
+            }
+            .keyboardShortcut("o", modifiers: [.command, .option])
         }
 
         CommandGroup(after: .importExport) {
@@ -162,6 +167,44 @@ struct OpenMarkedCommands: Commands {
                 }
                 .disabled(!appController.activeHasDocument)
             }
+        }
+
+        CommandGroup(after: .windowArrangement) {
+            Divider()
+
+            Button(DocumentWindowTabCommand.showTabBar.title) {
+                appController.performDocumentWindowTabCommand(.showTabBar)
+            }
+            .disabled(!appController.activeHasDocumentWindow)
+
+            Button(DocumentWindowTabCommand.showAllTabs.title) {
+                appController.performDocumentWindowTabCommand(.showAllTabs)
+            }
+            .disabled(!appController.activeHasDocumentWindow)
+
+            Button(DocumentWindowTabCommand.mergeAllWindows.title) {
+                appController.performDocumentWindowTabCommand(.mergeAllWindows)
+            }
+            .disabled(!appController.activeHasDocumentWindow)
+
+            Button(DocumentWindowTabCommand.moveTabToNewWindow.title) {
+                appController.performDocumentWindowTabCommand(.moveTabToNewWindow)
+            }
+            .disabled(!appController.activeHasDocumentWindow)
+
+            Divider()
+
+            Button(DocumentWindowTabCommand.selectNextTab.title) {
+                appController.performDocumentWindowTabCommand(.selectNextTab)
+            }
+            .keyboardShortcut(.tab, modifiers: [.control])
+            .disabled(!appController.activeHasDocumentWindow)
+
+            Button(DocumentWindowTabCommand.selectPreviousTab.title) {
+                appController.performDocumentWindowTabCommand(.selectPreviousTab)
+            }
+            .keyboardShortcut(.tab, modifiers: [.control, .shift])
+            .disabled(!appController.activeHasDocumentWindow)
         }
 
         CommandGroup(replacing: .help) {

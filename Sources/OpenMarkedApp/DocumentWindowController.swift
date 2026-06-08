@@ -441,6 +441,7 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func updateWindowTitle() {
         window?.title = state.windowTitle
+        window?.representedURL = currentSourceURL
     }
 
     func scrollToOutlineItem(_ item: OutlineItem) {

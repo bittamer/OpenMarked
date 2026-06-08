@@ -90,6 +90,8 @@ Tabbing behavior:
 - `AppController.activeWindowController` remains the command-routing source. `DocumentWindowActivityRegistry` tracks document-window activity, while `AppController` observes native key/main window notifications so toolbar and menu actions operate on the selected tab.
 - Closing a tab runs the same cleanup as closing a standalone document window: `NSWindow.willCloseNotification` maps the closing window to its `DocumentWindowController`, persists window/document state, stops live preview watchers, unregisters the document window, and falls back to the next known active controller or `nil`.
 - SwiftUI view disappearance does not close document controllers; cleanup is tied to native window close events so tab selection does not stop another tab's live preview or mutate its per-tab state.
+- `OpenMarkedCommands` exposes explicit Window menu tab commands backed by native `NSWindow` selectors, plus File > Open in New Window... for users who want standalone document windows.
+- Document windows keep their native represented URL in sync with the opened Markdown file so macOS tab/window accessibility can use the document title and source file identity.
 
 Exact native tab group restoration and duplicate-document focusing are deferred. Session restoration reopens the saved document list and groups those documents into native tabs where possible.
 

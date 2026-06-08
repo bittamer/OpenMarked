@@ -49,6 +49,10 @@ final class AppController: ObservableObject {
         activeWindowController != nil
     }
 
+    var activeHasDocumentWindow: Bool {
+        activeWindowController?.window != nil
+    }
+
     var activeIsInspectorVisible: Bool {
         activeWindowController?.state.layout.isInspectorVisible ?? false
     }
@@ -103,8 +107,16 @@ final class AppController: ObservableObject {
     }
 
     func presentOpenPanel() {
+        presentOpenPanel(placement: .tabOrReplace)
+    }
+
+    func presentOpenInNewWindowPanel() {
+        presentOpenPanel(placement: .standaloneWindows)
+    }
+
+    private func presentOpenPanel(placement: OpenPanelPlacement) {
         let panel = NSOpenPanel()
-        panel.title = "Open Markdown File"
+        panel.title = placement.openPanelTitle
         panel.prompt = "Open"
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -116,7 +128,12 @@ final class AppController: ObservableObject {
             return
         }
 
-        openURLs(panel.urls, preferredController: activeWindowController)
+        switch placement {
+        case .tabOrReplace:
+            openURLs(panel.urls, preferredController: activeWindowController)
+        case .standaloneWindows:
+            openURLsInNewWindows(panel.urls)
+        }
     }
 
     func openURLs(
@@ -195,6 +212,36 @@ final class AppController: ObservableObject {
 
     func openDroppedURLs(_ urls: [URL], into controller: DocumentWindowController) {
         openURLs(urls, preferredController: controller)
+    }
+
+    func openURLsInNewWindows(_ urls: [URL]) {
+        guard !urls.isEmpty else {
+            activeWindowController?.showNoSupportedFilesError()
+            return
+        }
+
+        let supportedURLs = urls.filter { AppInfo.supportsFileExtension($0.pathExtension) }
+        guard !supportedURLs.isEmpty else {
+            activeWindowController?.showNoSupportedFilesError()
+            return
+        }
+
+        if settings.restoresLastOpenedDocuments {
+            settingsStore.saveLastDocumentURLs(supportedURLs)
+        }
+
+        for url in supportedURLs {
+            createDocumentWindow(opening: url)
+        }
+    }
+
+    @discardableResult
+    func performDocumentWindowTabCommand(_ command: DocumentWindowTabCommand) -> Bool {
+        guard let window = activeWindowController?.window else {
+            return false
+        }
+
+        return NSApp.sendAction(command.selector, to: window, from: nil)
     }
 
     func reloadPreview() {
@@ -635,5 +682,19 @@ final class AppController: ObservableObject {
         alert.informativeText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+}
+
+private enum OpenPanelPlacement {
+    case tabOrReplace
+    case standaloneWindows
+
+    var openPanelTitle: String {
+        switch self {
+        case .tabOrReplace:
+            return "Open Markdown File"
+        case .standaloneWindows:
+            return "Open Markdown File in New Window"
+        }
     }
 }

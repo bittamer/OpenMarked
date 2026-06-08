@@ -13,6 +13,7 @@ final class AppController: ObservableObject {
 
     private var documentWindows: [UUID: NSWindow] = [:]
     private var registeredWindowControllers: [UUID: DocumentWindowController] = [:]
+    private var closingDocumentWindowIDs: Set<ObjectIdentifier> = []
     private var documentWindowActivity = DocumentWindowActivityRegistry()
     private var windowNotificationObservers: [NSObjectProtocol] = []
     private let settingsStore = ApplicationSettingsStore.shared
@@ -81,6 +82,11 @@ final class AppController: ObservableObject {
     }
 
     func registerDocumentWindow(_ window: NSWindow, controller: DocumentWindowController) {
+        let windowID = ObjectIdentifier(window)
+        guard !closingDocumentWindowIDs.contains(windowID) else {
+            return
+        }
+
         DocumentWindowTabbing.configureDocumentWindow(window)
         registeredWindowControllers[controller.id] = controller
         documentWindows[controller.id] = window
@@ -91,7 +97,7 @@ final class AppController: ObservableObject {
 
         documentWindowActivity.register(
             controllerID: controller.id,
-            windowID: ObjectIdentifier(window)
+            windowID: windowID
         )
 
         if activeWindowController == nil || window.isKeyWindow || window.isMainWindow {
@@ -503,6 +509,7 @@ final class AppController: ObservableObject {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         window.title = controller.state.windowTitle
         window.contentViewController = hostingController
         registerDocumentWindow(window, controller: controller)
@@ -651,7 +658,7 @@ final class AppController: ObservableObject {
                     return
                 }
 
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     self?.noteDocumentWindowBecameActive(window)
                 }
             }
@@ -667,7 +674,7 @@ final class AppController: ObservableObject {
                 return
             }
 
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self?.noteDocumentWindowWillClose(window)
             }
         }
@@ -684,22 +691,43 @@ final class AppController: ObservableObject {
     }
 
     func noteDocumentWindowWillClose(_ window: NSWindow) {
-        guard let closeResult = documentWindowActivity.close(windowID: ObjectIdentifier(window)) else {
+        let windowID = ObjectIdentifier(window)
+        guard documentWindowActivity.controllerID(for: windowID) != nil else {
+            return
+        }
+
+        guard closingDocumentWindowIDs.insert(windowID).inserted else {
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.finishDocumentWindowClose(windowID: windowID)
+        }
+    }
+
+    private func finishDocumentWindowClose(windowID: ObjectIdentifier) {
+        guard let closeResult = documentWindowActivity.close(windowID: windowID) else {
+            closingDocumentWindowIDs.remove(windowID)
+            reconcileActiveWindowController()
             return
         }
 
         let closedController = registeredWindowControllers.removeValue(forKey: closeResult.closedControllerID)
         documentWindows.removeValue(forKey: closeResult.closedControllerID)
-        closedController?.close()
 
         if activeWindowController?.id == closeResult.closedControllerID {
             activeWindowController = controller(for: closeResult.fallbackActiveControllerID)
         }
 
+        closedController?.close()
         persistOpenDocumentURLsForSessionRestore()
+        reconcileActiveWindowController()
 
-        Task { @MainActor in
-            reconcileActiveWindowController()
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            self?.closingDocumentWindowIDs.remove(windowID)
+            self?.reconcileActiveWindowController()
         }
     }
 

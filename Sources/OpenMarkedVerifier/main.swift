@@ -64,6 +64,86 @@ func runPerformanceSmoke(renderer: CMarkGFMRenderer) throws {
         verify(renderSeconds < 2.0, "\(path) should render within 2 seconds")
         print(String(format: "Performance smoke: %@ load=%.4fs render=%.4fs words=%d", path, loadSeconds, renderSeconds, document.statistics.wordCount))
     }
+
+    try runSyntheticPerformanceSmoke(renderer: renderer)
+}
+
+func runSyntheticPerformanceSmoke(renderer: CMarkGFMRenderer) throws {
+    let performanceDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("OpenMarkedPerformanceVerifier-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: performanceDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: performanceDirectory) }
+
+    let syntheticFixtures: [(name: String, markdown: String, maxLoadSeconds: Double, maxRenderSeconds: Double)] = [
+        ("large-text", syntheticLargeTextFixture(), 2.0, 4.0),
+        ("many-images", syntheticImageFixture(), 2.0, 4.0),
+        ("many-headings", syntheticHeadingFixture(), 2.0, 4.0),
+        ("many-links", syntheticLinkFixture(), 2.0, 4.0)
+    ]
+
+    for fixture in syntheticFixtures {
+        let url = performanceDirectory.appendingPathComponent("\(fixture.name).md")
+        try fixture.markdown.write(to: url, atomically: true, encoding: .utf8)
+
+        var document: MarkdownDocument?
+        let loadSeconds = try measureSeconds {
+            document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        }
+
+        guard let document else {
+            verify(false, "synthetic performance fixture should load: \(fixture.name)")
+            continue
+        }
+
+        var result: RenderResult?
+        let renderSeconds = try measureSeconds {
+            result = try renderer.render(RenderRequest(document: document))
+        }
+
+        verify(result?.fullHTML.isEmpty == false, "synthetic performance fixture should render: \(fixture.name)")
+        verify(loadSeconds < fixture.maxLoadSeconds, "\(fixture.name) should load within \(fixture.maxLoadSeconds) seconds")
+        verify(renderSeconds < fixture.maxRenderSeconds, "\(fixture.name) should render within \(fixture.maxRenderSeconds) seconds")
+        print(String(format: "Performance smoke: synthetic/%@ load=%.4fs render=%.4fs words=%d", fixture.name, loadSeconds, renderSeconds, document.statistics.wordCount))
+    }
+}
+
+func syntheticLargeTextFixture() -> String {
+    var markdown = "# Large Text\n\n"
+    for section in 1...220 {
+        markdown += "## Section \(section)\n\n"
+        markdown += "OpenMarked measures a deliberately large paragraph with normal prose, emphasis, links, and inline code so the text pipeline has realistic work to do. "
+        markdown += "This sentence repeats enough times to exercise tokenizer and renderer behavior without requiring external assets.\n\n"
+    }
+    return markdown
+}
+
+func syntheticImageFixture() -> String {
+    var markdown = "# Many Images\n\n"
+    for index in 1...500 {
+        markdown += "![Synthetic image \(index)](images/missing-\(index).png)\n\n"
+        if index.isMultiple(of: 20) {
+            markdown += "## Image Section \(index / 20)\n\n"
+        }
+    }
+    return markdown
+}
+
+func syntheticHeadingFixture() -> String {
+    var markdown = "# Many Headings\n\n"
+    for index in 1...900 {
+        let level = (index % 5) + 2
+        markdown += "\(String(repeating: "#", count: level)) Heading \(index)\n\n"
+        markdown += "Short body text for heading \(index).\n\n"
+    }
+    return markdown
+}
+
+func syntheticLinkFixture() -> String {
+    var markdown = "# Many Links\n\n"
+    for index in 1...800 {
+        markdown += "[Local \(index)](docs/page-\(index).md) [Heading \(index)](#heading-\(index)) [Remote \(index)](https://example.com/\(index))\n\n"
+    }
+    return markdown
 }
 
 verify(AppInfo.supportsFileExtension("md"), "md should be supported")
@@ -72,8 +152,8 @@ verify(AppInfo.supportsFileExtension("mkdn"), "mkdn should be supported")
 verify(AppInfo.supportsFileExtension("txt"), "txt should be supported")
 verify(!AppInfo.supportsFileExtension("pdf"), "pdf should not be supported in the MVP skeleton")
 verify(!AppInfo.supportsFileExtension("docx"), "docx should not be supported in the MVP skeleton")
-verify(AppInfo.version == "0.5.0", "version should be 0.5.0")
-verify(AppInfo.build == "6", "build should be 6")
+verify(AppInfo.version == "0.5.1", "version should be 0.5.1")
+verify(AppInfo.build == "7", "build should be 7")
 
 var state = DocumentWindowState()
 verify(!state.hasDocument, "new window state should not have a document")
@@ -197,6 +277,11 @@ let unknownInspectorSectionPayload = Data(
 let decodedUnknownInspectorSectionLayout = try JSONDecoder().decode(WindowLayoutState.self, from: unknownInspectorSectionPayload)
 verify(decodedUnknownInspectorSectionLayout.isInspectorVisible, "unknown inspector section layout should preserve visibility")
 verify(decodedUnknownInspectorSectionLayout.selectedInspectorSection == .summary, "unknown inspector section layout should fall back to summary")
+var sectionTrackingState = DocumentWindowState()
+sectionTrackingState.updateCurrentSection(id: "intro")
+let unchangedSectionTrackingState = sectionTrackingState
+sectionTrackingState.updateCurrentSection(id: "intro")
+verify(sectionTrackingState == unchangedSectionTrackingState, "repeated current section updates should be no-ops")
 
 let outlineDisplayFixture = [
     OutlineItem(id: "intro", level: 1, title: "Introduction"),
@@ -288,6 +373,23 @@ verify(decodedOldSettings.renderProfile == .openMarked, "old settings payloads s
 verify(decodedOldSettings.statisticsWordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute, "old settings payloads should decode with default reading speed")
 verify(!decodedOldSettings.includesFrontMatterInStatistics, "old settings payloads should keep front matter excluded from statistics")
 verify(decodedOldSettings.printConfiguration == .default, "old settings payloads should decode with default print settings")
+verify(decodedOldSettings.performanceMode == .automatic, "old settings payloads should decode with automatic performance mode")
+verify(decodedOldSettings.currentSectionTracking == .automatic, "old settings payloads should decode with automatic section tracking")
+verify(decodedOldSettings.referencedImageReloadMode == .automatic, "old settings payloads should decode with automatic referenced image reload")
+let smallPerformanceProfile = DocumentPerformanceProfile(sourceByteCount: 10_000, headingCount: 12, imageCount: 4, linkCount: 6)
+let largePerformanceProfile = DocumentPerformanceProfile(sourceByteCount: 800_000, headingCount: 260, imageCount: 240, linkCount: 20)
+let hugePerformanceProfile = DocumentPerformanceProfile(sourceByteCount: 2_000_000, headingCount: 700, imageCount: 520, linkCount: 20)
+verify(ApplicationSettings.default.currentSectionTrackingBehavior(for: smallPerformanceProfile) == .active, "small documents should track current sections actively")
+verify(ApplicationSettings.default.currentSectionTrackingBehavior(for: largePerformanceProfile) == .idleOnly, "large documents should use idle-only current section tracking")
+verify(ApplicationSettings.default.currentSectionTrackingBehavior(for: hugePerformanceProfile) == .disabled, "very large documents should disable automatic current section tracking")
+verify(ApplicationSettings(performanceMode: .fidelity).currentSectionTrackingBehavior(for: hugePerformanceProfile) == .active, "fidelity mode should keep current section tracking active")
+verify(ApplicationSettings(currentSectionTracking: .disabled).currentSectionTrackingBehavior(for: smallPerformanceProfile) == .disabled, "disabled current section tracking should override profile size")
+verify(ApplicationSettings.default.assetWatchStrategy(for: smallPerformanceProfile, directoryCount: 4) == .perFile, "small documents should watch referenced assets per file")
+verify(ApplicationSettings.default.assetWatchStrategy(for: largePerformanceProfile, directoryCount: 12) == .directoryFiltered, "large image-heavy documents should use directory-filtered asset watching")
+verify(ApplicationSettings.default.assetWatchStrategy(for: hugePerformanceProfile, directoryCount: 20) == .manualReload, "very large image-heavy documents should prefer manual referenced-asset reloads")
+verify(ApplicationSettings(performanceMode: .performance).assetWatchStrategy(for: largePerformanceProfile, directoryCount: 12) == .manualReload, "performance mode should disable automatic asset watching for large image-heavy documents")
+verify(ApplicationSettings(referencedImageReloadMode: .directory).assetWatchStrategy(for: smallPerformanceProfile, directoryCount: 4) == .directoryFiltered, "explicit directory image reload mode should override automatic strategy")
+verify(ApplicationSettings(referencedImageReloadMode: .manual).assetWatchStrategy(for: smallPerformanceProfile, directoryCount: 4) == .manualReload, "explicit manual image reload mode should override automatic strategy")
 let verifierUserThemeID = "\(UserPreviewTheme.idPrefix)verifier"
 let customThemeSettings = ApplicationSettings(defaultThemeID: verifierUserThemeID).normalized()
 verify(customThemeSettings.defaultThemeID == verifierUserThemeID, "user preview theme ids should survive settings normalization")
@@ -296,6 +398,14 @@ verify(customThemeSettings.defaultLayout.selectedThemeID == verifierUserThemeID,
 verify(
     AppChromeThemeStore.allBuiltInThemes.map(\.id) == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
     "app chrome theme ids should include the palette themes"
+)
+verify(
+    PreviewThemeStore.builtInThemeIDs == ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
+    "preview theme ids should be stable and cached"
+)
+verify(
+    PreviewThemeStore.allBuiltInThemes == PreviewThemeStore.allBuiltInThemes,
+    "preview theme cache should produce stable built-in themes"
 )
 verify(AppChromeThemeStore.theme(id: "missing").id == "default", "unknown app chrome themes should fall back to default")
 verify(MarkdownRenderProfile.openMarked.displayName == "OpenMarked", "OpenMarked render profile should be available")
@@ -495,8 +605,15 @@ let localImageURL = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").st
 let localImageDocument = try MarkdownDocumentLoader.load(url: localImageURL, createBookmark: false)
 let localImageResult = try renderer.render(RenderRequest(document: localImageDocument))
 verify(localImageResult.diagnostics.isEmpty, "existing local image fixture should not warn")
+verify(localImageResult.bodyHTML.contains(#"loading="lazy""#), "rendered images should opt into lazy loading")
+verify(localImageResult.bodyHTML.contains(#"decoding="async""#), "rendered images should opt into async decoding")
+verify(localImageResult.bodyHTML.contains(#"width="640""#), "rendered local images should include intrinsic width when known")
+verify(localImageResult.bodyHTML.contains(#"height="360""#), "rendered local images should include intrinsic height when known")
 let localImageAssetURLs = LocalAssetReferenceExtractor.imageURLs(from: localImageResult.bodyHTML, document: localImageDocument)
 verify(localImageAssetURLs.contains { $0.lastPathComponent == "sample-mark.svg" }, "local image assets should be extractable for live watching")
+let sampleMarkURL = URL(fileURLWithPath: "Fixtures/Assets/sample-mark.svg").standardizedFileURL
+let sampleMarkMetadata = ImageAssetMetadataCache.shared.metadata(for: sampleMarkURL)
+verify(sampleMarkMetadata?.pixelWidth == 640 && sampleMarkMetadata?.pixelHeight == 360, "image metadata cache should read SVG dimensions")
 let exportedLocalImageHTML = HTMLExportDocumentBuilder.standaloneHTML(renderResult: localImageResult, document: localImageDocument)
 verify(exportedLocalImageHTML.contains("<!doctype html>"), "standalone HTML export should include document structure")
 verify(exportedLocalImageHTML.contains("<title>Local Images</title>"), "standalone HTML export should use resolved title precedence")

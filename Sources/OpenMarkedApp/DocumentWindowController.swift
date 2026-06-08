@@ -12,11 +12,19 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     @Published private(set) var previewSearchRequest: PreviewSearchRequest?
 
     private let stateStore = DocumentWindowStateStore.shared
-    private let renderer: MarkdownRenderer = CMarkGFMRenderer()
     private var sourceWatcher: FileSystemWatcher?
     private var assetWatchers: [URL: FileSystemWatcher] = [:]
+    private var activeAssetWatchStrategy: AssetWatchStrategy?
+    private var watchedAssetURLs: Set<URL> = []
+    private var assetReloadTask: Task<Void, Never>?
+    private var documentLoadTask: Task<Void, Never>?
+    private var renderTask: Task<Void, Never>?
+    private var documentLoadGeneration: UInt64 = 0
+    private var renderGeneration: UInt64 = 0
     private var activePrintExporter: WebKitPrintExporter?
     private var exportDestinations = DocumentExportDestinations.empty
+    private var statisticsCache: [DocumentStatisticsCacheKey: DocumentStatistics] = [:]
+    private var currentSectionUpdateTask: Task<Void, Never>?
 
     weak var window: NSWindow? {
         didSet {
@@ -40,6 +48,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func open(url: URL) {
+        documentLoadTask?.cancel()
+        renderTask?.cancel()
+        documentLoadGeneration &+= 1
+        resetDocumentDerivedCaches()
         stopLivePreview()
         previewNavigationRequest = nil
         previewSearchRequest = PreviewSearchRequest(action: .clear)
@@ -47,36 +59,61 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         state.beginOpening(url: url)
         updateWindowTitle()
 
-        do {
-            let markdownDocument = try MarkdownDocumentLoader.load(url: url)
-            let document = OpenedDocument(markdownDocument: markdownDocument)
-            state.finishOpening(document: document)
-            if let restoredState = stateStore.restore(forDocumentID: markdownDocument.id) {
-                state.applyRestoredLayout(restoredState.layout)
-                exportDestinations = restoredState.exportDestinations
-            } else {
-                state.applyRestoredLayout(AppController.shared.settings.defaultLayout)
+        let loadGeneration = documentLoadGeneration
+        let openedAt = Date()
+        documentLoadTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
             }
-            render(markdownDocument)
-            startSourceWatcher(for: markdownDocument)
-            NSDocumentController.shared.noteNewRecentDocumentURL(url)
-            persistCurrentWindowState()
-        } catch let error as DocumentOpenError {
-            state.failOpening(error)
-        } catch {
-            state.failOpening(
-                DocumentOpenError(
-                    kind: .unreadable,
-                    url: url,
-                    message: "\(url.lastPathComponent) could not be opened."
-                )
-            )
-        }
 
-        updateWindowTitle()
+            do {
+                let markdownDocument = try await Self.loadMarkdownDocument(url: url)
+                guard !Task.isCancelled, self.documentLoadGeneration == loadGeneration else {
+                    return
+                }
+
+                let document = OpenedDocument(markdownDocument: markdownDocument, openedAt: openedAt)
+                self.state.finishOpening(document: document)
+                if let restoredState = self.stateStore.restore(forDocumentID: markdownDocument.id) {
+                    self.state.applyRestoredLayout(restoredState.layout)
+                    self.exportDestinations = restoredState.exportDestinations
+                } else {
+                    self.state.applyRestoredLayout(AppController.shared.settings.defaultLayout)
+                }
+                self.render(markdownDocument)
+                self.startSourceWatcher(for: markdownDocument)
+                NSDocumentController.shared.noteNewRecentDocumentURL(url)
+                AppController.shared.noteDocumentWindowFinishedOpening(self)
+                self.persistCurrentWindowState()
+            } catch is CancellationError {
+                return
+            } catch let error as DocumentOpenError {
+                guard self.documentLoadGeneration == loadGeneration else {
+                    return
+                }
+                self.state.failOpening(error)
+            } catch {
+                guard self.documentLoadGeneration == loadGeneration else {
+                    return
+                }
+                self.state.failOpening(
+                    DocumentOpenError(
+                        kind: .unreadable,
+                        url: url,
+                        message: "\(url.lastPathComponent) could not be opened."
+                    )
+                )
+            }
+
+            self.updateWindowTitle()
+        }
     }
 
     func close() {
+        documentLoadTask?.cancel()
+        renderTask?.cancel()
+        currentSectionUpdateTask?.cancel()
+        assetReloadTask?.cancel()
         persistCurrentWindowState()
         stopLivePreview()
     }
@@ -93,23 +130,17 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func reloadPreview() {
-        guard let markdownDocument = state.currentMarkdownDocument else {
+        guard let currentDocument = state.currentDocument,
+              let markdownDocument = currentDocument.markdownDocument else {
             return
         }
 
-        do {
-            let reloadedDocument = try MarkdownDocumentLoader.load(url: markdownDocument.sourceURL)
-            let openedDocument = OpenedDocument(markdownDocument: reloadedDocument)
-            state.finishOpening(document: openedDocument)
-            render(reloadedDocument)
-            startSourceWatcher(for: reloadedDocument)
-            persistCurrentWindowState()
-        } catch let error as DocumentOpenError {
-            stopLivePreview()
-            state.failOpening(error)
-        } catch {
-            state.failRendering(error)
-        }
+        reloadDocumentFromDisk(
+            url: markdownDocument.sourceURL,
+            openedAt: currentDocument.openedAt,
+            forceRender: true,
+            isLivePreviewUpdate: false
+        )
     }
 
     func toggleOutline() {
@@ -406,9 +437,18 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                 defaultLayoutChanged: shouldApplyDefaultLayoutChanges
             )
             let shouldUpdateLivePreview = shouldUpdateLivePreview(settings, previousSettings: previousSettings)
+            let shouldRefreshAssetWatchers = shouldRefreshAssetWatchers(settings, previousSettings: previousSettings)
 
             if shouldRefreshPreview {
                 render(markdownDocument)
+            } else if shouldRefreshInspectionReport(settings, previousSettings: previousSettings) {
+                refreshInspectionReport(document: markdownDocument, settings: settings)
+            }
+
+            if !shouldRefreshPreview,
+               shouldRefreshAssetWatchers,
+               let renderResult = state.currentRenderResult {
+                updateAssetWatchers(from: renderResult, document: markdownDocument)
             }
 
             if shouldRefreshPreview || shouldUpdateLivePreview {
@@ -451,7 +491,18 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     func updateCurrentPreviewSection(id: String?) {
-        state.updateCurrentSection(id: id)
+        guard state.currentSectionID != id else {
+            return
+        }
+
+        currentSectionUpdateTask?.cancel()
+        currentSectionUpdateTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.state.updateCurrentSection(id: id)
+        }
     }
 
     func setOutlineDisplayOptions(_ options: OutlineDisplayOptions) {
@@ -461,6 +512,29 @@ final class DocumentWindowController: ObservableObject, Identifiable {
 
     func updatePreviewStatus(_ message: String) {
         state.notePlaceholderAction(message)
+    }
+
+    func displayStatistics(options: DocumentStatisticsOptions) -> DocumentStatistics? {
+        guard let document = state.currentMarkdownDocument else {
+            return nil
+        }
+
+        let normalizedOptions = options.normalized()
+        let key = DocumentStatisticsCacheKey(document: document, options: normalizedOptions)
+        if let cached = statisticsCache[key] {
+            return cached
+        }
+
+        let statistics: DocumentStatistics
+        if !normalizedOptions.includesFrontMatter,
+           normalizedOptions.wordsPerMinute == DocumentStatisticsOptions.defaultWordsPerMinute {
+            statistics = document.statistics
+        } else {
+            statistics = DocumentStatisticsCalculator.calculate(document: document, options: normalizedOptions)
+        }
+
+        statisticsCache[key] = statistics
+        return statistics
     }
 
     func persistCurrentWindowState() {
@@ -483,28 +557,53 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         )
     }
 
-    private func render(_ markdownDocument: MarkdownDocument) {
+    private func render(_ markdownDocument: MarkdownDocument, isLivePreviewUpdate: Bool = false) {
+        renderTask?.cancel()
+        renderGeneration &+= 1
         state.beginRendering(documentName: markdownDocument.displayName)
         let settings = AppController.shared.settings
+        let theme = AppController.shared.previewTheme(id: state.layout.selectedThemeID)
+        let fontScale = state.layout.fontScale
+        let documentID = markdownDocument.id
+        let currentRenderGeneration = renderGeneration
 
-        do {
-            let result = try renderer.render(
-                RenderRequest(
-                    document: markdownDocument,
-                    options: RenderOptions(
-                        allowsRawHTML: settings.allowsRawHTML,
-                        renderProfile: settings.renderProfile,
-                        richMarkdownOptions: settings.richMarkdownOptions
-                    ),
-                    theme: AppController.shared.previewTheme(id: state.layout.selectedThemeID),
-                    fontScale: state.layout.fontScale,
-                    allowsRemoteImages: settings.allowsRemoteImages
+        renderTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let output = try await Self.renderMarkdownDocument(
+                    markdownDocument,
+                    settings: settings,
+                    theme: theme,
+                    fontScale: fontScale
                 )
-            )
-            state.finishRendering(result)
-            updateAssetWatchers(from: result, document: markdownDocument)
-        } catch {
-            state.failRendering(error)
+                guard !Task.isCancelled,
+                      self.renderGeneration == currentRenderGeneration,
+                      self.state.currentMarkdownDocument?.id == documentID else {
+                    return
+                }
+
+                self.state.finishRendering(output.renderResult, inspectionReport: output.inspectionReport)
+                if isLivePreviewUpdate {
+                    self.state.finishLivePreviewUpdate()
+                }
+                self.updateAssetWatchers(from: output.renderResult, document: markdownDocument)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard self.renderGeneration == currentRenderGeneration,
+                      self.state.currentMarkdownDocument?.id == documentID else {
+                    return
+                }
+
+                if isLivePreviewUpdate {
+                    self.state.failLivePreviewUpdate(error)
+                } else {
+                    self.state.failRendering(error)
+                }
+            }
         }
     }
 
@@ -547,6 +646,40 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         return settings.isLivePreviewEnabled != previousSettings.isLivePreviewEnabled
     }
 
+    private func shouldRefreshAssetWatchers(
+        _ settings: ApplicationSettings,
+        previousSettings: ApplicationSettings?
+    ) -> Bool {
+        guard let previousSettings else {
+            return true
+        }
+
+        return settings.performanceMode != previousSettings.performanceMode
+            || settings.referencedImageReloadMode != previousSettings.referencedImageReloadMode
+            || settings.isLivePreviewEnabled != previousSettings.isLivePreviewEnabled
+    }
+
+    private func shouldRefreshInspectionReport(
+        _ settings: ApplicationSettings,
+        previousSettings: ApplicationSettings?
+    ) -> Bool {
+        guard let previousSettings else {
+            return true
+        }
+
+        return settings.statisticsWordsPerMinute != previousSettings.statisticsWordsPerMinute
+            || settings.includesFrontMatterInStatistics != previousSettings.includesFrontMatterInStatistics
+    }
+
+    private func refreshInspectionReport(document: MarkdownDocument, settings: ApplicationSettings) {
+        let report = DocumentInspectionBuilder.build(
+            document: document,
+            renderResult: state.currentRenderResult,
+            statisticsOptions: settings.documentStatisticsOptions
+        )
+        state.updateInspectionReport(report)
+    }
+
     private func startSourceWatcher(for markdownDocument: MarkdownDocument, markWatching: Bool = true) {
         guard AppController.shared.settings.isLivePreviewEnabled else {
             stopLivePreview()
@@ -568,6 +701,12 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     private func updateAssetWatchers(from renderResult: RenderResult, document: MarkdownDocument) {
+        guard AppController.shared.settings.isLivePreviewEnabled else {
+            stopAssetWatchers()
+            state.noteReferencedAssetReloadStatus(.inactive)
+            return
+        }
+
         let sourcePath = document.sourceURL.standardizedFileURL.path
         let assetURLs = Set(
             LocalAssetReferenceExtractor
@@ -575,20 +714,67 @@ final class DocumentWindowController: ObservableObject, Identifiable {
                 .map(\.standardizedFileURL)
                 .filter { $0.path != sourcePath }
         )
+        watchedAssetURLs = assetURLs
 
-        for watchedURL in Set(assetWatchers.keys).subtracting(assetURLs) {
+        guard !assetURLs.isEmpty else {
+            stopAssetWatchers()
+            state.noteReferencedAssetReloadStatus(.inactive)
+            return
+        }
+
+        let directoryURLs = Set(assetURLs.map { $0.deletingLastPathComponent().standardizedFileURL })
+        let profile = DocumentPerformanceProfile(
+            sourceByteCount: renderResult.performanceProfile?.sourceByteCount ?? document.sourceText.utf8.count,
+            headingCount: renderResult.performanceProfile?.headingCount ?? renderResult.outline.count,
+            imageCount: assetURLs.count,
+            linkCount: renderResult.performanceProfile?.linkCount ?? 0
+        )
+        let strategy = AppController.shared.settings.assetWatchStrategy(
+            for: profile,
+            directoryCount: directoryURLs.count
+        )
+
+        if activeAssetWatchStrategy != strategy {
+            stopAssetWatchers()
+            activeAssetWatchStrategy = strategy
+        }
+
+        switch strategy {
+        case .perFile:
+            reconcileAssetWatchers(targetURLs: assetURLs) { [weak self] event in
+                self?.handleAssetFileEvent(event)
+            }
+            state.noteReferencedAssetReloadStatus(.watchingFiles(assetURLs.count))
+        case .directoryFiltered:
+            reconcileAssetWatchers(targetURLs: directoryURLs) { [weak self] event in
+                self?.handleAssetDirectoryEvent(event)
+            }
+            state.noteReferencedAssetReloadStatus(
+                .watchingDirectories(directoryCount: directoryURLs.count, assetCount: assetURLs.count)
+            )
+        case .manualReload:
+            stopAssetWatchers()
+            state.noteReferencedAssetReloadStatus(.manualReload(assetCount: assetURLs.count))
+        }
+    }
+
+    private func reconcileAssetWatchers(
+        targetURLs: Set<URL>,
+        handler: @escaping @MainActor (FileWatchEvent) -> Void
+    ) {
+        for watchedURL in Set(assetWatchers.keys).subtracting(targetURLs) {
             assetWatchers[watchedURL]?.stop()
             assetWatchers.removeValue(forKey: watchedURL)
         }
 
-        for assetURL in assetURLs.subtracting(Set(assetWatchers.keys)) {
-            let watcher = FileSystemWatcher(url: assetURL) { [weak self] event in
-                Task { @MainActor [weak self] in
-                    self?.handleAssetFileEvent(event)
+        for targetURL in targetURLs.subtracting(Set(assetWatchers.keys)) {
+            let watcher = FileSystemWatcher(url: targetURL) { event in
+                Task { @MainActor in
+                    handler(event)
                 }
             }
             watcher.start()
-            assetWatchers[assetURL] = watcher
+            assetWatchers[targetURL] = watcher
         }
     }
 
@@ -596,10 +782,25 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         sourceWatcher?.stop()
         sourceWatcher = nil
 
+        stopAssetWatchers()
+        state.noteReferencedAssetReloadStatus(.inactive)
+    }
+
+    private func stopAssetWatchers() {
+        assetReloadTask?.cancel()
+        assetReloadTask = nil
         for watcher in assetWatchers.values {
             watcher.stop()
         }
         assetWatchers.removeAll()
+        watchedAssetURLs.removeAll()
+        activeAssetWatchStrategy = nil
+    }
+
+    private func resetDocumentDerivedCaches() {
+        statisticsCache.removeAll()
+        currentSectionUpdateTask?.cancel()
+        currentSectionUpdateTask = nil
     }
 
     private func handleSourceFileEvent(_ event: FileWatchEvent) {
@@ -612,11 +813,30 @@ final class DocumentWindowController: ObservableObject, Identifiable {
     }
 
     private func handleAssetFileEvent(_ event: FileWatchEvent) {
+        guard watchedAssetURLs.contains(event.url.standardizedFileURL) else {
+            return
+        }
+
+        scheduleAssetReload()
+    }
+
+    private func handleAssetDirectoryEvent(_ event: FileWatchEvent) {
         guard assetWatchers[event.url.standardizedFileURL] != nil else {
             return
         }
 
-        reloadForLivePreview(forceRender: true)
+        scheduleAssetReload()
+    }
+
+    private func scheduleAssetReload() {
+        assetReloadTask?.cancel()
+        assetReloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.reloadForLivePreview(forceRender: true)
+        }
     }
 
     private func reloadForLivePreview(forceRender: Bool) {
@@ -625,30 +845,149 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             return
         }
 
-        state.beginLivePreviewUpdate()
+        reloadDocumentFromDisk(
+            url: currentMarkdownDocument.sourceURL,
+            openedAt: currentDocument.openedAt,
+            forceRender: forceRender,
+            isLivePreviewUpdate: true
+        )
+    }
 
-        do {
-            let reloadedDocument = try MarkdownDocumentLoader.load(url: currentMarkdownDocument.sourceURL)
-            let sourceTextChanged = reloadedDocument.sourceText != currentMarkdownDocument.sourceText
-            guard forceRender || sourceTextChanged else {
-                state.noteLivePreviewWatching()
+    private func reloadDocumentFromDisk(
+        url: URL,
+        openedAt: Date,
+        forceRender: Bool,
+        isLivePreviewUpdate: Bool
+    ) {
+        documentLoadTask?.cancel()
+        documentLoadGeneration &+= 1
+        let loadGeneration = documentLoadGeneration
+        let previousSourceText = state.currentMarkdownDocument?.sourceText
+
+        if isLivePreviewUpdate {
+            assetReloadTask?.cancel()
+            state.beginLivePreviewUpdate()
+        } else {
+            state.notePlaceholderAction("Reloading \(url.lastPathComponent)")
+        }
+
+        documentLoadTask = Task { @MainActor [weak self] in
+            guard let self else {
                 return
             }
 
-            state.finishOpening(document: OpenedDocument(markdownDocument: reloadedDocument, openedAt: currentDocument.openedAt))
-            render(reloadedDocument)
-            state.finishLivePreviewUpdate()
-            startSourceWatcher(for: reloadedDocument, markWatching: false)
-            persistCurrentWindowState()
-        } catch let error as DocumentOpenError {
-            state.failLivePreviewUpdate(error)
-        } catch {
-            state.failLivePreviewUpdate(error)
+            do {
+                let reloadedDocument = try await Self.loadMarkdownDocument(url: url)
+                guard !Task.isCancelled, self.documentLoadGeneration == loadGeneration else {
+                    return
+                }
+
+                let sourceTextChanged = reloadedDocument.sourceText != previousSourceText
+                guard forceRender || sourceTextChanged else {
+                    if isLivePreviewUpdate {
+                        self.state.noteLivePreviewWatching()
+                    } else {
+                        self.state.notePlaceholderAction("Preview is up to date")
+                    }
+                    return
+                }
+
+                self.resetDocumentDerivedCaches()
+                self.state.finishOpening(
+                    document: OpenedDocument(markdownDocument: reloadedDocument, openedAt: openedAt)
+                )
+                self.render(reloadedDocument, isLivePreviewUpdate: isLivePreviewUpdate)
+                self.startSourceWatcher(for: reloadedDocument, markWatching: !isLivePreviewUpdate)
+                AppController.shared.noteDocumentWindowFinishedOpening(self)
+                self.persistCurrentWindowState()
+                self.updateWindowTitle()
+            } catch is CancellationError {
+                return
+            } catch let error as DocumentOpenError {
+                guard self.documentLoadGeneration == loadGeneration else {
+                    return
+                }
+                if isLivePreviewUpdate {
+                    self.state.failLivePreviewUpdate(error)
+                } else {
+                    self.stopLivePreview()
+                    self.state.failOpening(error)
+                }
+            } catch {
+                guard self.documentLoadGeneration == loadGeneration else {
+                    return
+                }
+                if isLivePreviewUpdate {
+                    self.state.failLivePreviewUpdate(error)
+                } else {
+                    self.state.failRendering(error)
+                }
+            }
         }
     }
 
     private var currentSourceURL: URL? {
         state.currentMarkdownDocument?.sourceURL.standardizedFileURL
+    }
+
+    nonisolated private static func loadMarkdownDocument(url: URL) async throws -> MarkdownDocument {
+        try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let document = try MarkdownDocumentLoader.load(url: url)
+            try Task.checkCancellation()
+            return document
+        }.value
+    }
+
+    nonisolated private static func renderMarkdownDocument(
+        _ markdownDocument: MarkdownDocument,
+        settings: ApplicationSettings,
+        theme: PreviewTheme,
+        fontScale: Double
+    ) async throws -> RenderPipelineOutput {
+        try await Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let result = try CMarkGFMRenderer().render(
+                RenderRequest(
+                    document: markdownDocument,
+                    options: RenderOptions(
+                        allowsRawHTML: settings.allowsRawHTML,
+                        renderProfile: settings.renderProfile,
+                        richMarkdownOptions: settings.richMarkdownOptions
+                    ),
+                    theme: theme,
+                    fontScale: fontScale,
+                    allowsRemoteImages: settings.allowsRemoteImages
+                )
+            )
+            try Task.checkCancellation()
+            let optimizedPreviewHTML = PreviewImageCache.shared.optimizedHTMLForPreview(
+                result.fullHTML,
+                baseURL: markdownDocument.sourceURL.deletingLastPathComponent()
+            )
+            try Task.checkCancellation()
+            let previewHTML = PreviewHTMLSecurityPolicy.sanitize(optimizedPreviewHTML)
+            try Task.checkCancellation()
+            let performanceProfile = DocumentPerformanceProfile(
+                sourceByteCount: markdownDocument.sourceText.utf8.count,
+                headingCount: result.outline.count,
+                imageCount: max(0, result.bodyHTML.components(separatedBy: "<img").count - 1),
+                linkCount: LinkReferenceExtractor.linkReferences(from: result.bodyHTML).count
+            )
+            try Task.checkCancellation()
+            let previewResult = result.withPreviewData(
+                previewHTML: previewHTML,
+                performanceProfile: performanceProfile
+            )
+            try Task.checkCancellation()
+            let inspectionReport = DocumentInspectionBuilder.build(
+                document: markdownDocument,
+                renderResult: previewResult,
+                statisticsOptions: settings.documentStatisticsOptions
+            )
+            try Task.checkCancellation()
+            return RenderPipelineOutput(renderResult: previewResult, inspectionReport: inspectionReport)
+        }.value
     }
 
     private func exportHTML(
@@ -765,5 +1104,25 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         } else {
             alert.runModal()
         }
+    }
+}
+
+private struct RenderPipelineOutput: Sendable {
+    let renderResult: RenderResult
+    let inspectionReport: DocumentInspectionReport
+}
+
+private struct DocumentStatisticsCacheKey: Hashable {
+    let documentID: String
+    let loadedAt: TimeInterval
+    let wordsPerMinute: Int
+    let includesFrontMatter: Bool
+
+    init(document: MarkdownDocument, options: DocumentStatisticsOptions) {
+        let normalizedOptions = options.normalized()
+        self.documentID = document.id
+        self.loadedAt = document.loadedAt.timeIntervalSince1970
+        self.wordsPerMinute = normalizedOptions.wordsPerMinute
+        self.includesFrontMatter = normalizedOptions.includesFrontMatter
     }
 }

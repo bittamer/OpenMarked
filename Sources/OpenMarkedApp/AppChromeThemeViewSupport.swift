@@ -81,8 +81,20 @@ private struct WindowChromeBackgroundWriter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            nsView.window?.backgroundColor = color
+        guard let window = nsView.window else {
+            DispatchQueue.main.async { [weak nsView] in
+                guard let window = nsView?.window else {
+                    return
+                }
+                if !window.backgroundColor.isEqual(color) {
+                    window.backgroundColor = color
+                }
+            }
+            return
+        }
+
+        if !window.backgroundColor.isEqual(color) {
+            window.backgroundColor = color
         }
     }
 }

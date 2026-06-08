@@ -851,54 +851,15 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func assetFileInfo(for url: URL) -> DocumentAssetFileInfo? {
-        guard FileManager.default.fileExists(atPath: url.path) else {
+        guard let metadata = ImageAssetMetadataCache.shared.metadata(for: url) else {
             return nil
         }
-
-        let byteSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?
-            .int64Value
-        let dimensions = imageDimensions(for: url)
 
         return DocumentAssetFileInfo(
-            byteSize: byteSize,
-            pixelWidth: dimensions?.width,
-            pixelHeight: dimensions?.height
+            byteSize: metadata.byteSize,
+            pixelWidth: metadata.pixelWidth,
+            pixelHeight: metadata.pixelHeight
         )
-    }
-
-    private static func imageDimensions(for url: URL) -> (width: Int, height: Int)? {
-        if let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-           let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
-           let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
-           let height = properties[kCGImagePropertyPixelHeight] as? NSNumber {
-            return (width.intValue, height.intValue)
-        }
-
-        return svgDimensions(for: url)
-    }
-
-    private static func svgDimensions(for url: URL) -> (width: Int, height: Int)? {
-        guard url.pathExtension.lowercased() == "svg",
-              let data = try? Data(contentsOf: url, options: [.mappedIfSafe]),
-              let text = String(data: data.prefix(4096), encoding: .utf8),
-              let width = svgNumericAttribute("width", in: text),
-              let height = svgNumericAttribute("height", in: text) else {
-            return nil
-        }
-
-        return (width, height)
-    }
-
-    private static func svgNumericAttribute(_ attribute: String, in text: String) -> Int? {
-        let pattern = #"\b\#(attribute)\s*=\s*["']([0-9]+)(?:\.[0-9]+)?(?:px)?["']"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-              let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
-              let range = Range(match.range(at: 1), in: text)
-        else {
-            return nil
-        }
-
-        return Int(text[range])
     }
 
     private struct ImageReference: Equatable {

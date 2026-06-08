@@ -95,6 +95,8 @@ public struct RenderResult: Equatable, Sendable {
     public let rendererName: String
     public let rendererVersion: String?
     public let richMarkdownState: RichMarkdownRenderState
+    public let previewHTML: String?
+    public let performanceProfile: DocumentPerformanceProfile?
 
     public init(
         bodyHTML: String,
@@ -104,7 +106,9 @@ public struct RenderResult: Equatable, Sendable {
         statistics: DocumentStatistics,
         rendererName: String,
         rendererVersion: String?,
-        richMarkdownState: RichMarkdownRenderState = .empty
+        richMarkdownState: RichMarkdownRenderState = .empty,
+        previewHTML: String? = nil,
+        performanceProfile: DocumentPerformanceProfile? = nil
     ) {
         self.bodyHTML = bodyHTML
         self.fullHTML = fullHTML
@@ -114,6 +118,26 @@ public struct RenderResult: Equatable, Sendable {
         self.rendererName = rendererName
         self.rendererVersion = rendererVersion
         self.richMarkdownState = richMarkdownState
+        self.previewHTML = previewHTML
+        self.performanceProfile = performanceProfile
+    }
+
+    public func withPreviewData(
+        previewHTML: String,
+        performanceProfile: DocumentPerformanceProfile
+    ) -> RenderResult {
+        RenderResult(
+            bodyHTML: bodyHTML,
+            fullHTML: fullHTML,
+            outline: outline,
+            diagnostics: diagnostics,
+            statistics: statistics,
+            rendererName: rendererName,
+            rendererVersion: rendererVersion,
+            richMarkdownState: richMarkdownState,
+            previewHTML: previewHTML,
+            performanceProfile: performanceProfile
+        )
     }
 }
 
@@ -369,9 +393,10 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         diagnostics.append(contentsOf: mathProcessed.diagnostics)
         let highlightedHTML = CodeHighlighter.highlight(mathProcessed.html)
         let policyHTML = request.allowsRemoteImages ? highlightedHTML : HTMLResourcePolicy.blockRemoteImages(in: highlightedHTML)
+        let imageProcessedHTML = ImageAttributePostProcessor.process(policyHTML, document: request.document)
         diagnostics.append(
             contentsOf: RenderDiagnosticsCollector.collect(
-                from: policyHTML,
+                from: imageProcessedHTML,
                 document: request.document,
                 outline: processed.outline,
                 options: request.options.richMarkdownOptions,
@@ -380,7 +405,7 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         )
         let fullHTML = HTMLDocumentAssembler.assemble(
             title: request.document.resolvedTitle,
-            bodyHTML: policyHTML,
+            bodyHTML: imageProcessedHTML,
             baseURL: request.document.sourceURL.deletingLastPathComponent(),
             theme: request.theme,
             fontScale: request.fontScale,
@@ -388,7 +413,7 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         )
 
         return RenderResult(
-            bodyHTML: policyHTML,
+            bodyHTML: imageProcessedHTML,
             fullHTML: fullHTML,
             outline: processed.outline,
             diagnostics: diagnostics,

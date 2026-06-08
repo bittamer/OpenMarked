@@ -4,7 +4,7 @@
 
 OpenMarked is an open source, native macOS Markdown previewer and publishing companion.
 
-The project is currently at `0.5.0`: OpenMarked is now a native tabbed Markdown document workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks. The 0.5.0 release adds native macOS document tabs, tab-aware open routing, active-tab command routing, tab-safe cleanup, and tab-aware session restoration.
+The project is currently at `0.5.1`: OpenMarked is now a native tabbed Markdown document workbench with a native inspector, front matter metadata, rich statistics, link and asset review, export readiness checks, custom CSS themes, print controls, repeatable visual QA, PDF/export artifact checks, ZIP/DMG packaging, and optional Developer ID/notarization hooks. The 0.5.1 release focuses on large-document performance with cached native UI data, optimized image loading, scalable asset watching, lazy inspector rendering, background document rendering, idempotent native window chrome updates, and user-facing performance controls.
 
 ## Current Status
 
@@ -19,6 +19,7 @@ This repository currently contains:
 - 0.4.0 backlog tracker: `Docs/0.4.0_BACKLOG.md`.
 - 0.5.0 Native Tabbed Documents plan: `Docs/0.5.0_IMPLEMENTATION_PLAN.md`.
 - 0.5.0 backlog tracker: `Docs/0.5.0_BACKLOG.md`.
+- 0.5.1 performance audit and implementation plan: `Docs/0.5.1_PERFORMANCE_AUDIT_AND_PLAN.md`.
 - Document inspector guide: `Docs/DOCUMENT_INSPECTOR.md`.
 - Custom themes guide: `Docs/CUSTOM_THEMES.md`.
 - Print and export guide: `Docs/PRINT_AND_EXPORT.md`.
@@ -40,23 +41,23 @@ This repository currently contains:
 - YAML, TOML, and JSON front matter inspection with normalized standard fields, custom fields, title source, and file facts.
 - Rich statistics for words, characters, lines, reading time, estimated pages, headings, sections, links, images, missing references, code blocks, tables, footnotes, callouts, Mermaid diagrams, KaTeX math, wide table candidates, and diagnostics.
 - Export readiness checks for missing links/assets, malformed or unsupported links, remote images, blocked remote images, rich-content failures, malformed front matter, wide tables, and multi-page export review.
-- WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, external-link handling, and preview HTML script sanitization.
+- WKWebView preview loading with document-relative assets, outline navigation, scroll preservation on reload, optimized current-section tracking, preview-only local raster downsampling, lazy image hints, external-link handling, and preview HTML script sanitization.
 - Ten built-in preview themes - Default, GitHub, Minimal, plus popular palettes (Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, Gruvbox), each with light and dark variants - alongside print CSS, font scaling, toolbar/menu theme switching, and offline pre-highlighted code blocks.
 - Custom preview themes through a native Theme Manager, with local CSS import, built-in theme duplication, rename/delete/reveal actions, a live preview gallery, safe CSS validation, and fallback behavior for missing or unsafe user CSS.
 - Separate app chrome themes for the OpenMarked window shell, with palette choices for Catppuccin, Tokyo Night, Everforest, Nord, Rose Pine, Dracula, and Gruvbox.
-- Live preview for external source edits, atomic save replacement, missing-file feedback, local image asset watching, debounce/coalescing, and subtle update status.
-- Outline filtering, current-section highlighting, rendered-preview search, richer status statistics, diagnostics popover, and source file actions.
+- Live preview for external source edits, atomic save replacement, missing-file feedback, adaptive local image asset watching, debounce/coalescing, and subtle update status.
+- Outline filtering, adaptive current-section highlighting, rendered-preview search, cached status statistics, diagnostics popover, and source file actions.
 - Standalone HTML export, copy rendered HTML, PDF export, native print, repeat export to the previous per-document destination, and export error handling.
 - Print controls for page size, margins, content width, heading page breaks, print-only document title, and preview-theme vs. Default print CSS.
-- A native Settings window for app appearance, preview defaults, render profile, rich Markdown controls, link validation, content loading, print controls, export defaults, live preview, scroll preservation, and session restoration.
+- A native Settings window for app appearance, preview defaults, render profile, performance mode, current-section tracking, referenced-image reload strategy, rich Markdown controls, link validation, content loading, print controls, export defaults, live preview, scroll preservation, and session restoration.
 - Keyboard shortcuts for core document, preview, navigation, zoom, search, export, and print actions.
 - Accessibility labels for primary controls and states, plus reduced-motion handling for preview navigation/search scrolling.
-- Manual QA checklist, release notes, release gate notes, performance smoke coverage, WebKit screenshot baselines for preview, inspector, and settings surfaces, PDF/export artifact checks, and a developer packaging script that creates `OpenMarked.app`, a ZIP artifact, and a DMG.
+- Manual QA checklist, release notes, release gate notes, performance smoke and scroll-audit tooling with scroll-time and post-settle CPU/stack samples, WebKit screenshot baselines for preview, inspector, and settings surfaces, PDF/export artifact checks, and a developer packaging script that creates `OpenMarked.app`, a ZIP artifact, and a DMG.
 - Core test target.
 - Markdown fixture corpus.
 - CI workflow for Swift build, verifier, visual snapshots, export artifacts, and tests.
 
-Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.5.0`. The packaging script supports Developer ID signing and notarization when credentials are available.
+Signing credentials, notarization, Homebrew Cask, and strict hash-based visual regression enforcement are deferred beyond `0.5.1`. The packaging script supports Developer ID signing and notarization when credentials are available.
 
 ## Screenshots
 
@@ -116,7 +117,7 @@ Create a local developer artifact with:
 Scripts/package_release.sh
 ```
 
-The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.5.0/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.5.0-macOS.zip` plus `dist/OpenMarked-0.5.0-macOS.dmg`.
+The script builds Release configuration, wraps the executable in `dist/OpenMarked-0.5.1/OpenMarked.app`, copies SwiftPM resources, verifies packaged rich-content resources, signs the bundle, verifies the signature, and creates `dist/OpenMarked-0.5.1-macOS.zip` plus `dist/OpenMarked-0.5.1-macOS.dmg`.
 
 By default the app is ad hoc signed. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID certificate. Set `OPENMARKED_NOTARIZE=1` with `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD` to submit the DMG for notarization.
 
@@ -130,21 +131,21 @@ OpenMarked renders CommonMark plus GitHub Flavored Markdown tables, strikethroug
 
 OpenMarked bundles local Mermaid `11.15.0` and KaTeX `0.17.0` resources. Mermaid and KaTeX render offline in preview, PDF/print, snapshots, and standalone HTML export. Supported math delimiters are inline `$...$` and display `$$...$$`; escaped dollars, common currency text, code spans/fences, and link text are kept literal. See `Docs/RICH_MARKDOWN.md` for supported syntax and troubleshooting.
 
-Live preview watches the source file and local image references, including common atomic-save workflows. Use View/toolbar controls to toggle the outline, show the inspector, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
+Live preview watches the source file and local image references, including common atomic-save workflows. For image-heavy documents, OpenMarked can switch from per-file image watching to folder-level filtering or manual reload to keep scrolling smooth. Use View/toolbar controls to toggle the outline, show the inspector, search the rendered preview, change theme, zoom text, reveal the source in Finder, or open the source in the default editor.
 
-The inspector helps review the active document without leaving the preview. It shows resolved title metadata, front matter fields, file facts, links, images/assets, diagnostics, richer statistics, and export readiness. Inspection stays local-first: remote links are not crawled and remote images are reported without background fetching.
+The inspector helps review the active document without leaving the preview. It shows resolved title metadata, front matter fields, file facts, links, images/assets, diagnostics, richer statistics, and export readiness. Inspection reports are built once per render and long lists are lazy-capped until you ask to show all rows. Inspection stays local-first: remote links are not crawled and remote images are reported without background fetching.
 
 Export supports standalone HTML, copying the rendered HTML fragment, PDF export, native Print, and repeat HTML/PDF export to the previous per-document destination. HTML export can embed local images and theme CSS according to Settings, and rich standalone HTML embeds the trusted local Mermaid/KaTeX runtime needed to render diagrams and math offline. Print controls cover page size, margins, content width, heading page breaks, a print-only document title, and preview-theme versus Default print styling.
 
 ## Settings And Privacy
 
-Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover render profile, default theme, custom user themes, app chrome theme, default font scale, reading statistics, live updates, scroll preservation, remote image loading, raw HTML rendering, Mermaid, KaTeX, GitHub callouts, local/heading/remote link reporting, print controls, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents as native tabs where possible.
+Settings are available from the app menu and persist with `UserDefaults`. Current preferences cover render profile, default theme, custom user themes, app chrome theme, default font scale, performance mode, current-section tracking, referenced-image reload strategy, reading statistics, live updates, scroll preservation, remote image loading, raw HTML rendering, Mermaid, KaTeX, GitHub callouts, local/heading/remote link reporting, print controls, HTML export CSS embedding, local image embedding, and optional restoration of last opened documents as native tabs where possible.
 
 OpenMarked is designed as a local-first viewer. It does not send document contents to a service. Remote images are loaded only when the setting is enabled; remote scripts and inline event handlers are blocked in preview HTML. Link validation does not crawl remote URLs during normal rendering. Custom themes are local CSS only, with `@import`, `javascript:` URLs, and embedded script/style tags blocked. Last opened document paths are saved only when session restoration is enabled by the user.
 
 ## Known Limitations
 
-The `0.5.0` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Opening the same source file more than once may create duplicate tabs, and session restoration reopens documents as tabs where possible rather than restoring exact tab order or previous tab groups. Folder workspaces, backlinks, plugin processors, DOCX/EPUB export, grammar tools, browser integrations, and AI features are intentionally deferred.
+The `0.5.1` developer artifact is ad hoc signed but not notarized unless Developer ID credentials are supplied. It does not yet ship as a Homebrew Cask. Opening the same source file more than once may create duplicate tabs, and session restoration reopens documents as tabs where possible rather than restoring exact tab order or previous tab groups. Full DOM diffing for live preview remains deferred; render-changing edits still reload the preview document. Folder workspaces, backlinks, plugin processors, DOCX/EPUB export, grammar tools, browser integrations, and AI features are intentionally deferred.
 
 ## Feedback
 

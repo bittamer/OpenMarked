@@ -1,6 +1,8 @@
 # OpenMarked Document Inspector
 
-OpenMarked 0.4.0 adds a native document inspector for reviewing the active Markdown file after it renders. The inspector is a right sidebar, not an editor. It helps answer whether the document has the right metadata, structure, references, assets, diagnostics, and export readiness.
+OpenMarked includes a native document inspector for reviewing the active Markdown file after it renders. The inspector is a right sidebar, not an editor. It helps answer whether the document has the right metadata, structure, references, assets, diagnostics, and export readiness.
+
+In `0.5.1`, inspection reports are built once after each render and stored with the document window state. Large Links, Assets, Diagnostics, and Statistics lists render lazily and initially show a capped set of rows with a Show All control, so opening the inspector on image-heavy documents should not pause preview scrolling.
 
 ## Opening The Inspector
 
@@ -73,4 +75,4 @@ Remote links are not crawled. A document can still be exported with readiness wa
 
 ## Privacy
 
-The inspector does not send document contents anywhere. It works from the loaded Markdown file, the rendered HTML, local filesystem checks for selected files/assets, and the app settings. Remote link crawling and remote theme loading are not part of the 0.4.0 inspector.
+The inspector does not send document contents anywhere. It works from the loaded Markdown file, the rendered HTML, local filesystem checks for selected files/assets, and the app settings. Remote link crawling and remote theme loading are not part of the inspector.

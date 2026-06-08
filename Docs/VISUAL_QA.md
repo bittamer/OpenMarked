@@ -1,11 +1,11 @@
 # OpenMarked Visual QA
 
-Date: 2026-06-08
-Version: 0.5.0
-Build: 6
-Artifact: `dist/OpenMarked-0.5.0/OpenMarked.app`
+Date: 2026-06-09
+Version: 0.5.1
+Build: 7
+Artifact: `dist/OpenMarked-0.5.1/OpenMarked.app`
 
-This record covers the 0.5.0 release snapshot fixtures and native tab QA.
+This record covers the current release snapshot fixtures, native tab QA, and the 0.5.1 performance stabilization rebuild.
 
 ## Automated Snapshot Coverage
 
@@ -101,3 +101,14 @@ Remaining human checks before publishing `v0.5.0`:
 - Repeat the native tab checklist in `Docs/QA.md` on a clean user account.
 - Confirm Finder/Dock multi-file open behavior on the final `0.5.0` artifact.
 - Confirm selected-tab export and native print panel behavior on the final `0.5.0` artifact.
+
+## 0.5.1 Performance Rebuild
+
+The 0.5.1 release keeps the same visual snapshot matrix and adds a targeted performance audit for a generated large-image fixture.
+
+- Final artifact path: `dist/OpenMarked-0.5.1/OpenMarked.app`
+- ZIP artifact: `dist/OpenMarked-0.5.1-macOS.zip`
+- DMG artifact: `dist/OpenMarked-0.5.1-macOS.dmg`
+- `Scripts/verify_release.sh` regenerated and verified the visual snapshots and export artifacts for 0.5.1.
+- `Scripts/performance_scroll_audit.sh` passed with zero hot-stack matches for repeated status statistics calculation or preview theme CSS loading during scroll and after the post-scroll settle window.
+- Final post-settle audit sample showed the app idle at `0.0%` CPU with the main thread blocked in the normal AppKit run loop.

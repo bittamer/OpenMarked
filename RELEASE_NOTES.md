@@ -1,3 +1,38 @@
+# OpenMarked 0.5.1
+
+OpenMarked 0.5.1 is a performance stabilization release for very large Markdown notes, especially documents with many local images.
+
+## Highlights
+
+- Moves Markdown document loading, rendering, postprocessing, and inspection report generation off the main actor, with cancellation so rapid live-preview saves cannot publish stale renders.
+- Caches built-in preview themes and status-bar statistics so scrolling does not repeatedly read CSS resources or recalculate full-document word counts.
+- Optimizes current-section tracking by caching heading offsets in the WebView helper, throttling updates, and automatically reducing or disabling live section tracking for very large documents.
+- Adds preview-only image optimization: lazy/async image attributes, intrinsic dimensions for local images, metadata caching, and downsampled local raster preview sources while preserving originals for export and print.
+- Scales live preview image watching from per-file watchers to folder-filtered or manual reload modes for image-heavy notes, with a status hint when OpenMarked chooses a fallback.
+- Stores document inspection reports after render, uses lazy inspector row containers, and caps very large link/asset/diagnostic/section lists until the user asks to show all rows.
+- Makes SwiftUI window resolution and window-chrome background updates idempotent, eliminating an after-scroll native layout feedback loop found by the final audit.
+- Adds Settings controls for Performance Mode, Current Section tracking, and Referenced Images reload behavior.
+- Adds generated large-image fixtures, performance smoke timings, scroll-audit tooling with scroll-time and post-settle samples, and async open/stale-render test coverage.
+
+## Installation
+
+Developer artifacts are created by:
+
+```sh
+Scripts/package_release.sh
+```
+
+The resulting files are `dist/OpenMarked-0.5.1-macOS.zip` and `dist/OpenMarked-0.5.1-macOS.dmg`.
+
+These developer artifacts are ad hoc signed by default but not notarized unless Apple signing credentials are supplied. On macOS, Gatekeeper may require opening them from Finder's context menu. Only run local developer artifacts from sources you trust.
+
+## Known Limitations
+
+- Render-changing edits still reload the full WebView document; DOM patching is deferred.
+- Preview image downsampling is preview-only. HTML/PDF export and print continue to use original local assets by default.
+- Opening the same source file more than once may create duplicate tabs.
+- Exact native tab order and tab group topology are not restored; session restore reopens the saved document list and groups documents into tabs where possible.
+
 # OpenMarked 0.5.0
 
 OpenMarked 0.5.0 is the Native Tabbed Documents release.

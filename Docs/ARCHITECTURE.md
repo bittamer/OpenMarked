@@ -87,7 +87,7 @@ Tabbing behavior:
 - `AppController` owns open placement. It decides whether the first supported file replaces an empty active document window, opens a standalone first document window, or creates a native tab in the active document window group.
 - File > Open, toolbar open, drag/drop, Finder/Dock open events, Open Recent, and session restore all route through the same `openURLs` policy and pure `DocumentOpenPlacementPlanner`.
 - Finder/Dock file-open events enter through `openURLsFromExternalEvent`, which waits for any SwiftUI-created transient window to register, prefers the most recent loaded document window as the tab anchor, and closes only new empty windows created by the external-open activation.
-- `WindowAccessor` configures SwiftUI-created document windows once their `NSWindow` is available. Programmatic document windows created by `AppController` use the same tabbing helper.
+- `WindowAccessor` configures SwiftUI-created document windows once per resolved `NSWindow`. Programmatic document windows created by `AppController` use the same tabbing helper, and repeated active-window publications are guarded to avoid native shell relayout loops.
 - `AppController.activeWindowController` remains the command-routing source. `DocumentWindowActivityRegistry` tracks document-window activity, while `AppController` observes native key/main window notifications so toolbar and menu actions operate on the selected tab.
 - Closing a tab runs the same cleanup as closing a standalone document window: `NSWindow.willCloseNotification` maps the closing window to its `DocumentWindowController`, persists window/document state, stops live preview watchers, unregisters the document window, and falls back to the next known active controller or `nil`.
 - SwiftUI view disappearance does not close document controllers; cleanup is tied to native window close events so tab selection does not stop another tab's live preview or mutate its per-tab state.
@@ -118,8 +118,8 @@ Phase 6 uses `FileSystemWatcher` in `OpenMarkedCore` for debounced file-system e
 Live preview behavior:
 
 - The source Markdown file is watched with a direct file descriptor plus a parent-directory watcher so normal saves and atomic replacement saves are both detected.
-- Source changes reload the document, skip duplicate source text, render once, preserve scroll through the existing WebView reload path, and do not activate or steal focus from other apps.
-- Local image references are extracted from rendered HTML and watched separately, including missing images whose parent directory exists.
+- Source changes load and render on background tasks, skip duplicate source text, publish only the newest render result, preserve scroll through the existing WebView reload path, and do not activate or steal focus from other apps.
+- Local image references are extracted from rendered HTML and watched with an adaptive strategy: small documents use per-file watchers, larger asset sets use parent-directory filtered watchers, and very large image-heavy documents can fall back to manual reload.
 - Missing, moved, or unreadable source files leave the window open and show preview/update failure feedback instead of crashing or replacing the whole window state.
 - Watchers are restarted when documents reload and stopped when windows close.
 
@@ -130,7 +130,7 @@ Phase 7 keeps document navigation native where possible and preview-specific beh
 Navigation behavior:
 
 - The outline sidebar renders the renderer-provided heading list, filters headings through `OutlineFilter`, applies persistent `OutlineDisplayOptions`, and sends heading IDs to the WebView navigation bridge.
-- `PreviewWebView` owns preview-specific section tracking with app-injected JavaScript. It throttles scroll/resize updates, reports heading IDs through a WebKit script-message bridge, and keeps scroll preservation separate from current-section state.
+- `PreviewWebView` owns preview-specific section tracking with app-injected JavaScript. It caches heading offsets after load, uses throttled binary-search lookups instead of scanning every heading on every scroll event, reports heading IDs through a WebKit script-message bridge, and keeps scroll preservation separate from current-section state.
 - `DocumentWindowState.currentSectionID` is the shared source for the highlighted outline row and status-bar section breadcrumb.
 
 ## Print And Export Direction
@@ -168,6 +168,7 @@ Inspector behavior:
 - Asset references are extracted from rendered images and include resolved local paths, status, file size, and dimensions when available. Remote images reflect the current content policy as skipped or blocked.
 - Diagnostics are grouped by severity and kind in the inspector while the status-bar popover remains available for quick warning review.
 - Export readiness is advisory. It summarizes missing local links, missing images, blocked remote images, remote-image notes, rich-content render failures, wide tables, unsupported schemes, malformed front matter, and page-count/page-break review notes without disabling export commands.
+- Inspection reports are built once per render and stored in `DocumentWindowState`; SwiftUI inspector views read the stored report instead of rebuilding it from computed properties. Long links/assets/diagnostics/section lists use lazy containers and initial display caps with explicit Show All controls.
 
 ## Rich Content Resource Direction
 
@@ -206,6 +207,8 @@ Settings behavior:
 - `ApplicationSettings` is a small codable value that stores preview defaults, content policy, export defaults, live preview behavior, reading statistics preferences, scroll preservation, and optional session restoration.
 - `ApplicationSettingsStore` persists settings and last-opened document paths through `UserDefaults`, with normalization for unknown themes, out-of-range font scales, and out-of-range reading-speed values.
 - `MarkdownRenderProfile` is stored with settings and passed through `RenderOptions`; the default OpenMarked profile preserves current behavior, while the GitHub README profile switches heading slug generation and profile-aware heading-link validation.
+- `PerformanceMode`, `CurrentSectionTrackingPreference`, and `ReferencedImageReloadMode` are stored in settings and let the user choose automatic behavior, visual fidelity, or smoother large-document fallbacks.
+- App chrome background writes are idempotent; the SwiftUI/AppKit bridge only updates the native window background when the resolved color actually changes.
 - Rich Markdown toggles for Mermaid, KaTeX, GitHub callouts, and link validation live in `RichMarkdownOptions` and re-render the active document when changed.
 - Current documents re-render when content policy, rich Markdown settings, render profile, or preview defaults change. Theme and zoom only update from defaults when those specific defaults changed.
 - `DocumentWindowState.richContentPreview` tracks pending, rendering, ready, and failed rich-content runtime states separately from live-preview file watching.

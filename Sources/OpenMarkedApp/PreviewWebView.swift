@@ -42,6 +42,7 @@ struct PreviewWebView: NSViewRepresentable {
     let searchRequest: PreviewSearchRequest?
     let preservesScrollPosition: Bool
     let usesReducedMotion: Bool
+    let currentSectionTrackingBehavior: CurrentSectionTrackingBehavior
     let onStatusUpdate: (String) -> Void
     let onRichContentRendering: (Set<RichMarkdownFeature>) -> Void
     let onRichContentReady: (Set<RichMarkdownFeature>) -> Void
@@ -69,6 +70,10 @@ struct PreviewWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = false
         context.coordinator.webView = webView
+        context.coordinator.preservesScrollPosition = preservesScrollPosition
+        context.coordinator.usesReducedMotion = usesReducedMotion
+        context.coordinator.currentSectionTrackingBehavior = currentSectionTrackingBehavior
+        context.coordinator.applySectionTrackingBehavior()
         context.coordinator.load(renderResult: renderResult, baseURL: baseURL)
         return webView
     }
@@ -82,6 +87,7 @@ struct PreviewWebView: NSViewRepresentable {
         context.coordinator.onCurrentSectionChange = onCurrentSectionChange
         context.coordinator.preservesScrollPosition = preservesScrollPosition
         context.coordinator.usesReducedMotion = usesReducedMotion
+        context.coordinator.currentSectionTrackingBehavior = currentSectionTrackingBehavior
         context.coordinator.load(renderResult: renderResult, baseURL: baseURL)
 
         if context.coordinator.lastNavigationRequestID != navigationRequest?.id {
@@ -118,6 +124,7 @@ struct PreviewWebView: NSViewRepresentable {
         var lastSearchRequestID: UUID?
         var preservesScrollPosition = true
         var usesReducedMotion = false
+        var currentSectionTrackingBehavior: CurrentSectionTrackingBehavior = .active
         private var pendingNavigationID: String?
         private var pendingSearchRequest: PreviewSearchRequest?
         private var activeSearchQuery = ""
@@ -140,7 +147,13 @@ struct PreviewWebView: NSViewRepresentable {
         }
 
         func load(renderResult: RenderResult, baseURL: URL) {
-            let securedHTML = PreviewHTMLSecurityPolicy.sanitize(renderResult.fullHTML)
+            let securedHTML: String
+            if let previewHTML = renderResult.previewHTML {
+                securedHTML = previewHTML
+            } else {
+                let previewHTML = PreviewImageCache.shared.optimizedHTMLForPreview(renderResult.fullHTML, baseURL: baseURL)
+                securedHTML = PreviewHTMLSecurityPolicy.sanitize(previewHTML)
+            }
             let richMarkdownState = renderResult.richMarkdownState
             guard securedHTML != lastHTML || baseURL != lastBaseURL || richMarkdownState != lastRichMarkdownState else {
                 return
@@ -245,6 +258,23 @@ struct PreviewWebView: NSViewRepresentable {
             }
         }
 
+        func applySectionTrackingBehavior() {
+            let behavior = currentSectionTrackingBehavior.rawValue
+            let script = """
+            (function() {
+              window.openMarkedSectionTrackingBehavior = '\(behavior)';
+              if (window.openMarkedSectionTracker) {
+                if ('\(behavior)' === 'disabled') {
+                  window.openMarkedSectionTracker.post(null);
+                } else {
+                  window.openMarkedSectionTracker.markDirty();
+                }
+              }
+            })();
+            """
+            webView?.evaluateJavaScript(script)
+        }
+
         private func captureScrollRatio(completion: @escaping (Double) -> Void) {
             let script = """
             (function() {
@@ -345,11 +375,24 @@ struct PreviewWebView: NSViewRepresentable {
                 document.head.appendChild(style);
               }
               window.openMarkedPrefersReducedMotion = \(usesReducedMotion ? "true" : "false");
+              window.openMarkedSectionTrackingBehavior = '\(currentSectionTrackingBehavior.rawValue)';
               window.openMarkedSectionTracker = {
                 lastID: undefined,
                 pending: false,
+                installed: false,
+                cacheDirty: true,
+                cachedHeadings: [],
+                cachedOffsets: [],
+                refreshCache: function() {
+                  this.cachedHeadings = Array.prototype.slice.call(document.querySelectorAll('.om-document h1[id], .om-document h2[id], .om-document h3[id], .om-document h4[id], .om-document h5[id], .om-document h6[id]'));
+                  this.cachedOffsets = this.cachedHeadings.map(function(heading) {
+                    return heading.getBoundingClientRect().top + window.scrollY;
+                  });
+                  this.cacheDirty = false;
+                },
                 headings: function() {
-                  return Array.prototype.slice.call(document.querySelectorAll('.om-document h1[id], .om-document h2[id], .om-document h3[id], .om-document h4[id], .om-document h5[id], .om-document h6[id]'));
+                  if (this.cacheDirty) { this.refreshCache(); }
+                  return this.cachedHeadings;
                 },
                 post: function(id) {
                   if (this.lastID === id) { return; }
@@ -359,19 +402,24 @@ struct PreviewWebView: NSViewRepresentable {
                   }
                 },
                 currentID: function() {
+                  if (window.openMarkedSectionTrackingBehavior === 'disabled') { return null; }
                   var headings = this.headings();
                   if (!headings.length) { return null; }
-                  var current = headings[0];
                   var threshold = Math.max(72, window.innerHeight * 0.18);
-                  for (var i = 0; i < headings.length; i += 1) {
-                    var rect = headings[i].getBoundingClientRect();
-                    if (rect.top <= threshold) {
-                      current = headings[i];
+                  var targetOffset = window.scrollY + threshold;
+                  var low = 0;
+                  var high = this.cachedOffsets.length - 1;
+                  var index = 0;
+                  while (low <= high) {
+                    var mid = Math.floor((low + high) / 2);
+                    if (this.cachedOffsets[mid] <= targetOffset) {
+                      index = mid;
+                      low = mid + 1;
                     } else {
-                      break;
+                      high = mid - 1;
                     }
                   }
-                  return current ? current.id : null;
+                  return headings[index] ? headings[index].id : null;
                 },
                 report: function(id) {
                   this.post(id || this.currentID());
@@ -380,22 +428,39 @@ struct PreviewWebView: NSViewRepresentable {
                   if (this.pending) { return; }
                   this.pending = true;
                   var tracker = this;
-                  window.requestAnimationFrame(function() {
-                    window.setTimeout(function() {
+                  var delay = window.openMarkedSectionTrackingBehavior === 'idleOnly' ? 240 : 90;
+                  window.setTimeout(function() {
+                    window.requestAnimationFrame(function() {
                       tracker.pending = false;
                       tracker.report();
-                    }, 80);
-                  });
+                    });
+                  }, delay);
+                },
+                markDirty: function() {
+                  this.cacheDirty = true;
+                  this.schedule();
                 },
                 install: function() {
                   var tracker = this;
+                  if (window.openMarkedSectionTrackingBehavior === 'disabled') {
+                    this.post(null);
+                    return;
+                  }
                   if (!this.installed) {
                     window.addEventListener('scroll', function() { tracker.schedule(); }, { passive: true });
-                    window.addEventListener('resize', function() { tracker.schedule(); }, { passive: true });
+                    window.addEventListener('resize', function() { tracker.markDirty(); }, { passive: true });
+                    Array.prototype.slice.call(document.images || []).forEach(function(image) {
+                      if (!image.complete) {
+                        image.addEventListener('load', function() { tracker.markDirty(); }, { once: true, passive: true });
+                        image.addEventListener('error', function() { tracker.markDirty(); }, { once: true, passive: true });
+                      }
+                    });
                     this.installed = true;
                   }
+                  this.refreshCache();
                   this.schedule();
-                  window.setTimeout(function() { tracker.schedule(); }, 250);
+                  window.setTimeout(function() { tracker.markDirty(); }, 250);
+                  window.setTimeout(function() { tracker.markDirty(); }, 1200);
                 }
               };
               window.openMarkedSectionTracker.install();

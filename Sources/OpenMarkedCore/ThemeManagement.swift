@@ -342,14 +342,6 @@ public final class UserPreviewThemeStore: @unchecked Sendable {
 }
 
 public extension PreviewThemeStore {
-    static var builtInThemeIDs: [String] {
-        allBuiltInThemes.map(\.id)
-    }
-
-    static func isBuiltInThemeID(_ id: String) -> Bool {
-        builtInThemeIDs.contains(id)
-    }
-
     static func normalizedThemeID(_ id: String) -> String {
         if isBuiltInThemeID(id) || UserPreviewTheme.isUserThemeID(id) {
             return id

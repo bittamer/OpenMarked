@@ -106,6 +106,13 @@ final class AppController: ObservableObject {
     }
 
     func setActiveWindowController(_ controller: DocumentWindowController?) {
+        guard activeWindowController?.id != controller?.id else {
+            if let window = controller?.window {
+                _ = documentWindowActivity.activate(windowID: ObjectIdentifier(window))
+            }
+            return
+        }
+
         activeWindowController = controller
         if let window = controller?.window {
             _ = documentWindowActivity.activate(windowID: ObjectIdentifier(window))
@@ -269,6 +276,14 @@ final class AppController: ObservableObject {
 
     func reloadPreview() {
         activeWindowController?.reloadPreview()
+    }
+
+    func noteDocumentWindowFinishedOpening(_ controller: DocumentWindowController) {
+        guard registeredWindowControllers[controller.id] != nil else {
+            return
+        }
+
+        persistOpenDocumentURLsForSessionRestore()
     }
 
     func toggleOutline() {
@@ -684,6 +699,10 @@ final class AppController: ObservableObject {
     func noteDocumentWindowBecameActive(_ window: NSWindow) {
         guard let controllerID = documentWindowActivity.activate(windowID: ObjectIdentifier(window)),
               let controller = registeredWindowControllers[controllerID] else {
+            return
+        }
+
+        guard activeWindowController?.id != controller.id else {
             return
         }
 

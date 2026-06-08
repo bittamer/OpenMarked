@@ -2,9 +2,10 @@ import AppKit
 import SwiftUI
 import OpenMarkedCore
 
+private let inspectorInitialDisplayLimit = 250
+
 struct InspectorSidebar: View {
     @Environment(\.appChromeTheme) private var chrome
-    @EnvironmentObject private var appController: AppController
     @ObservedObject var controller: DocumentWindowController
 
     var body: some View {
@@ -91,7 +92,7 @@ struct InspectorSidebar: View {
                 message: "The document could not be inspected."
             )
         case .loaded:
-            if let report = currentInspectionReport {
+            if let report = controller.state.currentInspectionReport {
                 ScrollView {
                     sectionContent(report)
                         .padding(.horizontal, 12)
@@ -105,18 +106,6 @@ struct InspectorSidebar: View {
                 )
             }
         }
-    }
-
-    private var currentInspectionReport: DocumentInspectionReport? {
-        guard let document = controller.state.currentMarkdownDocument else {
-            return nil
-        }
-
-        return DocumentInspectionBuilder.build(
-            document: document,
-            renderResult: controller.state.currentRenderResult,
-            statisticsOptions: appController.settings.documentStatisticsOptions
-        )
     }
 
     @ViewBuilder
@@ -230,6 +219,7 @@ private struct LinksInspectorSection: View {
 
     @State private var typeFilter: InspectorLinkTypeFilter = .all
     @State private var statusFilter: InspectorReferenceStatusFilter = .all
+    @State private var showsAllLinks = false
 
     var body: some View {
         InspectorSectionStack(title: "Links") {
@@ -254,8 +244,8 @@ private struct LinksInspectorSection: View {
             } else if filteredLinks.isEmpty {
                 InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No links match the filters.")
             } else {
-                VStack(spacing: 0) {
-                    ForEach(filteredLinks) { link in
+                LazyVStack(spacing: 0) {
+                    ForEach(visibleLinks) { link in
                         InspectorReferenceRow(
                             title: link.text.isEmpty ? link.target : link.text,
                             subtitle: linkSubtitle(link),
@@ -266,11 +256,17 @@ private struct LinksInspectorSection: View {
                             subtitleLineLimit: 3,
                             actions: inspectorActions(for: link, controller: controller)
                         )
-                        if link.id != filteredLinks.last?.id {
+                        if link.id != visibleLinks.last?.id {
                             InspectorDivider()
                         }
                     }
                 }
+                largeListButton(
+                    visibleCount: visibleLinks.count,
+                    totalCount: filteredLinks.count,
+                    noun: "links",
+                    isShowingAll: $showsAllLinks
+                )
             }
         }
     }
@@ -279,6 +275,10 @@ private struct LinksInspectorSection: View {
         report.links.filter { link in
             typeFilter.matches(link.kind) && statusFilter.matches(link.status)
         }
+    }
+
+    private var visibleLinks: [DocumentLinkReference] {
+        showsAllLinks ? filteredLinks : Array(filteredLinks.prefix(inspectorInitialDisplayLimit))
     }
 
     private func linkSubtitle(_ link: DocumentLinkReference) -> String {
@@ -297,6 +297,7 @@ private struct AssetsInspectorSection: View {
     let report: DocumentInspectionReport
     @State private var typeFilter: InspectorAssetTypeFilter = .all
     @State private var statusFilter: InspectorReferenceStatusFilter = .all
+    @State private var showsAllAssets = false
 
     var body: some View {
         InspectorSectionStack(title: "Assets") {
@@ -321,8 +322,8 @@ private struct AssetsInspectorSection: View {
             } else if filteredAssets.isEmpty {
                 InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No assets match the filters.")
             } else {
-                VStack(spacing: 0) {
-                    ForEach(filteredAssets) { asset in
+                LazyVStack(spacing: 0) {
+                    ForEach(visibleAssets) { asset in
                         InspectorReferenceRow(
                             title: asset.altText.isEmpty ? asset.kind.title : asset.altText,
                             subtitle: assetSubtitle(asset),
@@ -333,11 +334,17 @@ private struct AssetsInspectorSection: View {
                             subtitleLineLimit: 4,
                             actions: inspectorActions(for: asset)
                         )
-                        if asset.id != filteredAssets.last?.id {
+                        if asset.id != visibleAssets.last?.id {
                             InspectorDivider()
                         }
                     }
                 }
+                largeListButton(
+                    visibleCount: visibleAssets.count,
+                    totalCount: filteredAssets.count,
+                    noun: "assets",
+                    isShowingAll: $showsAllAssets
+                )
             }
         }
     }
@@ -346,6 +353,10 @@ private struct AssetsInspectorSection: View {
         report.assets.filter { asset in
             typeFilter.matches(asset) && statusFilter.matches(asset.status)
         }
+    }
+
+    private var visibleAssets: [DocumentAssetReference] {
+        showsAllAssets ? filteredAssets : Array(filteredAssets.prefix(inspectorInitialDisplayLimit))
     }
 
     private func assetSubtitle(_ asset: DocumentAssetReference) -> String {
@@ -369,6 +380,7 @@ private struct DiagnosticsInspectorSection: View {
 
     @State private var searchQuery = ""
     @State private var severityFilter: InspectorDiagnosticSeverityFilter = .all
+    @State private var showsAllDiagnostics = false
 
     var body: some View {
         InspectorSectionStack(title: "Diagnostics") {
@@ -389,44 +401,58 @@ private struct DiagnosticsInspectorSection: View {
             } else if groupedDiagnostics.isEmpty {
                 InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No diagnostics match the filters.")
             } else {
-                ForEach(groupedDiagnostics) { group in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(group.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(group.tint(chrome: chrome))
-                            .textCase(.uppercase)
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(groupedDiagnostics) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(group.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(group.tint(chrome: chrome))
+                                .textCase(.uppercase)
 
-                        VStack(spacing: 0) {
-                            ForEach(group.diagnostics) { diagnostic in
-                                InspectorDiagnosticRow(
-                                    diagnostic: diagnostic,
-                                    actions: inspectorActions(
-                                        for: diagnostic,
-                                        report: report,
-                                        controller: controller
+                            LazyVStack(spacing: 0) {
+                                ForEach(group.diagnostics) { diagnostic in
+                                    InspectorDiagnosticRow(
+                                        diagnostic: diagnostic,
+                                        actions: inspectorActions(
+                                            for: diagnostic,
+                                            report: report,
+                                            controller: controller
+                                        )
                                     )
-                                )
-                                if diagnostic.id != group.diagnostics.last?.id {
-                                    InspectorDivider()
+                                    if diagnostic.id != group.diagnostics.last?.id {
+                                        InspectorDivider()
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                largeListButton(
+                    visibleCount: visibleDiagnostics.count,
+                    totalCount: filteredDiagnostics.count,
+                    noun: "diagnostics",
+                    isShowingAll: $showsAllDiagnostics
+                )
             }
         }
     }
 
     @Environment(\.appChromeTheme) private var chrome
 
-    private var groupedDiagnostics: [InspectorDiagnosticGroup] {
+    private var filteredDiagnostics: [RenderDiagnostic] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let filteredDiagnostics = report.diagnostics.filter { diagnostic in
+        return report.diagnostics.filter { diagnostic in
             severityFilter.matches(diagnostic.severity)
                 && (query.isEmpty || diagnostic.matches(query: query))
         }
+    }
 
-        let groups = Dictionary(grouping: filteredDiagnostics) { diagnostic in
+    private var visibleDiagnostics: [RenderDiagnostic] {
+        showsAllDiagnostics ? filteredDiagnostics : Array(filteredDiagnostics.prefix(inspectorInitialDisplayLimit))
+    }
+
+    private var groupedDiagnostics: [InspectorDiagnosticGroup] {
+        let groups = Dictionary(grouping: visibleDiagnostics) { diagnostic in
             InspectorDiagnosticGroupKey(kind: diagnostic.kind, severity: diagnostic.severity)
         }
 
@@ -435,6 +461,28 @@ private struct DiagnosticsInspectorSection: View {
                 key: key,
                 diagnostics: groups[key]?.sorted { $0.id < $1.id } ?? []
             )
+        }
+    }
+}
+
+@MainActor
+private func largeListButton(
+    visibleCount: Int,
+    totalCount: Int,
+    noun: String,
+    isShowingAll: Binding<Bool>
+) -> some View {
+    Group {
+        if totalCount > visibleCount {
+            Button {
+                isShowingAll.wrappedValue = true
+            } label: {
+                Label("Show all \(totalCount) \(noun)", systemImage: "ellipsis.circle")
+            }
+            .buttonStyle(.plain)
+            .controlSize(.small)
+            .padding(.top, 4)
+            .help("Showing the first \(visibleCount) \(noun) for smoother inspector performance.")
         }
     }
 }
@@ -520,7 +568,7 @@ private struct ExportInspectorSection: View {
             if report.exportReadiness.issues.isEmpty {
                 InlineEmptyState(systemImage: "square.and.arrow.up", message: "No export readiness issues.")
             } else {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(sortedIssues) { issue in
                         InspectorIssueRow(issue: issue)
                         if issue.id != sortedIssues.last?.id {
@@ -930,6 +978,7 @@ private struct InspectorSectionStatisticsGroup: View {
     @Environment(\.appChromeTheme) private var chrome
 
     let sections: [DocumentSectionStatistic]
+    @State private var showsAllSections = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -941,16 +990,26 @@ private struct InspectorSectionStatisticsGroup: View {
             if sections.isEmpty {
                 InlineEmptyState(systemImage: "list.bullet.indent", message: "No headings found.")
             } else {
-                VStack(spacing: 0) {
-                    ForEach(sections) { section in
+                LazyVStack(spacing: 0) {
+                    ForEach(visibleSections) { section in
                         InspectorSectionStatisticRow(section: section)
-                        if section.id != sections.last?.id {
+                        if section.id != visibleSections.last?.id {
                             InspectorDivider()
                         }
                     }
                 }
+                largeListButton(
+                    visibleCount: visibleSections.count,
+                    totalCount: sections.count,
+                    noun: "sections",
+                    isShowingAll: $showsAllSections
+                )
             }
         }
+    }
+
+    private var visibleSections: [DocumentSectionStatistic] {
+        showsAllSections ? sections : Array(sections.prefix(inspectorInitialDisplayLimit))
     }
 }
 
@@ -1002,7 +1061,7 @@ private struct InspectorFieldGroup: View {
                 .foregroundStyle(chrome.secondaryText)
                 .textCase(.uppercase)
 
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 ForEach(fields) { field in
                     InspectorKeyValueRow(field: field)
                     if field.id != fields.last?.id {

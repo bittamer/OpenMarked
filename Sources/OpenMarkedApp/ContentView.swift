@@ -681,6 +681,7 @@ private struct PreviewShell: View {
                         searchRequest: controller.previewSearchRequest,
                         preservesScrollPosition: appController.settings.preservesScrollPosition,
                         usesReducedMotion: reduceMotion,
+                        currentSectionTrackingBehavior: currentSectionTrackingBehavior(document: document, renderResult: result),
                         onStatusUpdate: { message in
                             controller.updatePreviewStatus(message)
                         },
@@ -711,6 +712,19 @@ private struct PreviewShell: View {
                 appController.presentOpenPanel()
             }
         }
+    }
+
+    private func currentSectionTrackingBehavior(
+        document: OpenedDocument,
+        renderResult: RenderResult
+    ) -> CurrentSectionTrackingBehavior {
+        let profile = renderResult.performanceProfile ?? DocumentPerformanceProfile(
+            sourceByteCount: document.markdownDocument?.sourceText.utf8.count ?? 0,
+            headingCount: renderResult.outline.count,
+            imageCount: 0,
+            linkCount: 0
+        )
+        return appController.settings.currentSectionTrackingBehavior(for: profile)
     }
 }
 
@@ -1009,6 +1023,13 @@ private struct StatusBar: View {
                     tint: chrome.secondaryText
                 )
             }
+            if let assetReloadStatusTitle {
+                StatusPill(
+                    title: assetReloadStatusTitle,
+                    systemImage: assetReloadStatusIcon,
+                    tint: assetReloadStatusColor
+                )
+            }
             Label(appController.previewTheme(id: controller.state.layout.selectedThemeID).name, systemImage: "paintpalette")
                 .labelStyle(.titleAndIcon)
             Text("\(Int((controller.state.layout.fontScale * 100).rounded()))%")
@@ -1048,13 +1069,7 @@ private struct StatusBar: View {
     }
 
     private var currentStatistics: DocumentStatistics? {
-        guard let document = controller.state.currentMarkdownDocument else {
-            return nil
-        }
-        return DocumentStatisticsCalculator.calculate(
-            document: document,
-            options: appController.settings.documentStatisticsOptions
-        )
+        controller.displayStatistics(options: appController.settings.documentStatisticsOptions)
     }
 
     private func statisticsHelp(_ statistics: DocumentStatistics) -> String {
@@ -1087,6 +1102,37 @@ private struct StatusBar: View {
             return "bolt"
         case .failed:
             return "exclamationmark.triangle"
+        }
+    }
+
+    private var assetReloadStatusTitle: String? {
+        switch controller.state.referencedAssetReload {
+        case .inactive, .watchingFiles:
+            return nil
+        case .watchingDirectories(let directoryCount, let assetCount):
+            return "Watching \(assetCount) assets in \(directoryCount) folder\(directoryCount == 1 ? "" : "s")"
+        case .manualReload(let assetCount):
+            return "\(assetCount) assets: manual reload"
+        }
+    }
+
+    private var assetReloadStatusIcon: String {
+        switch controller.state.referencedAssetReload {
+        case .inactive, .watchingFiles:
+            return "photo"
+        case .watchingDirectories:
+            return "folder"
+        case .manualReload:
+            return "arrow.clockwise"
+        }
+    }
+
+    private var assetReloadStatusColor: Color {
+        switch controller.state.referencedAssetReload {
+        case .manualReload:
+            return chrome.warning
+        default:
+            return chrome.secondaryText
         }
     }
 
@@ -1329,6 +1375,32 @@ struct SettingsView: View {
                 Toggle("Live updates", isOn: settingBinding(\.isLivePreviewEnabled))
                 Toggle("Preserve scroll position", isOn: settingBinding(\.preservesScrollPosition))
                 Toggle("Restore last opened documents", isOn: settingBinding(\.restoresLastOpenedDocuments))
+            }
+
+            Section("Performance") {
+                Picker("Mode", selection: settingBinding(\.performanceMode)) {
+                    ForEach(PerformanceMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .accessibilityLabel("Performance mode")
+                .help("Choose whether OpenMarked should favor exact live behavior or smoother large-document behavior.")
+
+                Picker("Current Section", selection: settingBinding(\.currentSectionTracking)) {
+                    ForEach(CurrentSectionTrackingPreference.allCases) { preference in
+                        Text(preference.displayName).tag(preference)
+                    }
+                }
+                .accessibilityLabel("Current section tracking")
+                .help("Control heading tracking while scrolling the rendered preview.")
+
+                Picker("Referenced Images", selection: settingBinding(\.referencedImageReloadMode)) {
+                    ForEach(ReferencedImageReloadMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .accessibilityLabel("Referenced image reload")
+                .help("Control how live preview watches local images referenced by the active document.")
             }
 
             Section("Reading Statistics") {

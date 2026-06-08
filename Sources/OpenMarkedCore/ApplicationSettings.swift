@@ -1,5 +1,118 @@
 import Foundation
 
+public enum PerformanceMode: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
+    case automatic
+    case fidelity
+    case performance
+
+    public var id: String {
+        rawValue
+    }
+
+    public var displayName: String {
+        switch self {
+        case .automatic:
+            return "Automatic"
+        case .fidelity:
+            return "Fidelity"
+        case .performance:
+            return "Performance"
+        }
+    }
+}
+
+public enum CurrentSectionTrackingPreference: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
+    case automatic
+    case always
+    case disabled
+
+    public var id: String {
+        rawValue
+    }
+
+    public var displayName: String {
+        switch self {
+        case .automatic:
+            return "Automatic"
+        case .always:
+            return "Always"
+        case .disabled:
+            return "Disabled"
+        }
+    }
+}
+
+public enum ReferencedImageReloadMode: String, CaseIterable, Codable, Equatable, Identifiable, Sendable {
+    case automatic
+    case perFile
+    case directory
+    case manual
+
+    public var id: String {
+        rawValue
+    }
+
+    public var displayName: String {
+        switch self {
+        case .automatic:
+            return "Automatic"
+        case .perFile:
+            return "Per File"
+        case .directory:
+            return "Folders"
+        case .manual:
+            return "Manual"
+        }
+    }
+}
+
+public enum CurrentSectionTrackingBehavior: String, Equatable, Sendable {
+    case active
+    case idleOnly
+    case disabled
+}
+
+public enum AssetWatchStrategy: String, Equatable, Sendable {
+    case perFile
+    case directoryFiltered
+    case manualReload
+}
+
+public struct DocumentPerformanceProfile: Equatable, Sendable {
+    public let sourceByteCount: Int
+    public let headingCount: Int
+    public let imageCount: Int
+    public let linkCount: Int
+
+    public init(
+        sourceByteCount: Int,
+        headingCount: Int,
+        imageCount: Int,
+        linkCount: Int
+    ) {
+        self.sourceByteCount = sourceByteCount
+        self.headingCount = headingCount
+        self.imageCount = imageCount
+        self.linkCount = linkCount
+    }
+
+    public var isLargeForSectionTracking: Bool {
+        sourceByteCount > 500_000 || headingCount > 220 || imageCount > 180
+    }
+
+    public var isVeryLargeForSectionTracking: Bool {
+        sourceByteCount > 1_500_000 || headingCount > 600 || imageCount > 450
+    }
+
+    public var isLargeForAssetWatching: Bool {
+        imageCount > 80
+    }
+
+    public var isVeryLargeForAssetWatching: Bool {
+        imageCount > 260
+    }
+}
+
 public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var defaultThemeID: String
     public var appChromeThemeID: String
@@ -16,6 +129,9 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
     public var statisticsWordsPerMinute: Int
     public var includesFrontMatterInStatistics: Bool
     public var printConfiguration: PrintConfiguration
+    public var performanceMode: PerformanceMode
+    public var currentSectionTracking: CurrentSectionTrackingPreference
+    public var referencedImageReloadMode: ReferencedImageReloadMode
 
     public init(
         defaultThemeID: String = PreviewThemeStore.defaultThemeID,
@@ -32,7 +148,10 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         richMarkdownOptions: RichMarkdownOptions = .default,
         statisticsWordsPerMinute: Int = DocumentStatisticsOptions.defaultWordsPerMinute,
         includesFrontMatterInStatistics: Bool = false,
-        printConfiguration: PrintConfiguration = .default
+        printConfiguration: PrintConfiguration = .default,
+        performanceMode: PerformanceMode = .automatic,
+        currentSectionTracking: CurrentSectionTrackingPreference = .automatic,
+        referencedImageReloadMode: ReferencedImageReloadMode = .automatic
     ) {
         self.defaultThemeID = defaultThemeID
         self.appChromeThemeID = appChromeThemeID
@@ -49,6 +168,9 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         self.statisticsWordsPerMinute = statisticsWordsPerMinute
         self.includesFrontMatterInStatistics = includesFrontMatterInStatistics
         self.printConfiguration = printConfiguration
+        self.performanceMode = performanceMode
+        self.currentSectionTracking = currentSectionTracking
+        self.referencedImageReloadMode = referencedImageReloadMode
     }
 
     public static let `default` = ApplicationSettings()
@@ -76,6 +198,56 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         .normalized()
     }
 
+    public func currentSectionTrackingBehavior(for profile: DocumentPerformanceProfile) -> CurrentSectionTrackingBehavior {
+        switch currentSectionTracking {
+        case .disabled:
+            return .disabled
+        case .always:
+            return .active
+        case .automatic:
+            switch performanceMode {
+            case .fidelity:
+                return .active
+            case .performance:
+                return profile.isLargeForSectionTracking ? .idleOnly : .active
+            case .automatic:
+                if profile.isVeryLargeForSectionTracking {
+                    return .disabled
+                }
+                return profile.isLargeForSectionTracking ? .idleOnly : .active
+            }
+        }
+    }
+
+    public func assetWatchStrategy(
+        for profile: DocumentPerformanceProfile,
+        directoryCount: Int
+    ) -> AssetWatchStrategy {
+        switch referencedImageReloadMode {
+        case .perFile:
+            return .perFile
+        case .directory:
+            return .directoryFiltered
+        case .manual:
+            return .manualReload
+        case .automatic:
+            switch performanceMode {
+            case .fidelity:
+                return profile.isVeryLargeForAssetWatching ? .directoryFiltered : .perFile
+            case .performance:
+                return profile.isLargeForAssetWatching ? .manualReload : .directoryFiltered
+            case .automatic:
+                if profile.isVeryLargeForAssetWatching {
+                    return .manualReload
+                }
+                if profile.isLargeForAssetWatching || directoryCount < profile.imageCount {
+                    return .directoryFiltered
+                }
+                return .perFile
+            }
+        }
+    }
+
     public var defaultLayout: WindowLayoutState {
         WindowLayoutState(
             isOutlineVisible: true,
@@ -100,6 +272,9 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
         case statisticsWordsPerMinute
         case includesFrontMatterInStatistics
         case printConfiguration
+        case performanceMode
+        case currentSectionTracking
+        case referencedImageReloadMode
     }
 
     public init(from decoder: Decoder) throws {
@@ -121,7 +296,10 @@ public struct ApplicationSettings: Codable, Equatable, Sendable {
             richMarkdownOptions: try container.decodeIfPresent(RichMarkdownOptions.self, forKey: .richMarkdownOptions) ?? defaults.richMarkdownOptions,
             statisticsWordsPerMinute: try container.decodeIfPresent(Int.self, forKey: .statisticsWordsPerMinute) ?? defaults.statisticsWordsPerMinute,
             includesFrontMatterInStatistics: try container.decodeIfPresent(Bool.self, forKey: .includesFrontMatterInStatistics) ?? defaults.includesFrontMatterInStatistics,
-            printConfiguration: try container.decodeIfPresent(PrintConfiguration.self, forKey: .printConfiguration) ?? defaults.printConfiguration
+            printConfiguration: try container.decodeIfPresent(PrintConfiguration.self, forKey: .printConfiguration) ?? defaults.printConfiguration,
+            performanceMode: try container.decodeIfPresent(PerformanceMode.self, forKey: .performanceMode) ?? defaults.performanceMode,
+            currentSectionTracking: try container.decodeIfPresent(CurrentSectionTrackingPreference.self, forKey: .currentSectionTracking) ?? defaults.currentSectionTracking,
+            referencedImageReloadMode: try container.decodeIfPresent(ReferencedImageReloadMode.self, forKey: .referencedImageReloadMode) ?? defaults.referencedImageReloadMode
         )
     }
 }

@@ -30,20 +30,29 @@ public struct PreviewTheme: Equatable, Identifiable, Sendable {
 
 public enum PreviewThemeStore {
     public static let defaultThemeID = "default"
+    private static let builtInThemeOrder = [
+        "default",
+        "github",
+        "minimal",
+        "catppuccin",
+        "tokyo-night",
+        "everforest",
+        "nord",
+        "rose-pine",
+        "dracula",
+        "gruvbox"
+    ]
+    private static let builtInThemeIDSet = Set(builtInThemeOrder)
+    private static let builtInThemeCache: [String: PreviewTheme] = {
+        Dictionary(
+            uniqueKeysWithValues: builtInThemeOrder.map { id in
+                (id, uncachedBuiltInTheme(id: id))
+            }
+        )
+    }()
 
     public static var allBuiltInThemes: [PreviewTheme] {
-        [
-            builtInTheme(id: "default"),
-            builtInTheme(id: "github"),
-            builtInTheme(id: "minimal"),
-            builtInTheme(id: "catppuccin"),
-            builtInTheme(id: "tokyo-night"),
-            builtInTheme(id: "everforest"),
-            builtInTheme(id: "nord"),
-            builtInTheme(id: "rose-pine"),
-            builtInTheme(id: "dracula"),
-            builtInTheme(id: "gruvbox")
-        ]
+        builtInThemeOrder.compactMap { builtInThemeCache[$0] }
     }
 
     public static var defaultTheme: PreviewTheme {
@@ -51,6 +60,18 @@ public enum PreviewThemeStore {
     }
 
     public static func builtInTheme(id: String) -> PreviewTheme {
+        builtInThemeCache[id] ?? builtInThemeCache[defaultThemeID] ?? uncachedBuiltInTheme(id: defaultThemeID)
+    }
+
+    public static var builtInThemeIDs: [String] {
+        builtInThemeOrder
+    }
+
+    public static func isBuiltInThemeID(_ id: String) -> Bool {
+        builtInThemeIDSet.contains(id)
+    }
+
+    private static func uncachedBuiltInTheme(id: String) -> PreviewTheme {
         switch id {
         case "github":
             return loadTheme(id: "github", name: "GitHub", supportsDarkMode: true, defaultMaxWidth: 980)

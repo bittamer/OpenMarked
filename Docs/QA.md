@@ -1,4 +1,4 @@
-# OpenMarked 0.5.0 QA Checklist
+# OpenMarked 0.5.1 QA Checklist
 
 Use this checklist for release manual QA. Run it on macOS 13 or newer from a clean checkout after `Scripts/verify_release.sh` passes.
 
@@ -16,6 +16,21 @@ Use this checklist for release manual QA. Run it on macOS 13 or newer from a cle
    Expected result: the About panel shows OpenMarked, current version/build, license, and project URL.
 6. Focus OpenMarked and inspect the macOS menu bar.
    Expected result: the top system menu bar switches to OpenMarked and includes standard app/window commands such as About, Settings, Hide, Quit, Window, and Help.
+
+## Performance Stabilization
+
+1. Generate the large-image fixture with `Scripts/generate_performance_fixture.sh .build/perf-audit`.
+   Expected result: `.build/perf-audit/large-images.md` and referenced local images are created.
+2. Run `swift run OpenMarkedVerifier --performance-smoke`.
+   Expected result: fixture and synthetic render timings complete under the configured smoke budgets.
+3. Package the app with `Scripts/package_release.sh`, then run `Scripts/performance_scroll_audit.sh`.
+   Expected result: scroll-time and post-settle CPU/RSS samples plus stack samples are written under `.build/perf-audit/`, hot samples do not show repeated status word counting or preview theme CSS loading, and post-settle CPU returns below 5%.
+4. Open `.build/perf-audit/large-images.md` in the packaged app and scroll from top to bottom with the outline visible.
+   Expected result: scrolling remains responsive after initial load; the status bar may show folder-filtered or manual referenced-image reload behavior for the large asset set.
+5. Show the inspector on the same large fixture and switch through Links, Assets, Diagnostics, and Statistics.
+   Expected result: the inspector opens without a long main-thread pause, long lists render in chunks, and Show All controls appear when row counts exceed the initial display limit.
+6. Change Settings > Performance > Mode between Automatic, Fidelity, and Performance.
+   Expected result: the active document remains usable; current-section tracking and referenced-image reload behavior follow the chosen mode.
 
 ## Opening Workflows
 
@@ -183,11 +198,13 @@ For `rich-markdown.md`, GitHub callouts, Mermaid diagrams, KaTeX math, and link 
    Expected result: raw HTML is rendered safely as text according to cmark behavior.
 10. Change print page size, margins, content width, title, heading page breaks, and print style.
    Expected result: PDF export and native Print use the selected page layout; standalone HTML includes print CSS when CSS embedding is enabled.
-11. Disable HTML export CSS embedding.
+11. Change Performance Mode, Current Section, and Referenced Images.
+   Expected result: the selected preferences persist, current-section tracking updates without a forced full re-render, and referenced-image watching updates its status for the active document.
+12. Disable HTML export CSS embedding.
    Expected result: exported HTML omits embedded style blocks.
-12. Enable and disable session restoration.
+13. Enable and disable session restoration.
    Expected result: last-opened paths are retained only while the setting is enabled.
-13. With session restoration enabled, open several document tabs, close one tab, quit, and relaunch.
+14. With session restoration enabled, open several document tabs, close one tab, quit, and relaunch.
    Expected result: the remaining open document list is restored into native tabs where possible; missing or unsupported saved files are ignored.
 
 ## Rich Content Status

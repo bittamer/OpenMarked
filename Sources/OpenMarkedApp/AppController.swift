@@ -11,8 +11,10 @@ final class AppController: ObservableObject {
     @Published private(set) var settings: ApplicationSettings
     @Published private(set) var userPreviewThemes: [UserPreviewTheme]
 
-    private var retainedWindows: [UUID: NSWindow] = [:]
-    private var retainedWindowDelegates: [UUID: WindowLifecycleDelegate] = [:]
+    private var documentWindows: [UUID: NSWindow] = [:]
+    private var registeredWindowControllers: [UUID: DocumentWindowController] = [:]
+    private var documentWindowActivity = DocumentWindowActivityRegistry()
+    private var windowNotificationObservers: [NSObjectProtocol] = []
     private let settingsStore = ApplicationSettingsStore.shared
     private let userPreviewThemeStore = UserPreviewThemeStore.shared
     private var didAttemptSessionRestore = false
@@ -20,6 +22,7 @@ final class AppController: ObservableObject {
     private init() {
         self.settings = settingsStore.load()
         self.userPreviewThemes = userPreviewThemeStore.load()
+        startDocumentWindowObservation()
     }
 
     var activeCanReloadPreview: Bool {
@@ -67,13 +70,36 @@ final class AppController: ObservableObject {
     }
 
     func registerWindowController(_ controller: DocumentWindowController) {
+        registeredWindowControllers[controller.id] = controller
         if activeWindowController == nil {
             activeWindowController = controller
         }
     }
 
-    func setActiveWindowController(_ controller: DocumentWindowController) {
+    func registerDocumentWindow(_ window: NSWindow, controller: DocumentWindowController) {
+        DocumentWindowTabbing.configureDocumentWindow(window)
+        registeredWindowControllers[controller.id] = controller
+        documentWindows[controller.id] = window
+
+        if controller.window !== window {
+            controller.window = window
+        }
+
+        documentWindowActivity.register(
+            controllerID: controller.id,
+            windowID: ObjectIdentifier(window)
+        )
+
+        if activeWindowController == nil || window.isKeyWindow || window.isMainWindow {
+            setActiveWindowController(controller)
+        }
+    }
+
+    func setActiveWindowController(_ controller: DocumentWindowController?) {
         activeWindowController = controller
+        if let window = controller?.window {
+            _ = documentWindowActivity.activate(windowID: ObjectIdentifier(window))
+        }
     }
 
     func presentOpenPanel() {
@@ -415,18 +441,9 @@ final class AppController: ObservableObject {
             backing: .buffered,
             defer: false
         )
-        DocumentWindowTabbing.configureDocumentWindow(window)
-
-        let delegate = WindowLifecycleDelegate { [weak self, weak controller] in
-            controller?.close()
-            self?.retainedWindows.removeValue(forKey: windowID)
-            self?.retainedWindowDelegates.removeValue(forKey: windowID)
-        }
-
-        controller.window = window
         window.title = controller.state.windowTitle
         window.contentViewController = hostingController
-        window.delegate = delegate
+        registerDocumentWindow(window, controller: controller)
 
         if let anchorWindow = anchorController?.window {
             DocumentWindowTabbing.addWindow(window, asTabTo: anchorWindow)
@@ -434,8 +451,7 @@ final class AppController: ObservableObject {
             window.center()
         }
 
-        retainedWindows[windowID] = window
-        retainedWindowDelegates[windowID] = delegate
+        documentWindows[windowID] = window
 
         setActiveAndFrontmost(controller)
         controller.open(url: url)
@@ -505,6 +521,102 @@ final class AppController: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    private func startDocumentWindowObservation() {
+        let notificationCenter = NotificationCenter.default
+        let activeNotifications: [Notification.Name] = [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didBecomeMainNotification
+        ]
+
+        for notificationName in activeNotifications {
+            let observer = notificationCenter.addObserver(
+                forName: notificationName,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let window = notification.object as? NSWindow else {
+                    return
+                }
+
+                Task { @MainActor in
+                    self?.noteDocumentWindowBecameActive(window)
+                }
+            }
+            windowNotificationObservers.append(observer)
+        }
+
+        let closeObserver = notificationCenter.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let window = notification.object as? NSWindow else {
+                return
+            }
+
+            Task { @MainActor in
+                self?.noteDocumentWindowWillClose(window)
+            }
+        }
+        windowNotificationObservers.append(closeObserver)
+    }
+
+    func noteDocumentWindowBecameActive(_ window: NSWindow) {
+        guard let controllerID = documentWindowActivity.activate(windowID: ObjectIdentifier(window)),
+              let controller = registeredWindowControllers[controllerID] else {
+            return
+        }
+
+        activeWindowController = controller
+    }
+
+    func noteDocumentWindowWillClose(_ window: NSWindow) {
+        guard let closeResult = documentWindowActivity.close(windowID: ObjectIdentifier(window)) else {
+            return
+        }
+
+        let closedController = registeredWindowControllers.removeValue(forKey: closeResult.closedControllerID)
+        documentWindows.removeValue(forKey: closeResult.closedControllerID)
+        closedController?.close()
+
+        if activeWindowController?.id == closeResult.closedControllerID {
+            activeWindowController = controller(for: closeResult.fallbackActiveControllerID)
+        }
+
+        Task { @MainActor in
+            reconcileActiveWindowController()
+        }
+    }
+
+    private func reconcileActiveWindowController() {
+        if let keyWindow = NSApp.keyWindow,
+           documentWindowActivity.controllerID(for: ObjectIdentifier(keyWindow)) != nil {
+            noteDocumentWindowBecameActive(keyWindow)
+            return
+        }
+
+        if let mainWindow = NSApp.mainWindow,
+           documentWindowActivity.controllerID(for: ObjectIdentifier(mainWindow)) != nil {
+            noteDocumentWindowBecameActive(mainWindow)
+            return
+        }
+
+        if let activeControllerID = documentWindowActivity.activeControllerID,
+           let controller = controller(for: activeControllerID) {
+            activeWindowController = controller
+            return
+        }
+
+        activeWindowController = nil
+    }
+
+    private func controller(for controllerID: UUID?) -> DocumentWindowController? {
+        guard let controllerID else {
+            return nil
+        }
+        return registeredWindowControllers[controllerID]
+    }
+
     private func reloadUserPreviewThemes() {
         userPreviewThemes = userPreviewThemeStore.load()
     }
@@ -523,17 +635,5 @@ final class AppController: ObservableObject {
         alert.informativeText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         alert.addButton(withTitle: "OK")
         alert.runModal()
-    }
-}
-
-private final class WindowLifecycleDelegate: NSObject, NSWindowDelegate {
-    private let onClose: () -> Void
-
-    init(onClose: @escaping () -> Void) {
-        self.onClose = onClose
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        onClose()
     }
 }

@@ -42,25 +42,14 @@ struct ContentView: View {
         .appChromeTheme(appController.settings.appChromeThemeID)
         .background(
             WindowAccessor { window in
-                DocumentWindowTabbing.configureDocumentWindow(window)
-                controller.window = window
-                appController.registerWindowController(controller)
+                appController.registerDocumentWindow(window, controller: controller)
             }
         )
         .onAppear {
             appController.registerWindowController(controller)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
-            guard let window = notification.object as? NSWindow, window === controller.window else {
-                return
-            }
-            appController.setActiveWindowController(controller)
-        }
         .onChange(of: controller.state.windowTitle) { _ in
             controller.updateWindowTitle()
-        }
-        .onDisappear {
-            controller.close()
         }
         .dropDestination(for: URL.self) { urls, _ in
             appController.openDroppedURLs(urls, into: controller)

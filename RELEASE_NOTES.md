@@ -1,3 +1,20 @@
+# OpenMarked 0.5.0 Draft
+
+OpenMarked 0.5.0 is the Native Tabbed Documents release.
+
+## Highlights
+
+- Adds native macOS document tabs for Markdown document windows.
+- Opens additional documents into the active native tab group instead of scattering separate top-level windows.
+- Keeps each tab backed by its own `DocumentWindowController`, preserving per-document preview state, live preview, outline, inspector, theme, zoom, search, and export destinations.
+- Routes active-tab changes through native key/main window notifications so toolbar and menu commands follow the selected tab.
+- Cleans up closed tabs through native window close notifications, stopping only the closed document's watchers and preserving other tabs.
+
+## Known Limitations
+
+- Opening the same source file more than once may create duplicate tabs in 0.5.0.
+- Exact native tab group restoration is not implemented; session restore reopens the saved document list and groups documents into tabs where possible.
+
 # OpenMarked 0.4.1
 
 OpenMarked 0.4.1 is a polish and reliability patch for the Document Workbench release.

@@ -87,10 +87,11 @@ Tabbing behavior:
 - `AppController` owns open placement. It decides whether the first supported file replaces an empty active document window, opens a standalone first document window, or creates a native tab in the active document window group.
 - File > Open, toolbar open, drag/drop, Finder/Dock open events, Open Recent, and session restore all route through the same `openURLs` policy and pure `DocumentOpenPlacementPlanner`.
 - `WindowAccessor` configures SwiftUI-created document windows once their `NSWindow` is available. Programmatic document windows created by `AppController` use the same tabbing helper.
-- `AppController.activeWindowController` remains the command-routing source. Native tab selection must update it so toolbar and menu actions operate on the selected tab.
-- Closing a tab must run the same cleanup as closing a standalone document window: persist window/document state, stop live preview watchers, and release retained window/delegate references.
+- `AppController.activeWindowController` remains the command-routing source. `DocumentWindowActivityRegistry` tracks document-window activity, while `AppController` observes native key/main window notifications so toolbar and menu actions operate on the selected tab.
+- Closing a tab runs the same cleanup as closing a standalone document window: `NSWindow.willCloseNotification` maps the closing window to its `DocumentWindowController`, persists window/document state, stops live preview watchers, unregisters the document window, and falls back to the next known active controller or `nil`.
+- SwiftUI view disappearance does not close document controllers; cleanup is tied to native window close events so tab selection does not stop another tab's live preview or mutate its per-tab state.
 
-Exact native tab group restoration is deferred. Session restoration reopens the saved document list and groups those documents into native tabs where possible.
+Exact native tab group restoration and duplicate-document focusing are deferred. Session restoration reopens the saved document list and groups those documents into native tabs where possible.
 
 ## Theme Direction
 

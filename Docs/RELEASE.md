@@ -32,12 +32,12 @@ The app bundle is ad hoc signed by default for local developer distribution. Set
 - Print panel QA: owner-recorded manual pass recommended before public distribution
 - Second Mac or clean-account launch: owner-recorded manual pass recommended before public distribution
 - Owner approval: accepted through the Phase 8 release request
-- Release tag: `0.4.1`
+- Release tag: `v0.4.1`
 
 Use this command only after approval and after all release changes are committed:
 
 ```sh
-git tag -a 0.4.1 -m "OpenMarked 0.4.1"
+git tag -a v0.4.1 -m "OpenMarked 0.4.1"
 ```
 
 ## P1 Deferrals

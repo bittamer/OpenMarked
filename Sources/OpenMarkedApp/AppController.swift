@@ -90,13 +90,12 @@ final class AppController: ObservableObject {
             return
         }
 
-        openURLs(panel.urls, preferredController: activeWindowController, replacePreferredController: false)
+        openURLs(panel.urls, preferredController: activeWindowController)
     }
 
     func openURLs(
         _ urls: [URL],
-        preferredController: DocumentWindowController? = nil,
-        replacePreferredController: Bool = false
+        preferredController: DocumentWindowController? = nil
     ) {
         guard !urls.isEmpty else {
             preferredController?.showNoSupportedFilesError()
@@ -113,23 +112,63 @@ final class AppController: ObservableObject {
             settingsStore.saveLastDocumentURLs(supportedURLs)
         }
 
-        let target = preferredController ?? activeWindowController
-        var remaining = supportedURLs
+        let originalPreferredController = controllerIfWindowIsAlive(preferredController)
+        let originalActiveController = controllerIfWindowIsAlive(activeWindowController)
+        let placements = DocumentOpenPlacementPlanner.plan(
+            documentCount: supportedURLs.count,
+            preferredWindow: descriptor(for: originalPreferredController),
+            activeWindow: descriptor(for: originalActiveController)
+        )
+        var firstOpenedController: DocumentWindowController?
 
-        if let firstURL = remaining.first {
-            if let target, replacePreferredController || target.shouldReplaceWithOpenedDocument {
-                target.open(url: firstURL)
-                remaining.removeFirst()
+        for (url, placement) in zip(supportedURLs, placements) {
+            switch placement {
+            case .replace(let windowID):
+                let controller = controller(
+                    matching: windowID,
+                    preferredController: originalPreferredController,
+                    activeController: originalActiveController
+                )
+
+                if let controller {
+                    controller.open(url: url)
+                    setActiveAndFrontmost(controller)
+                    if firstOpenedController == nil {
+                        firstOpenedController = controller
+                    }
+                } else {
+                    let controller = createDocumentWindow(opening: url)
+                    if firstOpenedController == nil {
+                        firstOpenedController = controller
+                    }
+                }
+
+            case .newStandaloneWindow:
+                let controller = createDocumentWindow(opening: url)
+                if firstOpenedController == nil {
+                    firstOpenedController = controller
+                }
+
+            case .newTab(let anchor):
+                let anchorController = controller(
+                    for: anchor,
+                    preferredController: originalPreferredController,
+                    activeController: originalActiveController,
+                    firstOpenedController: firstOpenedController
+                )
+                let controller = createDocumentWindow(
+                    opening: url,
+                    tabbingAnchor: anchorController
+                )
+                if firstOpenedController == nil {
+                    firstOpenedController = controller
+                }
             }
-        }
-
-        for url in remaining {
-            createDocumentWindow(opening: url)
         }
     }
 
     func openDroppedURLs(_ urls: [URL], into controller: DocumentWindowController) {
-        openURLs(urls, preferredController: controller, replacePreferredController: true)
+        openURLs(urls, preferredController: controller)
     }
 
     func reloadPreview() {
@@ -357,10 +396,14 @@ final class AppController: ObservableObject {
             return
         }
 
-        openURLs(urls, preferredController: activeWindowController, replacePreferredController: true)
+        openURLs(urls, preferredController: activeWindowController)
     }
 
-    private func createDocumentWindow(opening url: URL) {
+    @discardableResult
+    private func createDocumentWindow(
+        opening url: URL,
+        tabbingAnchor anchorController: DocumentWindowController? = nil
+    ) -> DocumentWindowController {
         let controller = DocumentWindowController()
         let contentView = ContentView(controller: controller)
             .environmentObject(self)
@@ -384,15 +427,82 @@ final class AppController: ObservableObject {
         window.title = controller.state.windowTitle
         window.contentViewController = hostingController
         window.delegate = delegate
-        window.center()
+
+        if let anchorWindow = anchorController?.window {
+            DocumentWindowTabbing.addWindow(window, asTabTo: anchorWindow)
+        } else {
+            window.center()
+        }
 
         retainedWindows[windowID] = window
         retainedWindowDelegates[windowID] = delegate
 
+        setActiveAndFrontmost(controller)
+        controller.open(url: url)
+        return controller
+    }
+
+    private func controllerIfWindowIsAlive(_ controller: DocumentWindowController?) -> DocumentWindowController? {
+        guard let controller, controller.window != nil else {
+            return nil
+        }
+
+        return controller
+    }
+
+    private func descriptor(for controller: DocumentWindowController?) -> DocumentWindowDescriptor? {
+        guard let controller = controllerIfWindowIsAlive(controller) else {
+            return nil
+        }
+
+        return DocumentWindowDescriptor(
+            id: controller.id,
+            canReplaceWithOpenedDocument: controller.shouldReplaceWithOpenedDocument
+        )
+    }
+
+    private func controller(
+        matching id: UUID,
+        preferredController: DocumentWindowController?,
+        activeController: DocumentWindowController?
+    ) -> DocumentWindowController? {
+        if preferredController?.id == id {
+            return preferredController
+        }
+
+        if activeController?.id == id {
+            return activeController
+        }
+
+        return nil
+    }
+
+    private func controller(
+        for anchor: DocumentOpenAnchor,
+        preferredController: DocumentWindowController?,
+        activeController: DocumentWindowController?,
+        firstOpenedController: DocumentWindowController?
+    ) -> DocumentWindowController? {
+        switch anchor {
+        case .existing(let id):
+            return controller(
+                matching: id,
+                preferredController: preferredController,
+                activeController: activeController
+            )
+        case .firstOpenedWindow:
+            return firstOpenedController
+        }
+    }
+
+    private func setActiveAndFrontmost(_ controller: DocumentWindowController) {
         setActiveWindowController(controller)
+        guard let window = controller.window else {
+            return
+        }
+
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        controller.open(url: url)
     }
 
     private func reloadUserPreviewThemes() {

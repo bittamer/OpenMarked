@@ -85,7 +85,7 @@ Tabbing behavior:
 - Document windows share the `OpenMarkedDocument` tabbing identifier and prefer native tabbing.
 - Settings, About, save panels, open panels, and other utility windows are not part of the document tab group.
 - `AppController` owns open placement. It decides whether the first supported file replaces an empty active document window, opens a standalone first document window, or creates a native tab in the active document window group.
-- File > Open, toolbar open, drag/drop, Finder/Dock open events, Open Recent, and session restore should all route through the same `openURLs` policy.
+- File > Open, toolbar open, drag/drop, Finder/Dock open events, Open Recent, and session restore all route through the same `openURLs` policy and pure `DocumentOpenPlacementPlanner`.
 - `WindowAccessor` configures SwiftUI-created document windows once their `NSWindow` is available. Programmatic document windows created by `AppController` use the same tabbing helper.
 - `AppController.activeWindowController` remains the command-routing source. Native tab selection must update it so toolbar and menu actions operate on the selected tab.
 - Closing a tab must run the same cleanup as closing a standalone document window: persist window/document state, stop live preview watchers, and release retained window/delegate references.

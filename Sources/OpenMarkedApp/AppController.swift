@@ -151,10 +151,6 @@ final class AppController: ObservableObject {
             return
         }
 
-        if settings.restoresLastOpenedDocuments {
-            settingsStore.saveLastDocumentURLs(supportedURLs)
-        }
-
         let originalPreferredController = controllerIfWindowIsAlive(preferredController)
         let originalActiveController = controllerIfWindowIsAlive(activeWindowController)
         let placements = DocumentOpenPlacementPlanner.plan(
@@ -208,6 +204,8 @@ final class AppController: ObservableObject {
                 }
             }
         }
+
+        persistOpenDocumentURLsForSessionRestore()
     }
 
     func openDroppedURLs(_ urls: [URL], into controller: DocumentWindowController) {
@@ -226,13 +224,11 @@ final class AppController: ObservableObject {
             return
         }
 
-        if settings.restoresLastOpenedDocuments {
-            settingsStore.saveLastDocumentURLs(supportedURLs)
-        }
-
         for url in supportedURLs {
             createDocumentWindow(opening: url)
         }
+
+        persistOpenDocumentURLsForSessionRestore()
     }
 
     @discardableResult
@@ -367,9 +363,8 @@ final class AppController: ObservableObject {
         settingsStore.save(settings)
         if !settings.restoresLastOpenedDocuments {
             settingsStore.saveLastDocumentURLs([])
-        } else if !previousSettings.restoresLastOpenedDocuments,
-                  let currentURL = activeWindowController?.state.currentDocument?.url {
-            settingsStore.saveLastDocumentURLs([currentURL])
+        } else if !previousSettings.restoresLastOpenedDocuments {
+            persistOpenDocumentURLsForSessionRestore()
         }
         activeWindowController?.applySettings(settings, previousSettings: previousSettings)
     }
@@ -460,16 +455,15 @@ final class AppController: ObservableObject {
         }
         didAttemptSessionRestore = true
 
-        guard settings.restoresLastOpenedDocuments else {
+        let plan = SessionRestorationPlanner.plan(
+            isEnabled: settings.restoresLastOpenedDocuments,
+            savedURLs: settingsStore.loadLastDocumentURLs()
+        )
+        guard plan.shouldRestore else {
             return
         }
 
-        let urls = settingsStore.loadLastDocumentURLs().filter { FileManager.default.fileExists(atPath: $0.path) }
-        guard !urls.isEmpty else {
-            return
-        }
-
-        openURLs(urls, preferredController: activeWindowController)
+        openURLs(plan.urls, preferredController: activeWindowController)
     }
 
     @discardableResult
@@ -630,6 +624,8 @@ final class AppController: ObservableObject {
             activeWindowController = controller(for: closeResult.fallbackActiveControllerID)
         }
 
+        persistOpenDocumentURLsForSessionRestore()
+
         Task { @MainActor in
             reconcileActiveWindowController()
         }
@@ -662,6 +658,34 @@ final class AppController: ObservableObject {
             return nil
         }
         return registeredWindowControllers[controllerID]
+    }
+
+    private func persistOpenDocumentURLsForSessionRestore() {
+        guard settings.restoresLastOpenedDocuments else {
+            return
+        }
+
+        settingsStore.saveLastDocumentURLs(currentOpenDocumentURLsForSessionRestore())
+    }
+
+    private func currentOpenDocumentURLsForSessionRestore() -> [URL] {
+        var urls: [URL] = []
+        var orderedControllerIDs = Set<UUID>()
+
+        for controllerID in documentWindowActivity.controllerIDsInActivityOrder {
+            orderedControllerIDs.insert(controllerID)
+            if let url = registeredWindowControllers[controllerID]?.state.currentDocument?.url {
+                urls.append(url)
+            }
+        }
+
+        for controller in registeredWindowControllers.values where !orderedControllerIDs.contains(controller.id) {
+            if let url = controller.state.currentDocument?.url {
+                urls.append(url)
+            }
+        }
+
+        return urls
     }
 
     private func reloadUserPreviewThemes() {

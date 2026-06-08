@@ -29,6 +29,20 @@ final class DocumentWindowActivityRegistryTests: XCTestCase {
         XCTAssertEqual(registry.activeControllerID, secondControllerID)
     }
 
+    func testActivityOrderTracksRecentActivation() {
+        var registry = DocumentWindowActivityRegistry()
+        let firstControllerID = UUID()
+        let secondControllerID = UUID()
+        let firstWindow = NSObject()
+        let secondWindow = NSObject()
+
+        registry.register(controllerID: firstControllerID, windowID: ObjectIdentifier(firstWindow))
+        registry.register(controllerID: secondControllerID, windowID: ObjectIdentifier(secondWindow))
+        registry.activate(windowID: ObjectIdentifier(firstWindow))
+
+        XCTAssertEqual(registry.controllerIDsInActivityOrder, [secondControllerID, firstControllerID])
+    }
+
     func testClosingActiveWindowFallsBackToPreviousController() {
         var registry = DocumentWindowActivityRegistry()
         let firstControllerID = UUID()
@@ -91,6 +105,21 @@ func activatingRegisteredWindowUpdatesActiveController() {
     registry.activate(windowID: ObjectIdentifier(secondWindow))
 
     #expect(registry.activeControllerID == secondControllerID)
+}
+
+@Test("Activity order tracks recent activation")
+func activityOrderTracksRecentActivation() {
+    var registry = DocumentWindowActivityRegistry()
+    let firstControllerID = UUID()
+    let secondControllerID = UUID()
+    let firstWindow = NSObject()
+    let secondWindow = NSObject()
+
+    registry.register(controllerID: firstControllerID, windowID: ObjectIdentifier(firstWindow))
+    registry.register(controllerID: secondControllerID, windowID: ObjectIdentifier(secondWindow))
+    registry.activate(windowID: ObjectIdentifier(firstWindow))
+
+    #expect(registry.controllerIDsInActivityOrder == [secondControllerID, firstControllerID])
 }
 
 @Test("Closing active window falls back to previous controller")

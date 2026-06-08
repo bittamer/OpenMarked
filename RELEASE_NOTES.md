@@ -11,11 +11,12 @@ OpenMarked 0.5.0 is the Native Tabbed Documents release.
 - Cleans up closed tabs through native window close notifications, stopping only the closed document's watchers and preserving other tabs.
 - Adds explicit Window menu commands for native tab actions: Show Tab Bar, Show All Tabs, Merge All Windows, Move Tab to New Window, Select Next Tab, and Select Previous Tab.
 - Adds File > Open in New Window... for opening selected Markdown files outside the current tab group.
+- Improves session restore by saving the current open document list across tab opens/closes and filtering missing or unsupported files before launch restore.
 
 ## Known Limitations
 
 - Opening the same source file more than once may create duplicate tabs in 0.5.0.
-- Exact native tab group restoration is not implemented; session restore reopens the saved document list and groups documents into tabs where possible.
+- Exact native tab order and tab group topology are not restored; session restore reopens the saved document list and groups documents into tabs where possible.
 
 # OpenMarked 0.4.1
 

@@ -15,6 +15,10 @@ struct DocumentWindowActivityRegistry {
         controllerIDsByWindowID.isEmpty
     }
 
+    var controllerIDsInActivityOrder: [UUID] {
+        controllerOrder
+    }
+
     mutating func register(controllerID: UUID, windowID: ObjectIdentifier) {
         if let previousControllerID = controllerIDsByWindowID[windowID],
            previousControllerID != controllerID {

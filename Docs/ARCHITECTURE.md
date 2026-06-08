@@ -92,8 +92,9 @@ Tabbing behavior:
 - SwiftUI view disappearance does not close document controllers; cleanup is tied to native window close events so tab selection does not stop another tab's live preview or mutate its per-tab state.
 - `OpenMarkedCommands` exposes explicit Window menu tab commands backed by native `NSWindow` selectors, plus File > Open in New Window... for users who want standalone document windows.
 - Document windows keep their native represented URL in sync with the opened Markdown file so macOS tab/window accessibility can use the document title and source file identity.
+- When session restore is enabled, `AppController` saves the current open document list after document opens and closes. `SessionRestorationPlanner` filters that saved list to existing supported Markdown/text files before restoring through the same tab-aware `openURLs` path.
 
-Exact native tab group restoration and duplicate-document focusing are deferred. Session restoration reopens the saved document list and groups those documents into native tabs where possible.
+Exact native tab order, tab group topology, and duplicate-document focusing are deferred. Session restoration reopens the saved document list and groups those documents into native tabs where possible.
 
 ## Theme Direction
 

@@ -29,7 +29,8 @@ PACKAGE_DIR="$DIST_DIR/OpenMarked-${VERSION}"
 APP_DIR="$PACKAGE_DIR/$APP_NAME"
 ZIP_PATH="$DIST_DIR/OpenMarked-${VERSION}-macOS.zip"
 DMG_PATH="$DIST_DIR/OpenMarked-${VERSION}-macOS.dmg"
-RESOURCE_BUNDLE="$BIN_DIR/OpenMarked_OpenMarkedCore.bundle"
+CORE_RESOURCE_BUNDLE="$BIN_DIR/OpenMarked_OpenMarkedCore.bundle"
+APP_RESOURCE_BUNDLE="$BIN_DIR/OpenMarked_OpenMarkedApp.bundle"
 APP_ICON_SOURCE="$ROOT_DIR/Packaging/Assets/OpenMarkedIcon.icns"
 APP_ICON_NAME="OpenMarkedIcon.icns"
 SIGN_IDENTITY="${OPENMARKED_SIGN_IDENTITY:--}"
@@ -39,8 +40,13 @@ if [[ ! -x "$BIN_DIR/OpenMarked" ]]; then
   exit 1
 fi
 
-if [[ ! -d "$RESOURCE_BUNDLE" ]]; then
-  echo "SwiftPM resource bundle was not found at $RESOURCE_BUNDLE" >&2
+if [[ ! -d "$CORE_RESOURCE_BUNDLE" ]]; then
+  echo "SwiftPM core resource bundle was not found at $CORE_RESOURCE_BUNDLE" >&2
+  exit 1
+fi
+
+if [[ ! -d "$APP_RESOURCE_BUNDLE" ]]; then
+  echo "SwiftPM app resource bundle was not found at $APP_RESOURCE_BUNDLE" >&2
   exit 1
 fi
 
@@ -55,14 +61,24 @@ install -d "$APP_DIR/Contents/Resources"
 
 install -m 755 "$BIN_DIR/OpenMarked" "$APP_DIR/Contents/MacOS/OpenMarked"
 install -m 644 "$APP_ICON_SOURCE" "$APP_DIR/Contents/Resources/$APP_ICON_NAME"
-cp -R "$RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
+cp -R "$CORE_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
+cp -R "$APP_RESOURCE_BUNDLE" "$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedApp.bundle"
 
 PACKAGED_RESOURCE_BUNDLE="$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedCore.bundle"
+PACKAGED_APP_RESOURCE_BUNDLE="$APP_DIR/Contents/Resources/OpenMarked_OpenMarkedApp.bundle"
 
 require_packaged_resource() {
   local resource_name="$1"
   if ! find "$PACKAGED_RESOURCE_BUNDLE" -type f -name "$resource_name" -print -quit | grep -q .; then
     echo "Packaged rich content resource is missing: $resource_name" >&2
+    exit 1
+  fi
+}
+
+require_packaged_app_resource() {
+  local resource_name="$1"
+  if ! find "$PACKAGED_APP_RESOURCE_BUNDLE" -type f -name "$resource_name" -print -quit | grep -q .; then
+    echo "Packaged app resource is missing: $resource_name" >&2
     exit 1
   fi
 }
@@ -75,6 +91,7 @@ require_packaged_resource "katex.min.js"
 require_packaged_resource "katex.min.css"
 require_packaged_resource "KaTeX-LICENSE"
 require_packaged_resource "KaTeX_Main-Regular.woff2"
+require_packaged_app_resource "preview-helpers.js"
 
 katex_woff2_count="$(find "$PACKAGED_RESOURCE_BUNDLE" -type f -name 'KaTeX_*.woff2' | wc -l | tr -d ' ')"
 if [[ "$katex_woff2_count" -lt 10 ]]; then

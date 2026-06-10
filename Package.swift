@@ -28,7 +28,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "OpenMarkedApp",
-            dependencies: ["OpenMarkedCore"]
+            dependencies: ["OpenMarkedCore"],
+            resources: [
+                .process("Resources")
+            ]
         ),
         .target(
             name: "OpenMarkedCore",

@@ -87,8 +87,12 @@ struct PreviewWebView: NSViewRepresentable {
         context.coordinator.onCurrentSectionChange = onCurrentSectionChange
         context.coordinator.preservesScrollPosition = preservesScrollPosition
         context.coordinator.usesReducedMotion = usesReducedMotion
+        let previousSectionTrackingBehavior = context.coordinator.currentSectionTrackingBehavior
         context.coordinator.currentSectionTrackingBehavior = currentSectionTrackingBehavior
         context.coordinator.load(renderResult: renderResult, baseURL: baseURL)
+        if previousSectionTrackingBehavior != currentSectionTrackingBehavior {
+            context.coordinator.applySectionTrackingBehavior()
+        }
 
         if context.coordinator.lastNavigationRequestID != navigationRequest?.id {
             context.coordinator.lastNavigationRequestID = navigationRequest?.id
@@ -191,19 +195,8 @@ struct PreviewWebView: NSViewRepresentable {
                 return
             }
 
-            let escapedID = PreviewJavaScriptEscaper.escape(id)
             let behavior = usesReducedMotion ? "auto" : "smooth"
-            let script = """
-            (function() {
-              var target = document.getElementById('\(escapedID)');
-              if (!target) { return false; }
-              target.scrollIntoView({ behavior: '\(behavior)', block: 'start' });
-              target.classList.add('om-heading-target');
-              window.setTimeout(function() { target.classList.remove('om-heading-target'); }, 900);
-              if (window.openMarkedSectionTracker) { window.openMarkedSectionTracker.report(target.id); }
-              return true;
-            })();
-            """
+            let script = PreviewJavaScript.scrollToElementScript(id: id, behavior: behavior)
 
             webView?.evaluateJavaScript(script) { [weak self] result, _ in
                 if (result as? Bool) == false {
@@ -218,26 +211,11 @@ struct PreviewWebView: NSViewRepresentable {
                 return
             }
 
-            let actionName: String
-            switch request.action {
-            case .setQuery:
-                actionName = "set"
-            case .next:
-                actionName = "next"
-            case .previous:
-                actionName = "previous"
-            case .clear:
-                actionName = "clear"
-            }
-
             activeSearchQuery = request.query
-            let escapedQuery = PreviewJavaScriptEscaper.escape(request.query)
-            let script = """
-            (function() {
-              if (!window.openMarkedSearch) { return { query: '\(escapedQuery)', count: 0, selectedIndex: 0 }; }
-              return window.openMarkedSearch.run('\(escapedQuery)', '\(actionName)');
-            })();
-            """
+            let script = PreviewJavaScript.searchScript(
+                query: request.query,
+                actionName: request.action.javaScriptActionName
+            )
 
             webView?.evaluateJavaScript(script) { [weak self] result, _ in
                 guard let self else {
@@ -259,19 +237,7 @@ struct PreviewWebView: NSViewRepresentable {
         }
 
         func applySectionTrackingBehavior() {
-            let behavior = currentSectionTrackingBehavior.rawValue
-            let script = """
-            (function() {
-              window.openMarkedSectionTrackingBehavior = '\(behavior)';
-              if (window.openMarkedSectionTracker) {
-                if ('\(behavior)' === 'disabled') {
-                  window.openMarkedSectionTracker.post(null);
-                } else {
-                  window.openMarkedSectionTracker.markDirty();
-                }
-              }
-            })();
-            """
+            let script = PreviewJavaScript.sectionTrackingBehaviorScript(currentSectionTrackingBehavior)
             webView?.evaluateJavaScript(script)
         }
 
@@ -290,13 +256,7 @@ struct PreviewWebView: NSViewRepresentable {
 
         private func restoreScrollRatio() {
             let boundedRatio = max(0, min(1, scrollRatio))
-            let script = """
-            (function() {
-              var scrollable = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-              window.scrollTo(0, scrollable * \(boundedRatio));
-              if (window.openMarkedSectionTracker) { window.openMarkedSectionTracker.schedule(); }
-            })();
-            """
+            let script = PreviewJavaScript.restoreScrollRatioScript(boundedRatio)
             webView?.evaluateJavaScript(script)
         }
 
@@ -366,191 +326,19 @@ struct PreviewWebView: NSViewRepresentable {
         }
 
         private func installPreviewHelpers(completion: @escaping () -> Void = {}) {
-            let css = """
-            (function() {
-              if (!document.getElementById('om-preview-helpers')) {
-                var style = document.createElement('style');
-                style.id = 'om-preview-helpers';
-                style.textContent = '.om-heading-target { outline: 2px solid -webkit-focus-ring-color; outline-offset: 4px; transition: outline-color 0.2s ease; } .om-search-match { background: color-mix(in srgb, Highlight 28%, transparent); color: inherit; border-radius: 2px; } .om-search-current { background: Mark; color: MarkText; }';
-                document.head.appendChild(style);
-              }
-              window.openMarkedPrefersReducedMotion = \(usesReducedMotion ? "true" : "false");
-              window.openMarkedSectionTrackingBehavior = '\(currentSectionTrackingBehavior.rawValue)';
-              window.openMarkedSectionTracker = {
-                lastID: undefined,
-                pending: false,
-                installed: false,
-                cacheDirty: true,
-                cachedHeadings: [],
-                cachedOffsets: [],
-                refreshCache: function() {
-                  this.cachedHeadings = Array.prototype.slice.call(document.querySelectorAll('.om-document h1[id], .om-document h2[id], .om-document h3[id], .om-document h4[id], .om-document h5[id], .om-document h6[id]'));
-                  this.cachedOffsets = this.cachedHeadings.map(function(heading) {
-                    return heading.getBoundingClientRect().top + window.scrollY;
-                  });
-                  this.cacheDirty = false;
-                },
-                headings: function() {
-                  if (this.cacheDirty) { this.refreshCache(); }
-                  return this.cachedHeadings;
-                },
-                post: function(id) {
-                  if (this.lastID === id) { return; }
-                  this.lastID = id;
-                  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openMarkedSection) {
-                    window.webkit.messageHandlers.openMarkedSection.postMessage({ id: id || null });
-                  }
-                },
-                currentID: function() {
-                  if (window.openMarkedSectionTrackingBehavior === 'disabled') { return null; }
-                  var headings = this.headings();
-                  if (!headings.length) { return null; }
-                  var threshold = Math.max(72, window.innerHeight * 0.18);
-                  var targetOffset = window.scrollY + threshold;
-                  var low = 0;
-                  var high = this.cachedOffsets.length - 1;
-                  var index = 0;
-                  while (low <= high) {
-                    var mid = Math.floor((low + high) / 2);
-                    if (this.cachedOffsets[mid] <= targetOffset) {
-                      index = mid;
-                      low = mid + 1;
-                    } else {
-                      high = mid - 1;
-                    }
-                  }
-                  return headings[index] ? headings[index].id : null;
-                },
-                report: function(id) {
-                  this.post(id || this.currentID());
-                },
-                schedule: function() {
-                  if (this.pending) { return; }
-                  this.pending = true;
-                  var tracker = this;
-                  var delay = window.openMarkedSectionTrackingBehavior === 'idleOnly' ? 240 : 90;
-                  window.setTimeout(function() {
-                    window.requestAnimationFrame(function() {
-                      tracker.pending = false;
-                      tracker.report();
-                    });
-                  }, delay);
-                },
-                markDirty: function() {
-                  this.cacheDirty = true;
-                  this.schedule();
-                },
-                install: function() {
-                  var tracker = this;
-                  if (window.openMarkedSectionTrackingBehavior === 'disabled') {
-                    this.post(null);
-                    return;
-                  }
-                  if (!this.installed) {
-                    window.addEventListener('scroll', function() { tracker.schedule(); }, { passive: true });
-                    window.addEventListener('resize', function() { tracker.markDirty(); }, { passive: true });
-                    Array.prototype.slice.call(document.images || []).forEach(function(image) {
-                      if (!image.complete) {
-                        image.addEventListener('load', function() { tracker.markDirty(); }, { once: true, passive: true });
-                        image.addEventListener('error', function() { tracker.markDirty(); }, { once: true, passive: true });
-                      }
-                    });
-                    this.installed = true;
-                  }
-                  this.refreshCache();
-                  this.schedule();
-                  window.setTimeout(function() { tracker.markDirty(); }, 250);
-                  window.setTimeout(function() { tracker.markDirty(); }, 1200);
-                }
-              };
-              window.openMarkedSectionTracker.install();
-              window.openMarkedSearch = {
-                state: { query: '', index: -1 },
-                clear: function() {
-                  var matches = Array.prototype.slice.call(document.querySelectorAll('.om-search-match'));
-                  matches.forEach(function(match) {
-                    var text = document.createTextNode(match.textContent || '');
-                    match.parentNode.replaceChild(text, match);
-                    if (text.parentNode) { text.parentNode.normalize(); }
-                  });
-                },
-                textNodes: function(root) {
-                  var nodes = [];
-                  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-                    acceptNode: function(node) {
-                      if (!node.nodeValue || !node.nodeValue.trim()) { return NodeFilter.FILTER_REJECT; }
-                      var parent = node.parentElement;
-                      if (!parent) { return NodeFilter.FILTER_REJECT; }
-                      if (parent.closest('script, style, textarea, select, .om-search-match')) { return NodeFilter.FILTER_REJECT; }
-                      return NodeFilter.FILTER_ACCEPT;
-                    }
-                  });
-                  while (walker.nextNode()) { nodes.push(walker.currentNode); }
-                  return nodes;
-                },
-                highlight: function(query) {
-                  var root = document.querySelector('.om-document') || document.body;
-                  var lowerQuery = query.toLocaleLowerCase();
-                  var nodes = this.textNodes(root);
-                  var matches = [];
-                  nodes.forEach(function(node) {
-                    var text = node.nodeValue;
-                    var lowerText = text.toLocaleLowerCase();
-                    var start = 0;
-                    var index = lowerText.indexOf(lowerQuery, start);
-                    if (index === -1) { return; }
-                    var fragment = document.createDocumentFragment();
-                    while (index !== -1) {
-                      if (index > start) {
-                        fragment.appendChild(document.createTextNode(text.slice(start, index)));
-                      }
-                      var span = document.createElement('mark');
-                      span.className = 'om-search-match';
-                      span.textContent = text.slice(index, index + query.length);
-                      fragment.appendChild(span);
-                      matches.push(span);
-                      start = index + query.length;
-                      index = lowerText.indexOf(lowerQuery, start);
-                    }
-                    if (start < text.length) {
-                      fragment.appendChild(document.createTextNode(text.slice(start)));
-                    }
-                    node.parentNode.replaceChild(fragment, node);
-                  });
-                  return matches;
-                },
-                run: function(query, action) {
-                  this.clear();
-                  query = query || '';
-                  if (!query) {
-                    this.state = { query: '', index: -1 };
-                    return { query: '', count: 0, selectedIndex: 0 };
-                  }
-                  var prior = this.state;
-                  var matches = this.highlight(query);
-                  if (!matches.length) {
-                    this.state = { query: query, index: -1 };
-                    return { query: query, count: 0, selectedIndex: 0 };
-                  }
-                  var index = 0;
-                  if (prior.query === query && prior.index >= 0) {
-                    if (action === 'previous') {
-                      index = (prior.index - 1 + matches.length) % matches.length;
-                    } else if (action === 'next') {
-                      index = (prior.index + 1) % matches.length;
-                    } else {
-                      index = Math.min(prior.index, matches.length - 1);
-                    }
-                  }
-                  matches[index].classList.add('om-search-current');
-                  matches[index].scrollIntoView({ behavior: window.openMarkedPrefersReducedMotion ? 'auto' : 'smooth', block: 'center' });
-                  this.state = { query: query, index: index };
-                  return { query: query, count: matches.length, selectedIndex: index + 1 };
-                }
-              };
-            })();
-            """
-            webView?.evaluateJavaScript(css) { _, _ in
+            let script: String
+            do {
+                script = try PreviewJavaScript.installHelpersScript(
+                    prefersReducedMotion: usesReducedMotion,
+                    sectionTrackingBehavior: currentSectionTrackingBehavior
+                )
+            } catch {
+                onStatusUpdate("Preview helpers failed to load")
+                completion()
+                return
+            }
+
+            webView?.evaluateJavaScript(script) { _, _ in
                 completion()
             }
         }
@@ -591,14 +379,105 @@ struct PreviewWebView: NSViewRepresentable {
     }
 }
 
-enum PreviewJavaScriptEscaper {
-    static func escape(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "'", with: "\\'")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
+private extension PreviewSearchRequest.Action {
+    var javaScriptActionName: String {
+        switch self {
+        case .setQuery:
+            return "set"
+        case .next:
+            return "next"
+        case .previous:
+            return "previous"
+        case .clear:
+            return "clear"
+        }
     }
+}
+
+enum PreviewJavaScript {
+    private static let cachedHelperScript: Result<String, Error> = Result {
+        guard let url = Bundle.module.url(forResource: "preview-helpers", withExtension: "js") else {
+            throw PreviewJavaScriptError.missingHelperResource
+        }
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    static func helperScript() throws -> String {
+        try cachedHelperScript.get()
+    }
+
+    static func installHelpersScript(
+        prefersReducedMotion: Bool,
+        sectionTrackingBehavior: CurrentSectionTrackingBehavior
+    ) throws -> String {
+        let configuration = """
+        {"prefersReducedMotion": \(prefersReducedMotion ? "true" : "false"), "sectionTrackingBehavior": \(literal(sectionTrackingBehavior.rawValue))}
+        """
+        return """
+        \(try helperScript())
+        window.openMarkedPreviewHelpers.install(\(configuration));
+        true;
+        """
+    }
+
+    static func scrollToElementScript(id: String, behavior: String) -> String {
+        """
+        (function() {
+          if (!window.openMarkedPreviewHelpers) { return false; }
+          return window.openMarkedPreviewHelpers.scrollToElement(\(literal(id)), \(literal(behavior)));
+        })();
+        """
+    }
+
+    static func searchScript(query: String, actionName: String) -> String {
+        let queryLiteral = literal(query)
+        return """
+        (function() {
+          if (!window.openMarkedSearch) { return { query: \(queryLiteral), count: 0, selectedIndex: 0 }; }
+          return window.openMarkedSearch.run(\(queryLiteral), \(literal(actionName)));
+        })();
+        """
+    }
+
+    static func sectionTrackingBehaviorScript(_ behavior: CurrentSectionTrackingBehavior) -> String {
+        """
+        (function() {
+          if (window.openMarkedPreviewHelpers) {
+            window.openMarkedPreviewHelpers.applySectionTrackingBehavior(\(literal(behavior.rawValue)));
+          } else {
+            window.openMarkedSectionTrackingBehavior = \(literal(behavior.rawValue));
+          }
+        })();
+        """
+    }
+
+    static func restoreScrollRatioScript(_ ratio: Double) -> String {
+        """
+        (function() {
+          if (window.openMarkedPreviewHelpers) {
+            window.openMarkedPreviewHelpers.restoreScrollRatio(\(ratio));
+          }
+        })();
+        """
+    }
+
+    static func literal(_ value: String) -> String {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: [value], options: [])
+            let jsonArray = String(decoding: data, as: UTF8.self)
+            let startIndex = jsonArray.index(after: jsonArray.startIndex)
+            let endIndex = jsonArray.index(before: jsonArray.endIndex)
+            return String(jsonArray[startIndex..<endIndex])
+                .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+                .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+        } catch {
+            return "\"\""
+        }
+    }
+}
+
+private enum PreviewJavaScriptError: Error {
+    case missingHelperResource
 }
 
 private extension URL {

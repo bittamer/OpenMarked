@@ -1082,10 +1082,39 @@ renderState.beginRendering(documentName: markdownDocument.displayName)
 renderState.finishRendering(renderResult)
 verify(renderState.currentRenderResult?.bodyHTML == renderResult.bodyHTML, "window state should retain render result for preview")
 
-let unsafeHTML = #"<h1 onclick="alert(1)">Title</h1><script src="https://example.com/x.js"></script>"#
+let unsafeHTML = #"""
+<h1 onclick="alert(1)" onmouseover='alert(2)' ONFOCUS=alert(3)>Title</h1>
+<a href="java&#x73;cript:alert(1)">bad link</a>
+<a href="java&#10;script:alert(1)">control-obfuscated bad link</a>
+<a href="java&Tab;script:alert(1)">named-whitespace bad link</a>
+<a href="vbscript:msgbox(1)">bad vbscript link</a>
+<img srcset="javascript:alert(1) 1x" alt="bad srcset">
+<form formaction="data:text/html,<b>bad</b>"></form>
+<script src="https://example.com/x.js"></script>
+<a href="https://example.com/#safe">safe link</a>
+<a href="#fragment">safe fragment</a>
+<a href="notes/page.md">safe relative</a>
+<a href="mailto:team@example.com">safe mail</a>
+<a href="file:///tmp/openmarked.md">safe file</a>
+<img src="data:image/png;base64,AAAA" alt="safe image">
+"""#
 let sanitizedHTML = PreviewHTMLSecurityPolicy.sanitize(unsafeHTML)
-verify(!sanitizedHTML.contains("<script"), "preview sanitizer should remove script tags")
-verify(!sanitizedHTML.contains("onclick"), "preview sanitizer should remove event handler attributes")
+let lowercasedSanitizedHTML = sanitizedHTML.lowercased()
+verify(!lowercasedSanitizedHTML.contains("<script"), "preview sanitizer should remove script tags")
+verify(!lowercasedSanitizedHTML.contains("onclick"), "preview sanitizer should remove double-quoted event handler attributes")
+verify(!lowercasedSanitizedHTML.contains("onmouseover"), "preview sanitizer should remove single-quoted event handler attributes")
+verify(!lowercasedSanitizedHTML.contains("onfocus"), "preview sanitizer should remove unquoted mixed-case event handler attributes")
+verify(!lowercasedSanitizedHTML.contains("javascript:"), "preview sanitizer should remove entity-obfuscated javascript URLs")
+verify(!lowercasedSanitizedHTML.contains("java&#10;script:"), "preview sanitizer should remove control-obfuscated javascript URLs")
+verify(!lowercasedSanitizedHTML.contains("java&tab;script:"), "preview sanitizer should remove named-whitespace-obfuscated javascript URLs")
+verify(!lowercasedSanitizedHTML.contains("vbscript:"), "preview sanitizer should remove vbscript URLs")
+verify(!lowercasedSanitizedHTML.contains("data:text/html"), "preview sanitizer should remove unsafe data document URLs")
+verify(sanitizedHTML.contains(#"href="https://example.com/#safe""#), "preview sanitizer should keep safe HTTP links")
+verify(sanitizedHTML.contains("href=\"#fragment\""), "preview sanitizer should keep safe fragment links")
+verify(sanitizedHTML.contains(#"href="notes/page.md""#), "preview sanitizer should keep safe relative links")
+verify(sanitizedHTML.contains(#"href="mailto:team@example.com""#), "preview sanitizer should keep safe mail links")
+verify(sanitizedHTML.contains(#"href="file:///tmp/openmarked.md""#), "preview sanitizer should keep safe file links")
+verify(sanitizedHTML.contains(#"src="data:image/png;base64,AAAA""#), "preview sanitizer should keep image data URLs")
 
 let watcherDirectory = FileManager.default.temporaryDirectory
     .appendingPathComponent("OpenMarkedWatcherVerifier-\(UUID().uuidString)", isDirectory: true)

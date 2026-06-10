@@ -1437,11 +1437,40 @@ final class AppInfoTests: XCTestCase {
     }
 
     func testPreviewHTMLSecurityPolicyRemovesScriptsAndEventHandlers() {
-        let unsafeHTML = #"<h1 onclick="alert(1)">Title</h1><script src="https://example.com/x.js"></script>"#
+        let unsafeHTML = #"""
+        <h1 onclick="alert(1)" onmouseover='alert(2)' ONFOCUS=alert(3)>Title</h1>
+        <a href="java&#x73;cript:alert(1)">bad link</a>
+        <a href="java&#10;script:alert(1)">control-obfuscated bad link</a>
+        <a href="java&Tab;script:alert(1)">named-whitespace bad link</a>
+        <a href="vbscript:msgbox(1)">bad vbscript link</a>
+        <img srcset="javascript:alert(1) 1x" alt="bad srcset">
+        <form formaction="data:text/html,<b>bad</b>"></form>
+        <script src="https://example.com/x.js"></script>
+        <a href="https://example.com/#safe">safe link</a>
+        <a href="#fragment">safe fragment</a>
+        <a href="notes/page.md">safe relative</a>
+        <a href="mailto:team@example.com">safe mail</a>
+        <a href="file:///tmp/openmarked.md">safe file</a>
+        <img src="data:image/png;base64,AAAA" alt="safe image">
+        """#
         let sanitizedHTML = PreviewHTMLSecurityPolicy.sanitize(unsafeHTML)
+        let lowercasedHTML = sanitizedHTML.lowercased()
 
-        XCTAssertFalse(sanitizedHTML.contains("<script"))
-        XCTAssertFalse(sanitizedHTML.contains("onclick"))
+        XCTAssertFalse(lowercasedHTML.contains("<script"))
+        XCTAssertFalse(lowercasedHTML.contains("onclick"))
+        XCTAssertFalse(lowercasedHTML.contains("onmouseover"))
+        XCTAssertFalse(lowercasedHTML.contains("onfocus"))
+        XCTAssertFalse(lowercasedHTML.contains("javascript:"))
+        XCTAssertFalse(lowercasedHTML.contains("java&#10;script:"))
+        XCTAssertFalse(lowercasedHTML.contains("java&tab;script:"))
+        XCTAssertFalse(lowercasedHTML.contains("vbscript:"))
+        XCTAssertFalse(lowercasedHTML.contains("data:text/html"))
+        XCTAssertTrue(sanitizedHTML.contains(#"href="https://example.com/#safe""#))
+        XCTAssertTrue(sanitizedHTML.contains("href=\"#fragment\""))
+        XCTAssertTrue(sanitizedHTML.contains(#"href="notes/page.md""#))
+        XCTAssertTrue(sanitizedHTML.contains(#"href="mailto:team@example.com""#))
+        XCTAssertTrue(sanitizedHTML.contains(#"href="file:///tmp/openmarked.md""#))
+        XCTAssertTrue(sanitizedHTML.contains(#"src="data:image/png;base64,AAAA""#))
     }
 }
 #elseif canImport(Testing)

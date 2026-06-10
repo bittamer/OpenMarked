@@ -138,6 +138,7 @@ public struct RenderedHTMLIndex: Equatable, Sendable {
 struct HTMLTagAttributeOccurrence: Equatable {
     let lowercasedName: String
     let value: String
+    let range: Range<String.Index>
     let valueRange: Range<String.Index>?
 }
 
@@ -305,6 +306,7 @@ enum HTMLTagScanner {
                     HTMLTagAttributeOccurrence(
                         lowercasedName: rawName.lowercased(),
                         value: "",
+                        range: nameStart..<cursor,
                         valueRange: nil
                     )
                 )
@@ -320,6 +322,7 @@ enum HTMLTagScanner {
                     lowercasedName: rawName.lowercased(),
                     value: HTMLUtilities.decodeEntities(in: parsedValue.value)
                         .trimmingCharacters(in: .whitespacesAndNewlines),
+                    range: nameStart..<cursor,
                     valueRange: parsedValue.range
                 )
             )

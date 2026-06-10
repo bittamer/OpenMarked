@@ -1021,6 +1021,8 @@ public enum LocalAssetReferenceExtractor {
 }
 
 public enum HTMLUtilities {
+    private static let numericEntityRegex = try? NSRegularExpression(pattern: #"(?i)&#(x[0-9a-f]+|[0-9]+);"#)
+
     public static func escapeText(_ text: String) -> String {
         text
             .replacingOccurrences(of: "&", with: "&amp;")
@@ -1040,7 +1042,7 @@ public enum HTMLUtilities {
     }
 
     public static func decodeEntities(in text: String) -> String {
-        var decoded = text
+        let decoded = text
             .replacingOccurrences(of: "&amp;", with: "&")
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
@@ -1048,43 +1050,176 @@ public enum HTMLUtilities {
             .replacingOccurrences(of: "&#39;", with: "'")
             .replacingOccurrences(of: "&apos;", with: "'")
 
-        let numericPattern = #"&#([0-9]+);"#
-        if let regex = try? NSRegularExpression(pattern: numericPattern) {
-            let nsDecoded = decoded as NSString
-            for match in regex.matches(in: decoded, range: NSRange(location: 0, length: nsDecoded.length)).reversed() {
-                guard
-                    let fullRange = Range(match.range(at: 0), in: decoded),
-                    let valueRange = Range(match.range(at: 1), in: decoded),
-                    let value = UInt32(decoded[valueRange]),
-                    let scalar = UnicodeScalar(value)
-                else {
-                    continue
-                }
-                decoded.replaceSubrange(fullRange, with: String(scalar))
-            }
+        return decodeNumericEntities(in: decoded)
+    }
+
+    private static func decodeNumericEntities(in text: String) -> String {
+        guard text.range(of: "&#") != nil, let regex = numericEntityRegex else {
+            return text
         }
 
+        var decoded = text
+        let nsDecoded = decoded as NSString
+        let range = NSRange(location: 0, length: nsDecoded.length)
+        for match in regex.matches(in: decoded, range: range).reversed() {
+            guard
+                let fullRange = Range(match.range(at: 0), in: decoded),
+                let valueRange = Range(match.range(at: 1), in: decoded)
+            else {
+                continue
+            }
+
+            let rawValue = String(decoded[valueRange])
+            let isHex = rawValue.first == "x" || rawValue.first == "X"
+            let digits = isHex ? String(rawValue.dropFirst()) : rawValue
+            guard
+                let value = UInt32(digits, radix: isHex ? 16 : 10),
+                let scalar = UnicodeScalar(value)
+            else {
+                continue
+            }
+
+            decoded.replaceSubrange(fullRange, with: String(scalar))
+        }
         return decoded
     }
 }
 
 public enum PreviewHTMLSecurityPolicy {
+    private static let urlAttributeNames: Set<String> = ["action", "background", "cite", "data", "formaction", "href", "poster", "src", "srcset", "xlink:href"]
+
+    private static let ignoredURLCharacters = CharacterSet.whitespacesAndNewlines.union(.controlCharacters)
+
     public static func sanitize(_ html: String) -> String {
-        html
-            .replacingOccurrences(
-                of: #"(?is)<script\b[^>]*>.*?</script>"#,
-                with: "",
-                options: .regularExpression
-            )
-            .replacingOccurrences(
-                of: #"(?i)\s+on[a-z]+\s*=\s*"[^"]*""#,
-                with: "",
-                options: .regularExpression
-            )
-            .replacingOccurrences(
-                of: #"(?i)\s+on[a-z]+\s*=\s*'[^']*'"#,
-                with: "",
-                options: .regularExpression
-            )
+        guard !html.isEmpty else {
+            return html
+        }
+
+        var mutations: [(range: Range<String.Index>, replacement: String)] = []
+        var scriptRanges: [Range<String.Index>] = []
+
+        for tag in HTMLTagScanner.tags(in: html) {
+            if scriptRanges.contains(where: { $0.contains(tag.range.lowerBound) }) {
+                continue
+            }
+
+            if tag.name == "script" {
+                let range = scriptBlockRange(for: tag, in: html)
+                scriptRanges.append(range)
+                mutations.append((range, ""))
+                continue
+            }
+
+            let unsafeAttributes = tag.attributes.filter { shouldRemove($0, tagName: tag.name) }
+            guard !unsafeAttributes.isEmpty else {
+                continue
+            }
+
+            mutations.append((tag.range, tagHTML(removing: unsafeAttributes, from: tag, in: html)))
+        }
+
+        guard !mutations.isEmpty else {
+            return html
+        }
+
+        var sanitized = html
+        for mutation in mutations.sorted(by: { $0.range.lowerBound > $1.range.lowerBound }) {
+            sanitized.replaceSubrange(mutation.range, with: mutation.replacement)
+        }
+        return sanitized
+    }
+
+    private static func scriptBlockRange(for tag: HTMLTagOccurrence, in html: String) -> Range<String.Index> {
+        guard
+            let closingStart = HTMLTagScanner.closingTagStart(named: "script", in: html, from: tag.range.upperBound),
+            let closingEnd = html[closingStart...].firstIndex(of: ">")
+        else {
+            return tag.range
+        }
+
+        return tag.range.lowerBound..<html.index(after: closingEnd)
+    }
+
+    private static func shouldRemove(_ attribute: HTMLTagAttributeOccurrence, tagName: String) -> Bool {
+        if attribute.lowercasedName.hasPrefix("on") {
+            return true
+        }
+
+        guard urlAttributeNames.contains(attribute.lowercasedName) else {
+            return false
+        }
+
+        return hasDangerousURL(attribute.value, attributeName: attribute.lowercasedName, tagName: tagName)
+    }
+
+    private static func hasDangerousURL(_ value: String, attributeName: String, tagName: String) -> Bool {
+        let candidates = attributeName == "srcset" ? value.split(separator: ",").map(srcsetURLCandidate) : [value]
+        return candidates.contains { candidate in
+            let normalized = normalizedURLValue(candidate)
+            guard !normalized.isEmpty, !normalized.hasPrefix("#") else {
+                return false
+            }
+
+            if normalized.hasPrefix("data:") {
+                return !isAllowedDataImageURL(normalized, attributeName: attributeName, tagName: tagName)
+            }
+
+            guard let colonIndex = normalized.firstIndex(of: ":") else {
+                return false
+            }
+
+            let scheme = normalized[..<colonIndex]
+            return scheme == "javascript" || scheme == "vbscript"
+        }
+    }
+
+    private static func normalizedURLValue(_ value: String) -> String {
+        let value = value
+            .replacingOccurrences(of: "&Tab;", with: "\t", options: .caseInsensitive)
+            .replacingOccurrences(of: "&NewLine;", with: "\n", options: .caseInsensitive)
+        var normalized = ""
+        normalized.reserveCapacity(value.count)
+
+        for scalar in value.unicodeScalars where !ignoredURLCharacters.contains(scalar) {
+            normalized.append(String(scalar))
+        }
+
+        return normalized.lowercased()
+    }
+
+    private static func isAllowedDataImageURL(
+        _ normalized: String,
+        attributeName: String,
+        tagName: String
+    ) -> Bool {
+        let isImageSourceAttribute = attributeName == "src" || attributeName == "srcset"
+        return isImageSourceAttribute && (tagName == "img" || tagName == "source") && normalized.hasPrefix("data:image/")
+    }
+
+    private static func srcsetURLCandidate(from candidate: Substring) -> String {
+        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let firstWhitespace = trimmed.firstIndex(where: \.isWhitespace) else {
+            return trimmed
+        }
+        return String(trimmed[..<firstWhitespace])
+    }
+
+    private static func tagHTML(
+        removing attributes: [HTMLTagAttributeOccurrence],
+        from tag: HTMLTagOccurrence,
+        in html: String
+    ) -> String {
+        let attributes = attributes.sorted { $0.range.lowerBound < $1.range.lowerBound }
+        var updatedTag = ""
+        updatedTag.reserveCapacity(html[tag.range].count)
+        var cursor = tag.range.lowerBound
+
+        for attribute in attributes {
+            updatedTag.append(contentsOf: html[cursor..<attribute.range.lowerBound])
+            cursor = attribute.range.upperBound
+        }
+
+        updatedTag.append(contentsOf: html[cursor..<tag.range.upperBound])
+        return updatedTag
     }
 }

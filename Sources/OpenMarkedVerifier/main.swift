@@ -419,6 +419,14 @@ verify(
     "app chrome theme ids should include the palette themes"
 )
 verify(
+    AppChromeThemeStore.builtInThemeIDs == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
+    "app chrome built-in theme ids should be cached and stable"
+)
+verify(AppChromeThemeStore.isBuiltInThemeID("tokyo-night"), "known app chrome theme ids should be recognized")
+verify(!AppChromeThemeStore.isBuiltInThemeID("missing"), "unknown app chrome theme ids should not be recognized")
+verify(AppChromeThemeStore.allBuiltInThemes == AppChromeThemeStore.allBuiltInThemes, "app chrome theme cache should produce stable built-in themes")
+verify(ApplicationSettings(appChromeThemeID: "tokyo-night").normalized().appChromeThemeID == "tokyo-night", "known app chrome theme ids should survive normalization")
+verify(
     PreviewThemeStore.builtInThemeIDs == ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"],
     "preview theme ids should be stable and cached"
 )

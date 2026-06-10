@@ -1194,7 +1194,15 @@ final class AppInfoTests: XCTestCase {
             AppChromeThemeStore.allBuiltInThemes.map(\.id),
             ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
         )
+        XCTAssertEqual(
+            AppChromeThemeStore.builtInThemeIDs,
+            ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
+        )
+        XCTAssertTrue(AppChromeThemeStore.isBuiltInThemeID("tokyo-night"))
+        XCTAssertFalse(AppChromeThemeStore.isBuiltInThemeID("missing"))
+        XCTAssertEqual(AppChromeThemeStore.allBuiltInThemes, AppChromeThemeStore.allBuiltInThemes)
         XCTAssertEqual(AppChromeThemeStore.theme(id: "missing").id, "default")
+        XCTAssertEqual(ApplicationSettings(appChromeThemeID: "tokyo-night").normalized().appChromeThemeID, "tokyo-night")
         XCTAssertEqual(
             PreviewThemeStore.allBuiltInThemes.map(\.id),
             ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
@@ -2488,7 +2496,15 @@ struct AppInfoTests {
             AppChromeThemeStore.allBuiltInThemes.map(\.id)
                 == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
         )
+        #expect(
+            AppChromeThemeStore.builtInThemeIDs
+                == ["default", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]
+        )
+        #expect(AppChromeThemeStore.isBuiltInThemeID("tokyo-night"))
+        #expect(!AppChromeThemeStore.isBuiltInThemeID("missing"))
+        #expect(AppChromeThemeStore.allBuiltInThemes == AppChromeThemeStore.allBuiltInThemes)
         #expect(AppChromeThemeStore.theme(id: "missing").id == "default")
+        #expect(ApplicationSettings(appChromeThemeID: "tokyo-night").normalized().appChromeThemeID == "tokyo-night")
         #expect(
             PreviewThemeStore.allBuiltInThemes.map(\.id)
                 == ["default", "github", "minimal", "catppuccin", "tokyo-night", "everforest", "nord", "rose-pine", "dracula", "gruvbox"]

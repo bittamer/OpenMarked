@@ -70,18 +70,27 @@ public struct AppChromeTheme: Equatable, Identifiable, Sendable {
 
 public enum AppChromeThemeStore {
     public static let defaultThemeID = "default"
+    public static let builtInThemeIDs = [
+        "default",
+        "catppuccin",
+        "tokyo-night",
+        "everforest",
+        "nord",
+        "rose-pine",
+        "dracula",
+        "gruvbox"
+    ]
+    private static let builtInThemeIDSet = Set(builtInThemeIDs)
+    private static let builtInThemeCache: [String: AppChromeTheme] = {
+        Dictionary(
+            uniqueKeysWithValues: builtInThemeIDs.map { id in
+                (id, uncachedBuiltInTheme(id: id))
+            }
+        )
+    }()
 
     public static var allBuiltInThemes: [AppChromeTheme] {
-        [
-            builtInTheme(id: defaultThemeID),
-            builtInTheme(id: "catppuccin"),
-            builtInTheme(id: "tokyo-night"),
-            builtInTheme(id: "everforest"),
-            builtInTheme(id: "nord"),
-            builtInTheme(id: "rose-pine"),
-            builtInTheme(id: "dracula"),
-            builtInTheme(id: "gruvbox")
-        ]
+        builtInThemeIDs.compactMap { builtInThemeCache[$0] }
     }
 
     public static var defaultTheme: AppChromeTheme {
@@ -89,15 +98,18 @@ public enum AppChromeThemeStore {
     }
 
     public static func theme(id: String) -> AppChromeTheme {
-        let knownIDs = Set(allBuiltInThemes.map(\.id))
-        guard knownIDs.contains(id) else {
-            return defaultTheme
-        }
-
         return builtInTheme(id: id)
     }
 
     public static func builtInTheme(id: String) -> AppChromeTheme {
+        builtInThemeCache[id] ?? builtInThemeCache[defaultThemeID] ?? uncachedBuiltInTheme(id: defaultThemeID)
+    }
+
+    public static func isBuiltInThemeID(_ id: String) -> Bool {
+        builtInThemeIDSet.contains(id)
+    }
+
+    private static func uncachedBuiltInTheme(id: String) -> AppChromeTheme {
         switch id {
         case "catppuccin":
             return AppChromeTheme(

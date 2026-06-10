@@ -219,6 +219,25 @@ verify(!frontMatterDocument.bodyText.contains("description: Metadata"), "body te
 verify(frontMatterDocument.displayTitle == "Fixture With Front Matter", "front matter title should become display title")
 verify(frontMatterDocument.resolvedTitle == "Fixture With Front Matter", "front matter title should become resolved title")
 verify(frontMatterDocument.resolvedTitleSource == .frontMatter, "front matter should be the resolved title source")
+verify(frontMatterDocument.firstHeadingTitle == "Body Heading", "front matter documents should still store the first body heading")
+
+let scannerTitleURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("openmarked-setext-title-\(UUID().uuidString).md")
+try """
+```swift
+# Ignored Fence Heading
+```
+
+Scanner Title
+=============
+
+Body text.
+""".write(to: scannerTitleURL, atomically: true, encoding: .utf8)
+defer { try? FileManager.default.removeItem(at: scannerTitleURL) }
+let scannerTitleDocument = try MarkdownDocumentLoader.load(url: scannerTitleURL, createBookmark: false)
+verify(scannerTitleDocument.firstHeadingTitle == "Scanner Title", "document title metadata should use the shared heading scanner")
+verify(scannerTitleDocument.resolvedTitle == "Scanner Title", "Setext first heading should become the resolved title")
+verify(scannerTitleDocument.resolvedTitleSource == .firstHeading, "Setext first heading should be the title source")
 
 let suiteName = "OpenMarkedVerifier-\(UUID().uuidString)"
 guard let userDefaults = UserDefaults(suiteName: suiteName) else {
@@ -512,6 +531,7 @@ let renderer = CMarkGFMRenderer()
 let renderResult = try renderer.render(RenderRequest(document: markdownDocument))
 verify(renderResult.rendererName == "cmark-gfm", "renderer name should identify cmark-gfm")
 verify(markdownDocument.displayTitle == "readme.md", "display title should remain file-oriented without front matter")
+verify(markdownDocument.firstHeadingTitle == "OpenMarked Fixture README", "document should store the first heading title at load time")
 verify(markdownDocument.resolvedTitle == "OpenMarked Fixture README", "resolved title should fall back to the first heading")
 verify(markdownDocument.resolvedTitleSource == .firstHeading, "first heading should be the resolved title source")
 verify(renderResult.bodyHTML.contains("<h1 id=\"openmarked-fixture-readme\">"), "headings should receive stable ids")

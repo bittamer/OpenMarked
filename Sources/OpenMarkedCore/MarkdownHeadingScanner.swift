@@ -3,22 +3,47 @@ import Foundation
 struct MarkdownHeadingIndex: Equatable, Sendable {
     let outline: [OutlineItem]
     let headingIDs: Set<String>
+    let firstHeadingTitle: String?
+    let occurrences: [MarkdownHeadingOccurrence]
 
-    static let empty = MarkdownHeadingIndex(outline: [], headingIDs: [])
+    static let empty = MarkdownHeadingIndex(outline: [], headingIDs: [], firstHeadingTitle: nil, occurrences: [])
+}
+
+struct MarkdownHeadingOccurrence: Equatable, Sendable {
+    let item: OutlineItem
+    let lineIndex: Int
+    let contentStartLineIndex: Int
 }
 
 enum MarkdownHeadingScanner {
+    static func firstHeadingTitle(in markdown: String) -> String? {
+        scan(markdown, mode: .firstHeadingTitle).firstHeadingTitle
+    }
+
     static func scan(_ markdown: String, slugStyle: HeadingSlugStyle = .openMarked) -> MarkdownHeadingIndex {
+        scan(markdown, slugStyle: slugStyle, mode: .all)
+    }
+
+    private static func scan(
+        _ markdown: String,
+        slugStyle: HeadingSlugStyle = .openMarked,
+        mode: ScanMode
+    ) -> MarkdownHeadingIndex {
         guard !markdown.isEmpty else {
             return .empty
         }
 
         var outline: [OutlineItem] = []
+        var occurrences: [MarkdownHeadingOccurrence] = []
         var usedSlugs: [String: Int] = [:]
         var fence: Fence?
-        var setextCandidate: String?
+        var setextCandidate: SetextCandidate?
+        var firstHeadingTitle: String?
+        var lineIndex = 0
 
-        markdown.enumerateSubstrings(in: markdown.startIndex..<markdown.endIndex, options: [.byLines, .substringNotRequired]) { _, lineRange, _, _ in
+        markdown.enumerateSubstrings(in: markdown.startIndex..<markdown.endIndex, options: [.byLines, .substringNotRequired]) { _, lineRange, _, stop in
+            defer { lineIndex += 1 }
+
             let line = String(markdown[lineRange])
             let indented = IndentedLine(line)
 
@@ -32,65 +57,170 @@ enum MarkdownHeadingScanner {
                 return
             }
 
-            if appendRawHTMLHeadings(from: line, to: &outline, usedSlugs: &usedSlugs, slugStyle: slugStyle) {
+            if appendRawHTMLHeadings(
+                from: line,
+                lineIndex: lineIndex,
+                to: &outline,
+                occurrences: &occurrences,
+                firstHeadingTitle: &firstHeadingTitle,
+                usedSlugs: &usedSlugs,
+                slugStyle: slugStyle
+            ) {
                 setextCandidate = nil
+                stop = shouldStopScanning(mode: mode, firstHeadingTitle: firstHeadingTitle)
                 return
             }
 
             if let heading = atxHeading(from: indented) {
-                append(title: heading.title, level: heading.level, to: &outline, usedSlugs: &usedSlugs, slugStyle: slugStyle)
+                append(
+                    title: heading.title,
+                    level: heading.level,
+                    lineIndex: lineIndex,
+                    contentStartLineIndex: lineIndex + 1,
+                    to: &outline,
+                    occurrences: &occurrences,
+                    firstHeadingTitle: &firstHeadingTitle,
+                    usedSlugs: &usedSlugs,
+                    slugStyle: slugStyle
+                )
                 setextCandidate = nil
+                stop = shouldStopScanning(mode: mode, firstHeadingTitle: firstHeadingTitle)
                 return
             }
 
             if let level = setextLevel(from: indented), let candidate = setextCandidate {
-                append(title: candidate, level: level, to: &outline, usedSlugs: &usedSlugs, slugStyle: slugStyle)
+                append(
+                    title: candidate.title,
+                    level: level,
+                    lineIndex: candidate.lineIndex,
+                    contentStartLineIndex: lineIndex + 1,
+                    to: &outline,
+                    occurrences: &occurrences,
+                    firstHeadingTitle: &firstHeadingTitle,
+                    usedSlugs: &usedSlugs,
+                    slugStyle: slugStyle
+                )
                 setextCandidate = nil
+                stop = shouldStopScanning(mode: mode, firstHeadingTitle: firstHeadingTitle)
                 return
             }
 
-            setextCandidate = nextSetextCandidate(from: indented)
+            setextCandidate = nextSetextCandidate(from: indented, lineIndex: lineIndex)
         }
 
-        return MarkdownHeadingIndex(outline: outline, headingIDs: Set(outline.map(\.id)))
+        return MarkdownHeadingIndex(
+            outline: outline,
+            headingIDs: Set(outline.map(\.id)),
+            firstHeadingTitle: firstHeadingTitle,
+            occurrences: occurrences
+        )
+    }
+
+    static func containsSingleLineHeading(_ line: String) -> Bool {
+        let indented = IndentedLine(line)
+        if atxHeading(from: indented) != nil {
+            return true
+        }
+        return rawHTMLHeading(in: line) != nil
+    }
+
+    private static func shouldStopScanning(mode: ScanMode, firstHeadingTitle: String?) -> Bool {
+        mode == .firstHeadingTitle && firstHeadingTitle != nil
     }
 
     private static func append(
         title rawTitle: String,
         level: Int,
+        lineIndex: Int,
+        contentStartLineIndex: Int,
         to outline: inout [OutlineItem],
+        occurrences: inout [MarkdownHeadingOccurrence],
+        firstHeadingTitle: inout String?,
         usedSlugs: inout [String: Int],
         slugStyle: HeadingSlugStyle
     ) {
         let title = markdownPlainText(rawTitle)
         let id = uniqueSlug(for: title, slugStyle: slugStyle, usedSlugs: &usedSlugs)
-        outline.append(OutlineItem(id: id, level: level, title: title.isEmpty ? "Untitled Heading" : title))
+        append(
+            item: OutlineItem(id: id, level: level, title: title.isEmpty ? "Untitled Heading" : title),
+            documentTitle: title.isEmpty ? nil : title,
+            lineIndex: lineIndex,
+            contentStartLineIndex: contentStartLineIndex,
+            to: &outline,
+            occurrences: &occurrences,
+            firstHeadingTitle: &firstHeadingTitle
+        )
     }
 
     private static func appendRawHTMLHeadings(
         from line: String,
+        lineIndex: Int,
         to outline: inout [OutlineItem],
+        occurrences: inout [MarkdownHeadingOccurrence],
+        firstHeadingTitle: inout String?,
         usedSlugs: inout [String: Int],
         slugStyle: HeadingSlugStyle
     ) -> Bool {
         var appended = false
 
-        for tag in HTMLTagScanner.tags(in: line) where tag.name.count == 2 && tag.name.first == "h" {
-            guard
-                let level = Int(String(tag.name.suffix(1))),
-                (1...6).contains(level),
-                let closingStart = HTMLTagScanner.closingTagStart(named: tag.name, in: line, from: tag.range.upperBound)
-            else {
-                continue
-            }
-
-            let title = HTMLUtilities.plainText(fromHTMLFragment: String(line[tag.range.upperBound..<closingStart]))
-            let id = tag.attributeValue(named: "id") ?? uniqueSlug(for: title, slugStyle: slugStyle, usedSlugs: &usedSlugs)
-            outline.append(OutlineItem(id: id, level: level, title: title.isEmpty ? "Untitled Heading" : title))
+        for heading in rawHTMLHeadings(in: line) {
+            let id = heading.id ?? uniqueSlug(for: heading.title, slugStyle: slugStyle, usedSlugs: &usedSlugs)
+            append(
+                item: OutlineItem(id: id, level: heading.level, title: heading.title.isEmpty ? "Untitled Heading" : heading.title),
+                documentTitle: heading.title.isEmpty ? nil : heading.title,
+                lineIndex: lineIndex,
+                contentStartLineIndex: lineIndex + 1,
+                to: &outline,
+                occurrences: &occurrences,
+                firstHeadingTitle: &firstHeadingTitle
+            )
             appended = true
         }
 
         return appended
+    }
+
+    private static func append(
+        item: OutlineItem,
+        documentTitle: String?,
+        lineIndex: Int,
+        contentStartLineIndex: Int,
+        to outline: inout [OutlineItem],
+        occurrences: inout [MarkdownHeadingOccurrence],
+        firstHeadingTitle: inout String?
+    ) {
+        outline.append(item)
+        occurrences.append(
+            MarkdownHeadingOccurrence(
+                item: item,
+                lineIndex: lineIndex,
+                contentStartLineIndex: contentStartLineIndex
+            )
+        )
+        if firstHeadingTitle == nil {
+            firstHeadingTitle = documentTitle
+        }
+    }
+
+    private static func rawHTMLHeading(in line: String) -> (level: Int, title: String, id: String?)? {
+        rawHTMLHeadings(in: line).first
+    }
+
+    private static func rawHTMLHeadings(in line: String) -> [(level: Int, title: String, id: String?)] {
+        HTMLTagScanner.tags(in: line).compactMap { tag in
+            guard
+                tag.name.count == 2,
+                tag.name.first == "h",
+                let level = Int(String(tag.name.suffix(1))),
+                (1...6).contains(level),
+                let closingStart = HTMLTagScanner.closingTagStart(named: tag.name, in: line, from: tag.range.upperBound)
+            else {
+                return nil
+            }
+
+            let title = HTMLUtilities.plainText(fromHTMLFragment: String(line[tag.range.upperBound..<closingStart]))
+            return (level, title, tag.attributeValue(named: "id"))
+        }
     }
 
     private static func atxHeading(from line: IndentedLine) -> (level: Int, title: String)? {
@@ -134,7 +264,7 @@ enum MarkdownHeadingScanner {
         return first == "=" ? 1 : 2
     }
 
-    private static func nextSetextCandidate(from line: IndentedLine) -> String? {
+    private static func nextSetextCandidate(from line: IndentedLine, lineIndex: Int) -> SetextCandidate? {
         guard line.indentation <= 3 else {
             return nil
         }
@@ -144,7 +274,7 @@ enum MarkdownHeadingScanner {
             return nil
         }
 
-        return trimmed
+        return SetextCandidate(title: trimmed, lineIndex: lineIndex)
     }
 
     private static func updatedFence(from line: IndentedLine, current: Fence?) -> Fence? {
@@ -188,6 +318,16 @@ enum MarkdownHeadingScanner {
         let priorCount = usedSlugs[base, default: 0]
         usedSlugs[base] = priorCount + 1
         return priorCount == 0 ? base : "\(base)-\(priorCount)"
+    }
+
+    private struct SetextCandidate {
+        let title: String
+        let lineIndex: Int
+    }
+
+    private enum ScanMode {
+        case all
+        case firstHeadingTitle
     }
 
     private struct IndentedLine {

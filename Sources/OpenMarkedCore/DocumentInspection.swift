@@ -929,90 +929,30 @@ public enum DocumentInspectionBuilder {
         in markdown: String,
         outline: [OutlineItem]
     ) -> [DocumentSectionStatistic] {
-        struct SectionAccumulator {
-            let id: String
-            let title: String
-            let level: Int
-            var lines: [String]
+        let headingIndex = MarkdownHeadingScanner.scan(markdown)
+        guard !headingIndex.occurrences.isEmpty else {
+            return []
         }
 
-        var sections: [DocumentSectionStatistic] = []
-        var currentSection: SectionAccumulator?
-        var headingIndex = 0
-        var isInFence = false
+        let lines = markdown.components(separatedBy: "\n")
+        let occurrences = headingIndex.occurrences
+        return occurrences.indices.map { index in
+            let occurrence = occurrences[index]
+            let outlineItem = index < outline.count ? outline[index] : occurrence.item
+            let outlineTitle = outlineItem.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let nextHeadingLine = index + 1 < occurrences.count ? occurrences[index + 1].lineIndex : lines.count
+            let sectionStart = min(occurrence.contentStartLineIndex, lines.count)
+            let sectionEnd = min(max(nextHeadingLine, sectionStart), lines.count)
+            let sectionMarkdown = lines[sectionStart..<sectionEnd].joined(separator: "\n")
 
-        func flushSection() {
-            guard let section = currentSection else {
-                return
-            }
-            let sectionMarkdown = section.lines.joined(separator: "\n")
-            sections.append(
-                DocumentSectionStatistic(
-                    id: section.id,
-                    title: section.title,
-                    level: section.level,
-                    wordCount: DocumentStatisticsCalculator.wordCount(in: sectionMarkdown),
-                    paragraphCount: countMarkdownParagraphs(in: sectionMarkdown)
-                )
+            return DocumentSectionStatistic(
+                id: outlineItem.id,
+                title: outlineTitle.isEmpty ? occurrence.item.title : outlineTitle,
+                level: outlineItem.level,
+                wordCount: DocumentStatisticsCalculator.wordCount(in: sectionMarkdown),
+                paragraphCount: countMarkdownParagraphs(in: sectionMarkdown)
             )
-            currentSection = nil
         }
-
-        for rawLine in markdown.components(separatedBy: "\n") {
-            let trimmedLine = rawLine.trimmingCharacters(in: .whitespaces)
-            if isFenceLine(trimmedLine) {
-                currentSection?.lines.append(rawLine)
-                isInFence.toggle()
-                continue
-            }
-
-            if !isInFence, let heading = parseMarkdownHeading(trimmedLine) {
-                flushSection()
-                let outlineItem = headingIndex < outline.count ? outline[headingIndex] : nil
-                let outlineTitle = outlineItem?.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                currentSection = SectionAccumulator(
-                    id: outlineItem?.id ?? "section-\(headingIndex + 1)",
-                    title: outlineTitle.flatMap { $0.isEmpty ? nil : $0 } ?? heading.title,
-                    level: outlineItem?.level ?? heading.level,
-                    lines: []
-                )
-                headingIndex += 1
-            } else {
-                currentSection?.lines.append(rawLine)
-            }
-        }
-
-        flushSection()
-        return sections
-    }
-
-    private static func parseMarkdownHeading(_ trimmedLine: String) -> (level: Int, title: String)? {
-        guard trimmedLine.first == Character("#") else {
-            return nil
-        }
-
-        let level = trimmedLine.prefix { $0 == Character("#") }.count
-        guard (1...6).contains(level),
-              trimmedLine.dropFirst(level).first?.isWhitespace == true
-        else {
-            return nil
-        }
-
-        var title = String(trimmedLine.dropFirst(level))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: #"\s+#+\s*$"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        title = normalizedSectionHeadingTitle(title)
-
-        return title.isEmpty ? nil : (level, title)
-    }
-
-    private static func normalizedSectionHeadingTitle(_ title: String) -> String {
-        title
-            .replacingOccurrences(of: #"`([^`]*)`"#, with: "$1", options: .regularExpression)
-            .replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
-            .replacingOccurrences(of: #"[*_~]"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func countMarkdownParagraphs(in markdown: String) -> Int {
@@ -1057,7 +997,7 @@ public enum DocumentInspectionBuilder {
             || trimmedLine.hasPrefix("<")
             || trimmedLine == "---"
             || trimmedLine == "***"
-            || parseMarkdownHeading(trimmedLine) != nil
+            || MarkdownHeadingScanner.containsSingleLineHeading(trimmedLine)
     }
 
     private static func isFenceLine(_ trimmedLine: String) -> Bool {

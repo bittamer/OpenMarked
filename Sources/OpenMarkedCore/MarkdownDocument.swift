@@ -14,6 +14,7 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
     public let bodyText: String
     public let frontMatter: FrontMatter?
     public let frontMatterDiagnostics: [RenderDiagnostic]
+    public let firstHeadingTitle: String?
     public let metadata: DocumentFileMetadata
     public let statistics: DocumentStatistics
     public let loadedAt: Date
@@ -25,6 +26,7 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
         bodyText: String,
         frontMatter: FrontMatter?,
         frontMatterDiagnostics: [RenderDiagnostic] = [],
+        firstHeadingTitle: String? = nil,
         metadata: DocumentFileMetadata,
         statistics: DocumentStatistics,
         loadedAt: Date,
@@ -36,6 +38,7 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
         self.bodyText = bodyText
         self.frontMatter = frontMatter
         self.frontMatterDiagnostics = frontMatterDiagnostics
+        self.firstHeadingTitle = firstHeadingTitle
         self.metadata = metadata
         self.statistics = statistics
         self.loadedAt = loadedAt
@@ -71,9 +74,6 @@ public struct MarkdownDocument: Equatable, Identifiable, Sendable {
         return .fileName
     }
 
-    public var firstHeadingTitle: String? {
-        MarkdownDocumentTitleResolver.firstHeadingTitle(in: bodyText)
-    }
 }
 
 public struct DocumentFileMetadata: Equatable, Sendable {
@@ -271,6 +271,7 @@ public enum MarkdownDocumentLoader {
 
         let normalizedText = try decodeUTF8(data: data, url: url)
         let parsedFrontMatter = FrontMatterParser.parse(normalizedText)
+        let firstHeadingTitle = MarkdownHeadingScanner.firstHeadingTitle(in: parsedFrontMatter.bodyText)
         let metadata = try readMetadata(for: url, fileManager: fileManager)
         let statistics = DocumentStatisticsCalculator.calculate(bodyText: parsedFrontMatter.bodyText)
         let bookmark = createBookmark ? try? SecurityScopedBookmarkStore.makeBookmark(for: url) : nil
@@ -281,6 +282,7 @@ public enum MarkdownDocumentLoader {
             bodyText: parsedFrontMatter.bodyText,
             frontMatter: parsedFrontMatter.frontMatter,
             frontMatterDiagnostics: parsedFrontMatter.diagnostics,
+            firstHeadingTitle: firstHeadingTitle,
             metadata: metadata,
             statistics: statistics,
             loadedAt: loadedAt,
@@ -341,28 +343,11 @@ public struct FrontMatterParseResult: Equatable, Sendable {
 
 public enum FrontMatterParser {
     public static func parse(_ sourceText: String) -> FrontMatterParseResult {
-        if let parsed = parse(sourceText, delimiter: "---", format: .yaml) {
-            return parsed
+        guard let opening = openingDelimiter(in: sourceText) else {
+            return FrontMatterParseResult(frontMatter: nil, bodyText: sourceText)
         }
 
-        if let parsed = parse(sourceText, delimiter: "+++", format: .toml) {
-            return parsed
-        }
-
-        if let parsed = parse(sourceText, delimiter: ";;;", format: .json) {
-            return parsed
-        }
-
-        return FrontMatterParseResult(frontMatter: nil, bodyText: sourceText)
-    }
-
-    private static func parse(_ sourceText: String, delimiter: String, format: FrontMatterFormat) -> FrontMatterParseResult? {
-        let lines = sourceText.components(separatedBy: "\n")
-        guard lines.first == delimiter else {
-            return nil
-        }
-
-        guard let closingIndex = lines.dropFirst().firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == delimiter }) else {
+        guard let closing = closingDelimiter(in: sourceText, after: opening.bodyStart, delimiter: opening.delimiter) else {
             return FrontMatterParseResult(
                 frontMatter: nil,
                 bodyText: sourceText,
@@ -370,27 +355,86 @@ public enum FrontMatterParser {
                     RenderDiagnostic(
                         severity: .warning,
                         kind: .malformedFrontMatter,
-                        message: "Front matter opened with '\(delimiter)' but no closing delimiter was found.",
-                        source: delimiter
+                        message: "Front matter opened with '\(opening.delimiter)' but no closing delimiter was found.",
+                        source: opening.delimiter
                     )
                 ]
             )
         }
 
-        let raw = lines[1..<closingIndex].joined(separator: "\n")
-        let bodyText: String
-        if closingIndex + 1 < lines.count {
-            bodyText = lines[(closingIndex + 1)..<lines.count].joined(separator: "\n")
-        } else {
-            bodyText = ""
-        }
+        let raw = String(sourceText[opening.bodyStart..<closing.rawEnd])
+        let bodyText = String(sourceText[closing.bodyStart...])
 
-        let parsedValues = parseValues(raw, format: format)
+        let parsedValues = parseValues(raw, format: opening.format)
         return FrontMatterParseResult(
-            frontMatter: FrontMatter(format: format, raw: raw, values: parsedValues.values),
+            frontMatter: FrontMatter(format: opening.format, raw: raw, values: parsedValues.values),
             bodyText: bodyText,
             diagnostics: parsedValues.diagnostics
         )
+    }
+
+    private static func openingDelimiter(
+        in sourceText: String
+    ) -> (delimiter: String, format: FrontMatterFormat, bodyStart: String.Index)? {
+        let lineEnd = sourceText.firstIndex(of: "\n") ?? sourceText.endIndex
+        let firstLine = sourceText[..<lineEnd]
+
+        let delimiter: String
+        let format: FrontMatterFormat
+        switch firstLine {
+        case "---":
+            delimiter = "---"
+            format = .yaml
+        case "+++":
+            delimiter = "+++"
+            format = .toml
+        case ";;;":
+            delimiter = ";;;"
+            format = .json
+        default:
+            return nil
+        }
+
+        let bodyStart = lineEnd < sourceText.endIndex ? sourceText.index(after: lineEnd) : sourceText.endIndex
+        return (delimiter, format, bodyStart)
+    }
+
+    private static func closingDelimiter(
+        in sourceText: String,
+        after start: String.Index,
+        delimiter: String
+    ) -> (rawEnd: String.Index, bodyStart: String.Index)? {
+        var lineStart = start
+
+        while lineStart < sourceText.endIndex {
+            let lineEnd = sourceText[lineStart...].firstIndex(of: "\n") ?? sourceText.endIndex
+            let line = sourceText[lineStart..<lineEnd]
+            if line.trimmingCharacters(in: .whitespaces) == delimiter {
+                let rawEnd = rawEnd(beforeClosingDelimiterAt: lineStart, contentStart: start, in: sourceText)
+                let bodyStart = lineEnd < sourceText.endIndex ? sourceText.index(after: lineEnd) : sourceText.endIndex
+                return (rawEnd, bodyStart)
+            }
+
+            guard lineEnd < sourceText.endIndex else {
+                break
+            }
+            lineStart = sourceText.index(after: lineEnd)
+        }
+
+        return nil
+    }
+
+    private static func rawEnd(
+        beforeClosingDelimiterAt closingStart: String.Index,
+        contentStart: String.Index,
+        in sourceText: String
+    ) -> String.Index {
+        guard closingStart > contentStart else {
+            return closingStart
+        }
+
+        let previous = sourceText.index(before: closingStart)
+        return sourceText[previous] == "\n" ? previous : closingStart
     }
 
     private static func parseValues(_ raw: String, format: FrontMatterFormat) -> (values: [String: String], diagnostics: [RenderDiagnostic]) {
@@ -544,53 +588,6 @@ public enum FrontMatterParser {
         default:
             return "\(value)"
         }
-    }
-}
-
-private enum MarkdownDocumentTitleResolver {
-    static func firstHeadingTitle(in bodyText: String) -> String? {
-        var isInFence = false
-
-        for rawLine in bodyText.components(separatedBy: "\n") {
-            let trimmedLine = rawLine.trimmingCharacters(in: .whitespaces)
-            if trimmedLine.hasPrefix("```") || trimmedLine.hasPrefix("~~~") {
-                isInFence.toggle()
-                continue
-            }
-
-            guard !isInFence, trimmedLine.hasPrefix("#") else {
-                continue
-            }
-
-            let hashCount = trimmedLine.prefix(while: { $0 == "#" }).count
-            guard hashCount > 0, hashCount <= 6 else {
-                continue
-            }
-
-            let remainderStart = trimmedLine.index(trimmedLine.startIndex, offsetBy: hashCount)
-            guard remainderStart < trimmedLine.endIndex, trimmedLine[remainderStart].isWhitespace else {
-                continue
-            }
-
-            let rawTitle = String(trimmedLine[remainderStart...])
-                .trimmingCharacters(in: .whitespaces)
-                .replacingOccurrences(of: #"\s+#+\s*$"#, with: "", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let title = normalizedHeadingTitle(rawTitle)
-            if !title.isEmpty {
-                return title
-            }
-        }
-
-        return nil
-    }
-
-    private static func normalizedHeadingTitle(_ title: String) -> String {
-        title
-            .replacingOccurrences(of: #"`([^`]*)`"#, with: "$1", options: .regularExpression)
-            .replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
-            .replacingOccurrences(of: #"[*_~]"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

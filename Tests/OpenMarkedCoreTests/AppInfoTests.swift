@@ -175,6 +175,7 @@ final class AppInfoTests: XCTestCase {
 
         XCTAssertTrue(document.sourceText.contains("# OpenMarked Fixture README"))
         XCTAssertNil(document.frontMatter)
+        XCTAssertEqual(document.firstHeadingTitle, "OpenMarked Fixture README")
         XCTAssertGreaterThan(document.statistics.wordCount, 0)
         XCTAssertGreaterThan(document.metadata.fileSize, 0)
     }
@@ -188,7 +189,30 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(document.displayTitle, "Fixture With Front Matter")
         XCTAssertEqual(document.resolvedTitle, "Fixture With Front Matter")
         XCTAssertEqual(document.resolvedTitleSource, .frontMatter)
+        XCTAssertEqual(document.firstHeadingTitle, "Body Heading")
         XCTAssertFalse(document.bodyText.contains("description: Metadata"))
+    }
+
+    func testDocumentTitleUsesStoredMarkdownHeadingScannerMetadata() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-setext-title-\(UUID().uuidString).md")
+        try """
+        ```swift
+        # Ignored Fence Heading
+        ```
+
+        Scanner Title
+        =============
+
+        Body text.
+        """.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+
+        XCTAssertEqual(document.firstHeadingTitle, "Scanner Title")
+        XCTAssertEqual(document.resolvedTitle, "Scanner Title")
+        XCTAssertEqual(document.resolvedTitleSource, .firstHeading)
     }
 
     func testTitleFallsBackToFirstHeadingForPreviewAndExport() throws {
@@ -2022,6 +2046,7 @@ struct AppInfoTests {
 
         #expect(document.sourceText.contains("# OpenMarked Fixture README"))
         #expect(document.frontMatter == nil)
+        #expect(document.firstHeadingTitle == "OpenMarked Fixture README")
         #expect(document.statistics.wordCount > 0)
         #expect(document.metadata.fileSize > 0)
     }
@@ -2072,7 +2097,31 @@ struct AppInfoTests {
         #expect(document.frontMatter?.format == .yaml)
         #expect(document.frontMatter?.title == "Fixture With Front Matter")
         #expect(document.displayTitle == "Fixture With Front Matter")
+        #expect(document.firstHeadingTitle == "Body Heading")
         #expect(!document.bodyText.contains("description: Metadata"))
+    }
+
+    @Test("Document title uses stored Markdown heading scanner metadata")
+    func documentTitleUsesStoredMarkdownHeadingScannerMetadata() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("openmarked-setext-title-\(UUID().uuidString).md")
+        try """
+        ```swift
+        # Ignored Fence Heading
+        ```
+
+        Scanner Title
+        =============
+
+        Body text.
+        """.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+
+        #expect(document.firstHeadingTitle == "Scanner Title")
+        #expect(document.resolvedTitle == "Scanner Title")
+        #expect(document.resolvedTitleSource == .firstHeading)
     }
 
     @Test("cmark-gfm renderer renders README fixture")

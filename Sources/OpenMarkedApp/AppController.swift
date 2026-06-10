@@ -71,7 +71,11 @@ final class AppController: ObservableObject {
             return PreviewThemeStore.builtInTheme(id: id)
         }
 
-        return userPreviewThemeStore.previewTheme(id: id) ?? PreviewThemeStore.defaultTheme
+        guard let userTheme = userPreviewThemes.first(where: { $0.id == id }) else {
+            return PreviewThemeStore.defaultTheme
+        }
+
+        return userPreviewThemeStore.previewTheme(for: userTheme)
     }
 
     func registerWindowController(_ controller: DocumentWindowController) {

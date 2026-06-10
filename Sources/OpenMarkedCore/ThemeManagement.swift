@@ -81,6 +81,8 @@ public final class UserPreviewThemeStore: @unchecked Sendable {
     private let userDefaults: UserDefaults
     private let metadataKey: String
     private let fileManager: FileManager
+    private let previewThemeCacheLock = NSLock()
+    private var previewThemeCache: [String: CachedPreviewTheme] = [:]
 
     public init(
         userDefaults: UserDefaults = .standard,
@@ -122,6 +124,7 @@ public final class UserPreviewThemeStore: @unchecked Sendable {
         }
 
         userDefaults.set(data, forKey: metadataKey)
+        invalidatePreviewThemeCache()
     }
 
     @discardableResult
@@ -212,12 +215,23 @@ public final class UserPreviewThemeStore: @unchecked Sendable {
     }
 
     public func previewTheme(for userTheme: UserPreviewTheme) -> PreviewTheme {
+        let signature = UserThemeCSSSignature(theme: userTheme, fileManager: fileManager)
+
+        previewThemeCacheLock.lock()
+        if let cached = previewThemeCache[userTheme.id],
+           cached.userTheme == userTheme,
+           cached.signature == signature {
+            previewThemeCacheLock.unlock()
+            return cached.previewTheme
+        }
+        previewThemeCacheLock.unlock()
+
         let fallbackTheme = PreviewThemeStore.defaultTheme
         let screenCSS = validatedCSS(atPath: userTheme.screenCSSPath) ?? fallbackTheme.screenCSS
         let codeCSS = userTheme.codeCSSPath.flatMap(validatedCSS(atPath:)) ?? fallbackTheme.codeHighlightingCSS
         let printCSS = userTheme.printCSSPath.flatMap(validatedCSS(atPath:)) ?? fallbackTheme.printCSS
 
-        return PreviewTheme(
+        let previewTheme = PreviewTheme(
             id: userTheme.id,
             name: userTheme.name,
             screenCSS: screenCSS,
@@ -226,6 +240,16 @@ public final class UserPreviewThemeStore: @unchecked Sendable {
             supportsDarkMode: true,
             defaultMaxWidth: min(1_400, max(560, userTheme.defaultMaxWidth))
         )
+
+        previewThemeCacheLock.lock()
+        previewThemeCache[userTheme.id] = CachedPreviewTheme(
+            userTheme: userTheme,
+            signature: signature,
+            previewTheme: previewTheme
+        )
+        previewThemeCacheLock.unlock()
+
+        return previewTheme
     }
 
     public func previewTheme(id themeID: String) -> PreviewTheme? {
@@ -327,6 +351,56 @@ public final class UserPreviewThemeStore: @unchecked Sendable {
         }
 
         try? fileManager.removeItem(at: url)
+    }
+
+    private func invalidatePreviewThemeCache() {
+        previewThemeCacheLock.lock()
+        previewThemeCache.removeAll()
+        previewThemeCacheLock.unlock()
+    }
+
+    private struct CachedPreviewTheme {
+        let userTheme: UserPreviewTheme
+        let signature: UserThemeCSSSignature
+        let previewTheme: PreviewTheme
+    }
+
+    private struct UserThemeCSSSignature: Equatable {
+        let screen: ThemeFileSignature
+        let code: ThemeFileSignature?
+        let print: ThemeFileSignature?
+
+        init(theme: UserPreviewTheme, fileManager: FileManager) {
+            screen = ThemeFileSignature(path: theme.screenCSSPath, fileManager: fileManager)
+            code = theme.codeCSSPath.map { ThemeFileSignature(path: $0, fileManager: fileManager) }
+            print = theme.printCSSPath.map { ThemeFileSignature(path: $0, fileManager: fileManager) }
+        }
+    }
+
+    private struct ThemeFileSignature: Equatable {
+        let path: String
+        let exists: Bool
+        let fileSize: UInt64?
+        let modifiedAt: Date?
+
+        init(path: String, fileManager: FileManager) {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            self.path = url.path
+
+            guard
+                let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+                let size = attributes[.size] as? NSNumber
+            else {
+                exists = false
+                fileSize = nil
+                modifiedAt = nil
+                return
+            }
+
+            exists = true
+            fileSize = size.uint64Value
+            modifiedAt = attributes[.modificationDate] as? Date
+        }
     }
 
     private static func defaultThemesDirectoryURL(fileManager: FileManager) -> URL {

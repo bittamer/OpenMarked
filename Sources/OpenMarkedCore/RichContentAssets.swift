@@ -62,6 +62,21 @@ public struct RichContentAssetManifest: Equatable, Sendable {
 }
 
 public enum RichContentAssetStore {
+    private static let resourceCache = RichContentResourceCache()
+    private static let cachedKaTeXFontURLs = uncachedKaTeXFontURLs()
+    private static let cachedKaTeXHTMLCSS = Result<String, Error> {
+        var css = try katexCSS()
+
+        for fontURL in katexFontURLs() {
+            css = css.replacingOccurrences(
+                of: "url(fonts/\(fontURL.lastPathComponent))",
+                with: "url('\(fontURL.absoluteString)')"
+            )
+        }
+
+        return css
+    }
+
     public static let mermaidPackage = RichContentPackage(
         name: "mermaid",
         version: "11.15.0",
@@ -113,11 +128,15 @@ public enum RichContentAssetStore {
     }
 
     public static func resourceString(_ relativePath: String) throws -> String {
-        let url = try requiredResourceURL(relativePath)
-        do {
-            return try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            throw RichContentAssetError.unreadableResource(relativePath)
+        try resourceCache.string(relativePath) {
+            do {
+                let url = try requiredResourceURL(relativePath)
+                return .success(try String(contentsOf: url, encoding: .utf8))
+            } catch let error as RichContentAssetError {
+                return .failure(error)
+            } catch {
+                return .failure(RichContentAssetError.unreadableResource(relativePath))
+            }
         }
     }
 
@@ -134,16 +153,7 @@ public enum RichContentAssetStore {
     }
 
     public static func katexCSSForHTML() throws -> String {
-        var css = try katexCSS()
-
-        for fontURL in katexFontURLs() {
-            css = css.replacingOccurrences(
-                of: "url(fonts/\(fontURL.lastPathComponent))",
-                with: "url('\(fontURL.absoluteString)')"
-            )
-        }
-
-        return css
+        try cachedKaTeXHTMLCSS.get()
     }
 
     public static func openMarkedRuntimeJavaScript() throws -> String {
@@ -155,6 +165,10 @@ public enum RichContentAssetStore {
     }
 
     public static func katexFontURLs() -> [URL] {
+        cachedKaTeXFontURLs
+    }
+
+    private static func uncachedKaTeXFontURLs() -> [URL] {
         guard let resourceURL = Bundle.module.resourceURL else {
             return []
         }
@@ -176,6 +190,24 @@ public enum RichContentAssetStore {
 
     private static func resourceExists(_ relativePath: String) -> Bool {
         (try? requiredResourceURL(relativePath)) != nil
+    }
+}
+
+private final class RichContentResourceCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var strings: [String: Result<String, Error>] = [:]
+
+    func string(_ relativePath: String, loader: () -> Result<String, Error>) throws -> String {
+        lock.lock()
+        if let cached = strings[relativePath] {
+            lock.unlock()
+            return try cached.get()
+        }
+
+        let loaded = loader()
+        strings[relativePath] = loaded
+        lock.unlock()
+        return try loaded.get()
     }
 }
 
@@ -216,21 +248,23 @@ public enum RichContentHTMLAssets {
 
 public enum RichContentRuntimeAssembler {
     public static let defaultTimeoutMilliseconds = 4_000
+    private static let runtimeScriptCache = RichContentRuntimeScriptCache()
 
     public static func runtimeScripts(for state: RichMarkdownRenderState) throws -> [String] {
         guard state.requiresRichContentRuntime else {
             return []
         }
 
-        var scripts = [try RichContentAssetStore.openMarkedRuntimeJavaScript()]
-        if state.requiresMermaidRuntime {
-            scripts.append(try RichContentAssetStore.mermaidRuntimeJavaScript())
+        return try runtimeScriptCache.scripts(for: state) {
+            var scripts = [try RichContentAssetStore.openMarkedRuntimeJavaScript()]
+            if state.requiresMermaidRuntime {
+                scripts.append(try RichContentAssetStore.mermaidRuntimeJavaScript())
+            }
+            if state.requiresMathRuntime {
+                scripts.append(try RichContentAssetStore.katexRuntimeJavaScript())
+            }
+            return scripts
         }
-        if state.requiresMathRuntime {
-            scripts.append(try RichContentAssetStore.katexRuntimeJavaScript())
-        }
-
-        return scripts
     }
 
     public static func invocationScript(for state: RichMarkdownRenderState) -> String {
@@ -275,5 +309,30 @@ public enum RichContentRuntimeAssembler {
         const result = await window.openMarkedRichContent.waitUntilReady(\(timeoutMilliseconds));
         return JSON.stringify(result);
         """
+    }
+}
+
+private final class RichContentRuntimeScriptCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var scriptsByFeatureKey: [String: Result<[String], Error>] = [:]
+
+    func scripts(for state: RichMarkdownRenderState, loader: () throws -> [String]) throws -> [String] {
+        let key = [
+            state.requiresMermaidRuntime ? "mermaid" : nil,
+            state.requiresMathRuntime ? "math" : nil
+        ]
+            .compactMap { $0 }
+            .joined(separator: "|")
+
+        lock.lock()
+        if let cached = scriptsByFeatureKey[key] {
+            lock.unlock()
+            return try cached.get()
+        }
+
+        let loaded = Result<[String], Error> { try loader() }
+        scriptsByFeatureKey[key] = loaded
+        lock.unlock()
+        return try loaded.get()
     }
 }

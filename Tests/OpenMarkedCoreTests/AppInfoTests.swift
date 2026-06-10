@@ -1201,6 +1201,13 @@ final class AppInfoTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: imported.screenCSSPath))
         XCTAssertTrue(store.previewTheme(for: imported).screenCSS.contains("#123456"))
 
+        try "body { color: #654321; background: #abcdef; }\n".write(
+            to: URL(fileURLWithPath: imported.screenCSSPath),
+            atomically: true,
+            encoding: .utf8
+        )
+        XCTAssertTrue(store.previewTheme(for: imported).screenCSS.contains("#654321"))
+
         let reloadedStore = UserPreviewThemeStore(userDefaults: userDefaults, metadataKey: "Themes", themesDirectoryURL: managedURL)
         XCTAssertEqual(reloadedStore.load(), [imported])
 
@@ -2437,6 +2444,13 @@ struct AppInfoTests {
         #expect(store.load() == [imported])
         #expect(FileManager.default.fileExists(atPath: imported.screenCSSPath))
         #expect(store.previewTheme(for: imported).screenCSS.contains("#123456"))
+
+        try "body { color: #654321; background: #abcdef; }\n".write(
+            to: URL(fileURLWithPath: imported.screenCSSPath),
+            atomically: true,
+            encoding: .utf8
+        )
+        #expect(store.previewTheme(for: imported).screenCSS.contains("#654321"))
 
         let reloadedStore = UserPreviewThemeStore(userDefaults: userDefaults, metadataKey: "Themes", themesDirectoryURL: managedURL)
         #expect(reloadedStore.load() == [imported])

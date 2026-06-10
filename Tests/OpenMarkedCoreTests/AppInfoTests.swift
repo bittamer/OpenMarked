@@ -967,6 +967,55 @@ final class AppInfoTests: XCTestCase {
         XCTAssertFalse(result.diagnostics.contains { $0.source == "guide%20one.md?download=1#target-heading" })
     }
 
+    func testCrossDocumentHeadingValidationScansMarkdownWithoutRenderingTarget() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedHeadingScanner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let targetURL = directory.appendingPathComponent("target.md")
+        try """
+        ---
+        title: Target
+        ---
+
+        Setext Target
+        =============
+
+        Duplicate
+        ---------
+
+        Duplicate
+        ---------
+
+        ```
+        # Hidden Heading
+        ```
+
+        <h3 id="custom-html">HTML Heading</h3>
+        """.write(to: targetURL, atomically: true, encoding: .utf8)
+
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try """
+        # Source
+
+        [Setext](target.md#setext-target)
+        [Duplicate](target.md#duplicate)
+        [Duplicate 2](target.md#duplicate-1)
+        [HTML](target.md#custom-html)
+        [Hidden](target.md#hidden-heading)
+        """.write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        XCTAssertFalse(result.diagnostics.contains { $0.source == "target.md#setext-target" })
+        XCTAssertFalse(result.diagnostics.contains { $0.source == "target.md#duplicate" })
+        XCTAssertFalse(result.diagnostics.contains { $0.source == "target.md#duplicate-1" })
+        XCTAssertFalse(result.diagnostics.contains { $0.source == "target.md#custom-html" })
+        XCTAssertTrue(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#hidden-heading" })
+    }
+
     func testLinkValidationOptionsCanDisableLocalAndHeadingDiagnostics() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/broken-links.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -2139,6 +2188,56 @@ struct AppInfoTests {
         #expect(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "guide%20one.md#missing-heading" })
         #expect(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "source.md#missing-current" })
         #expect(!result.diagnostics.contains { $0.source == "guide%20one.md?download=1#target-heading" })
+    }
+
+    @Test("Cross-document heading validation scans Markdown without rendering target")
+    func crossDocumentHeadingValidationScansMarkdownWithoutRenderingTarget() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OpenMarkedHeadingScanner-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let targetURL = directory.appendingPathComponent("target.md")
+        try """
+        ---
+        title: Target
+        ---
+
+        Setext Target
+        =============
+
+        Duplicate
+        ---------
+
+        Duplicate
+        ---------
+
+        ```
+        # Hidden Heading
+        ```
+
+        <h3 id="custom-html">HTML Heading</h3>
+        """.write(to: targetURL, atomically: true, encoding: .utf8)
+
+        let sourceURL = directory.appendingPathComponent("source.md")
+        try """
+        # Source
+
+        [Setext](target.md#setext-target)
+        [Duplicate](target.md#duplicate)
+        [Duplicate 2](target.md#duplicate-1)
+        [HTML](target.md#custom-html)
+        [Hidden](target.md#hidden-heading)
+        """.write(to: sourceURL, atomically: true, encoding: .utf8)
+
+        let document = try MarkdownDocumentLoader.load(url: sourceURL, createBookmark: false)
+        let result = try CMarkGFMRenderer().render(RenderRequest(document: document))
+
+        #expect(!result.diagnostics.contains { $0.source == "target.md#setext-target" })
+        #expect(!result.diagnostics.contains { $0.source == "target.md#duplicate" })
+        #expect(!result.diagnostics.contains { $0.source == "target.md#duplicate-1" })
+        #expect(!result.diagnostics.contains { $0.source == "target.md#custom-html" })
+        #expect(result.diagnostics.contains { $0.kind == .missingHeadingFragment && $0.source == "target.md#hidden-heading" })
     }
 
     @Test("Link validation options can disable local and heading diagnostics")

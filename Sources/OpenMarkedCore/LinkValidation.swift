@@ -52,6 +52,7 @@ public enum LinkValidator {
 
         var collectedDiagnostics: [RenderDiagnostic] = []
         var seenDiagnosticIDs = Set<String>()
+        var context = LinkValidationContext()
         let headingIDs = Set(outline.map(\.id))
 
         for reference in references {
@@ -60,7 +61,8 @@ public enum LinkValidator {
                 document: document,
                 headingIDs: headingIDs,
                 options: options,
-                renderProfile: renderProfile
+                renderProfile: renderProfile,
+                context: &context
             ) {
                 guard seenDiagnosticIDs.insert(diagnostic.id).inserted else {
                     continue
@@ -78,7 +80,8 @@ public enum LinkValidator {
         document: MarkdownDocument,
         headingIDs: Set<String>,
         options: RichMarkdownOptions,
-        renderProfile: MarkdownRenderProfile
+        renderProfile: MarkdownRenderProfile,
+        context: inout LinkValidationContext
     ) -> [RenderDiagnostic] {
         let source = reference.source
         guard let components = URLComponents(string: source) else {
@@ -93,7 +96,8 @@ public enum LinkValidator {
                 document: document,
                 headingIDs: headingIDs,
                 options: options,
-                renderProfile: renderProfile
+                renderProfile: renderProfile,
+                context: &context
             )
         }
 
@@ -148,7 +152,8 @@ public enum LinkValidator {
             targetURL: targetURL,
             fragment: components.fragment,
             currentDocumentURL: document.sourceURL,
-            renderProfile: renderProfile
+            renderProfile: renderProfile,
+            context: &context
         )
     }
 
@@ -159,7 +164,8 @@ public enum LinkValidator {
         document: MarkdownDocument,
         headingIDs: Set<String>,
         options: RichMarkdownOptions,
-        renderProfile: MarkdownRenderProfile
+        renderProfile: MarkdownRenderProfile,
+        context: inout LinkValidationContext
     ) -> [RenderDiagnostic] {
         switch scheme {
         case "http", "https":
@@ -228,7 +234,8 @@ public enum LinkValidator {
                 targetURL: targetURL,
                 fragment: components.fragment,
                 currentDocumentURL: document.sourceURL,
-                renderProfile: renderProfile
+                renderProfile: renderProfile,
+                context: &context
             )
         case "mailto", "tel":
             guard !components.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -289,7 +296,8 @@ public enum LinkValidator {
         targetURL: URL,
         fragment: String?,
         currentDocumentURL: URL,
-        renderProfile: MarkdownRenderProfile
+        renderProfile: MarkdownRenderProfile,
+        context: inout LinkValidationContext
     ) -> [RenderDiagnostic] {
         guard let headingID = normalizedFragment(fragment), !headingID.isEmpty else {
             return []
@@ -303,7 +311,7 @@ public enum LinkValidator {
             return []
         }
 
-        guard let fileSize = fileSize(at: targetURL) else {
+        guard let signature = FileSignature(url: targetURL) else {
             return [
                 RenderDiagnostic(
                     severity: .info,
@@ -314,7 +322,7 @@ public enum LinkValidator {
             ]
         }
 
-        guard fileSize <= maxCrossDocumentHeadingFileSize else {
+        guard signature.fileSize <= maxCrossDocumentHeadingFileSize else {
             return [
                 RenderDiagnostic(
                     severity: .info,
@@ -325,35 +333,25 @@ public enum LinkValidator {
             ]
         }
 
-        do {
-            let targetDocument = try MarkdownDocumentLoader.load(url: targetURL, createBookmark: false)
-            let renderOptions = RenderOptions(
-                renderProfile: renderProfile,
-                richMarkdownOptions: RichMarkdownOptions(
-                    rendersMermaid: false,
-                    rendersMath: false,
-                    rendersGitHubCallouts: false,
-                    validatesLocalLinks: false,
-                    validatesHeadingFragments: false,
-                    validatesRemoteLinks: false
-                )
-            )
-            let result = try CMarkGFMRenderer().render(
-                RenderRequest(
-                    document: targetDocument,
-                    options: renderOptions,
-                    allowsRemoteImages: false
-                )
-            )
-            let targetHeadingIDs = Set(result.outline.map(\.id))
+        let cacheKey = "\(signature.path)|\(renderProfile.headingSlugStyle.rawValue)"
+        let lookup: CrossDocumentHeadingLookup
+        if let cached = context.headingIndexes[cacheKey], cached.signature == signature {
+            lookup = cached.lookup
+        } else {
+            lookup = loadHeadingIndex(at: targetURL, slugStyle: renderProfile.headingSlugStyle)
+            context.headingIndexes[cacheKey] = CachedCrossDocumentHeadingLookup(signature: signature, lookup: lookup)
+        }
+
+        switch lookup {
+        case .index(let index):
             return headingDiagnostics(
                 source: source,
                 fragment: fragment,
                 targetDisplayName: targetURL.lastPathComponent,
-                headingIDs: targetHeadingIDs,
+                headingIDs: index.headingIDs,
                 options: RichMarkdownOptions()
             )
-        } catch {
+        case .skipped:
             return [
                 RenderDiagnostic(
                     severity: .info,
@@ -362,6 +360,20 @@ public enum LinkValidator {
                     source: source
                 )
             ]
+        }
+    }
+
+    private static func loadHeadingIndex(at url: URL, slugStyle: HeadingSlugStyle) -> CrossDocumentHeadingLookup {
+        do {
+            let data = try Data(contentsOf: url)
+            guard let sourceText = String(data: data, encoding: .utf8) else {
+                return .skipped
+            }
+
+            let parsed = FrontMatterParser.parse(sourceText)
+            return .index(MarkdownHeadingScanner.scan(parsed.bodyText, slugStyle: slugStyle))
+        } catch {
+            return .skipped
         }
     }
 
@@ -407,14 +419,36 @@ public enum LinkValidator {
             .removingPercentEncoding ?? HTMLUtilities.decodeEntities(in: fragment)
     }
 
-    private static func fileSize(at url: URL) -> UInt64? {
-        guard
-            let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-            let size = attributes[.size] as? NSNumber
-        else {
-            return nil
-        }
+    private struct LinkValidationContext {
+        var headingIndexes: [String: CachedCrossDocumentHeadingLookup] = [:]
+    }
 
-        return size.uint64Value
+    private struct CachedCrossDocumentHeadingLookup {
+        let signature: FileSignature
+        let lookup: CrossDocumentHeadingLookup
+    }
+
+    private enum CrossDocumentHeadingLookup {
+        case index(MarkdownHeadingIndex)
+        case skipped
+    }
+
+    private struct FileSignature: Equatable {
+        let path: String
+        let fileSize: UInt64
+        let modifiedAt: Date?
+
+        init?(url: URL) {
+            guard
+                let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                let size = attributes[.size] as? NSNumber
+            else {
+                return nil
+            }
+
+            path = url.standardizedFileURL.path
+            fileSize = size.uint64Value
+            modifiedAt = attributes[.modificationDate] as? Date
+        }
     }
 }

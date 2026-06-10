@@ -95,6 +95,7 @@ public struct RenderResult: Equatable, Sendable {
     public let rendererName: String
     public let rendererVersion: String?
     public let richMarkdownState: RichMarkdownRenderState
+    public let htmlIndex: RenderedHTMLIndex?
     public let previewHTML: String?
     public let performanceProfile: DocumentPerformanceProfile?
 
@@ -107,6 +108,7 @@ public struct RenderResult: Equatable, Sendable {
         rendererName: String,
         rendererVersion: String?,
         richMarkdownState: RichMarkdownRenderState = .empty,
+        htmlIndex: RenderedHTMLIndex? = nil,
         previewHTML: String? = nil,
         performanceProfile: DocumentPerformanceProfile? = nil
     ) {
@@ -118,6 +120,7 @@ public struct RenderResult: Equatable, Sendable {
         self.rendererName = rendererName
         self.rendererVersion = rendererVersion
         self.richMarkdownState = richMarkdownState
+        self.htmlIndex = htmlIndex
         self.previewHTML = previewHTML
         self.performanceProfile = performanceProfile
     }
@@ -135,6 +138,7 @@ public struct RenderResult: Equatable, Sendable {
             rendererName: rendererName,
             rendererVersion: rendererVersion,
             richMarkdownState: richMarkdownState,
+            htmlIndex: htmlIndex,
             previewHTML: previewHTML,
             performanceProfile: performanceProfile
         )
@@ -394,10 +398,12 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
         let highlightedHTML = CodeHighlighter.highlight(mathProcessed.html)
         let policyHTML = request.allowsRemoteImages ? highlightedHTML : HTMLResourcePolicy.blockRemoteImages(in: highlightedHTML)
         let imageProcessedHTML = ImageAttributePostProcessor.process(policyHTML, document: request.document)
+        let htmlIndex = RenderedHTMLIndex.build(from: imageProcessedHTML, document: request.document)
         diagnostics.append(
             contentsOf: RenderDiagnosticsCollector.collect(
                 from: imageProcessedHTML,
                 document: request.document,
+                htmlIndex: htmlIndex,
                 outline: processed.outline,
                 options: request.options.richMarkdownOptions,
                 renderProfile: request.options.renderProfile
@@ -420,7 +426,8 @@ public final class CMarkGFMRenderer: MarkdownRenderer {
             statistics: request.document.statistics,
             rendererName: "cmark-gfm",
             rendererVersion: cmarkVersionString(),
-            richMarkdownState: richMarkdownState
+            richMarkdownState: richMarkdownState,
+            htmlIndex: htmlIndex
         )
     }
 
@@ -898,27 +905,28 @@ public enum HeadingPostProcessor {
 
 public enum HTMLResourcePolicy {
     public static func blockRemoteImages(in html: String) -> String {
-        let pattern = #"(?i)(<img\b[^>]*\bsrc\s*=\s*)(["'])(https?://[^"']+)(["'])"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return html
-        }
-
         var rendered = html
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
-        for match in matches.reversed() {
+        for tag in HTMLTagScanner.tags(in: html, named: "img").reversed() {
             guard
-                let fullRange = Range(match.range(at: 0), in: html),
-                let prefixRange = Range(match.range(at: 1), in: html),
-                let quoteRange = Range(match.range(at: 2), in: html),
-                let sourceRange = Range(match.range(at: 3), in: html)
+                let sourceAttribute = tag.attribute(named: "src"),
+                let valueRange = sourceAttribute.valueRange,
+                sourceAttribute.value.lowercased().hasPrefix("http://")
+                    || sourceAttribute.value.lowercased().hasPrefix("https://")
             else {
                 continue
             }
 
-            let source = String(html[sourceRange])
-            let quote = String(html[quoteRange])
-            let replacement = "\(html[prefixRange])\(quote)about:blank\(quote) data-openmarked-blocked-src=\(quote)\(HTMLUtilities.escapeAttribute(source))\(quote)"
-            rendered.replaceSubrange(fullRange, with: replacement)
+            let originalSource = HTMLUtilities.escapeAttribute(sourceAttribute.value)
+            let updatedTag = String(html[tag.range.lowerBound..<valueRange.lowerBound])
+                + "about:blank"
+                + String(html[valueRange.upperBound..<tag.range.upperBound])
+            rendered.replaceSubrange(
+                tag.range,
+                with: HTMLTagRewriter.appending(
+                    attributes: [#"data-openmarked-blocked-src="\#(originalSource)""#],
+                    to: updatedTag
+                )
+            )
         }
 
         return rendered
@@ -929,14 +937,16 @@ public enum RenderDiagnosticsCollector {
     public static func collect(
         from html: String,
         document: MarkdownDocument,
+        htmlIndex: RenderedHTMLIndex? = nil,
         outline: [OutlineItem] = [],
         options: RichMarkdownOptions = .default,
         renderProfile: MarkdownRenderProfile = .openMarked
     ) -> [RenderDiagnostic] {
-        deduplicated(
-            collectMissingLocalImages(from: html, document: document)
+        let index = htmlIndex ?? RenderedHTMLIndex.build(from: html, document: document)
+        return deduplicated(
+            collectMissingLocalImages(from: index)
                 + LinkValidator.diagnostics(
-                    from: html,
+                    for: index.links,
                     document: document,
                     outline: outline,
                     options: options,
@@ -945,9 +955,8 @@ public enum RenderDiagnosticsCollector {
         )
     }
 
-    private static func collectMissingLocalImages(from html: String, document: MarkdownDocument) -> [RenderDiagnostic] {
-        let imageURLsBySource = LocalAssetReferenceExtractor.localImageSources(from: html, document: document)
-        return imageURLsBySource.compactMap { source, imageURL in
+    private static func collectMissingLocalImages(from htmlIndex: RenderedHTMLIndex) -> [RenderDiagnostic] {
+        htmlIndex.localImageSources.compactMap { source, imageURL in
             guard !FileManager.default.fileExists(atPath: imageURL.path) else {
                 return nil
             }
@@ -971,43 +980,11 @@ public enum RenderDiagnosticsCollector {
 
 public enum LocalAssetReferenceExtractor {
     public static func imageURLs(from html: String, document: MarkdownDocument) -> [URL] {
-        let urls = localImageSources(from: html, document: document).map(\.url)
-        var seen = Set<String>()
-        return urls.filter { url in
-            let key = url.standardizedFileURL.path
-            guard !seen.contains(key) else {
-                return false
-            }
-            seen.insert(key)
-            return true
-        }
+        RenderedHTMLIndex.build(from: html, document: document).localImageURLs
     }
 
     public static func localImageSources(from html: String, document: MarkdownDocument) -> [(source: String, url: URL)] {
-        let pattern = #"<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["'][^>]*>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return []
-        }
-
-        let nsHTML = html as NSString
-        return regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length)).compactMap { match in
-            guard
-                let range = Range(match.range(at: 1), in: html)
-            else {
-                return nil
-            }
-
-            let source = HTMLUtilities.decodeEntities(in: String(html[range]))
-            guard isLocalImagePath(source) else {
-                return nil
-            }
-
-            guard let imageURL = localFileURL(for: source, relativeTo: document.sourceURL.deletingLastPathComponent()) else {
-                return nil
-            }
-
-            return (source, imageURL)
-        }
+        RenderedHTMLIndex.build(from: html, document: document).localImageSources
     }
 
     public static func isLocalImagePath(_ source: String) -> Bool {

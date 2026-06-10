@@ -16,39 +16,7 @@ public struct LinkReference: Equatable, Identifiable, Sendable {
 
 public enum LinkReferenceExtractor {
     public static func linkReferences(from html: String) -> [LinkReference] {
-        let pattern = #"(?is)<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>(.*?)</a>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return []
-        }
-
-        let nsHTML = html as NSString
-        var references: [LinkReference] = []
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length))
-
-        for (index, match) in matches.enumerated() {
-            guard
-                let hrefRange = Range(match.range(at: 2), in: html),
-                let textRange = Range(match.range(at: 3), in: html)
-            else {
-                continue
-            }
-
-            let source = HTMLUtilities.decodeEntities(in: String(html[hrefRange]))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !source.isEmpty else {
-                continue
-            }
-
-            references.append(
-                LinkReference(
-                    source: source,
-                    text: HTMLUtilities.plainText(fromHTMLFragment: String(html[textRange])),
-                    occurrenceIndex: index
-                )
-            )
-        }
-
-        return references
+        RenderedHTMLIndex.build(from: html).links
     }
 }
 
@@ -62,7 +30,22 @@ public enum LinkValidator {
         options: RichMarkdownOptions,
         renderProfile: MarkdownRenderProfile = .openMarked
     ) -> [RenderDiagnostic] {
-        let references = LinkReferenceExtractor.linkReferences(from: html)
+        diagnostics(
+            for: RenderedHTMLIndex.build(from: html).links,
+            document: document,
+            outline: outline,
+            options: options,
+            renderProfile: renderProfile
+        )
+    }
+
+    static func diagnostics(
+        for references: [LinkReference],
+        document: MarkdownDocument,
+        outline: [OutlineItem],
+        options: RichMarkdownOptions,
+        renderProfile: MarkdownRenderProfile = .openMarked
+    ) -> [RenderDiagnostic] {
         guard !references.isEmpty else {
             return []
         }

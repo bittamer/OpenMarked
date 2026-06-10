@@ -127,76 +127,41 @@ private struct ImageAssetMetadataKey: Hashable {
 
 public enum ImageAttributePostProcessor {
     public static func process(_ html: String, document: MarkdownDocument) -> String {
-        let pattern = #"<img\b[^>]*>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return html
-        }
-
         var rendered = html
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
-        for match in matches.reversed() {
-            guard let tagRange = Range(match.range(at: 0), in: html) else {
-                continue
-            }
-
-            let tag = String(html[tagRange])
-            let processedTag = processTag(tag, document: document)
-            rendered.replaceSubrange(tagRange, with: processedTag)
+        let imageTags = HTMLTagScanner.tags(in: html, named: "img")
+        for tag in imageTags.reversed() {
+            let processedTag = processTag(tag, tagText: String(html[tag.range]), document: document)
+            rendered.replaceSubrange(tag.range, with: processedTag)
         }
 
         return rendered
     }
 
-    private static func processTag(_ tag: String, document: MarkdownDocument) -> String {
+    private static func processTag(_ tag: HTMLTagOccurrence, tagText: String, document: MarkdownDocument) -> String {
         var attributes: [String] = []
 
-        if !hasAttribute("loading", in: tag) {
+        if !tag.hasAttribute(named: "loading") {
             attributes.append(#"loading="lazy""#)
         }
-        if !hasAttribute("decoding", in: tag) {
+        if !tag.hasAttribute(named: "decoding") {
             attributes.append(#"decoding="async""#)
         }
 
-        if let source = attributeValue(named: "src", in: tag),
+        if let source = tag.attributeValue(named: "src"),
            let imageURL = LocalAssetReferenceExtractor.localFileURL(
             for: source,
             relativeTo: document.sourceURL.deletingLastPathComponent()
            ),
            let metadata = ImageAssetMetadataCache.shared.metadata(for: imageURL) {
-            if !hasAttribute("width", in: tag), let width = metadata.pixelWidth {
+            if !tag.hasAttribute(named: "width"), let width = metadata.pixelWidth {
                 attributes.append(#"width="\#(width)""#)
             }
-            if !hasAttribute("height", in: tag), let height = metadata.pixelHeight {
+            if !tag.hasAttribute(named: "height"), let height = metadata.pixelHeight {
                 attributes.append(#"height="\#(height)""#)
             }
         }
 
-        guard !attributes.isEmpty else {
-            return tag
-        }
-
-        let insertion = " " + attributes.joined(separator: " ")
-        if tag.hasSuffix("/>") {
-            return String(tag.dropLast(2)) + insertion + " />"
-        }
-        return String(tag.dropLast()) + insertion + ">"
-    }
-
-    static func hasAttribute(_ name: String, in tag: String) -> Bool {
-        let pattern = #"\b\#(name)\s*="#
-        return tag.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
-    }
-
-    static func attributeValue(named name: String, in tag: String) -> String? {
-        let pattern = #"\b\#(name)\s*=\s*(["'])(.*?)\1"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-              let match = regex.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)),
-              let valueRange = Range(match.range(at: 2), in: tag) else {
-            return nil
-        }
-
-        return HTMLUtilities.decodeEntities(in: String(tag[valueRange]))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return HTMLTagRewriter.appending(attributes: attributes, to: tagText)
     }
 }
 
@@ -220,54 +185,44 @@ public final class PreviewImageCache: @unchecked Sendable {
         baseURL: URL,
         maxPixelWidth: Int = 1800
     ) -> String {
-        let pattern = #"<img\b[^>]*>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return html
-        }
-
         var rendered = html
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
-        for match in matches.reversed() {
-            guard let tagRange = Range(match.range(at: 0), in: html) else {
+        let imageTags = HTMLTagScanner.tags(in: html, named: "img")
+        for tag in imageTags.reversed() {
+            guard let optimizedTag = optimizedTag(tag, in: html, baseURL: baseURL, maxPixelWidth: maxPixelWidth) else {
                 continue
             }
 
-            let tag = String(html[tagRange])
-            guard let optimizedTag = optimizedTag(tag, baseURL: baseURL, maxPixelWidth: maxPixelWidth) else {
-                continue
-            }
-
-            rendered.replaceSubrange(tagRange, with: optimizedTag)
+            rendered.replaceSubrange(tag.range, with: optimizedTag)
         }
 
         return rendered
     }
 
-    private func optimizedTag(_ tag: String, baseURL: URL, maxPixelWidth: Int) -> String? {
-        guard let source = ImageAttributePostProcessor.attributeValue(named: "src", in: tag),
-              let imageURL = LocalAssetReferenceExtractor.localFileURL(for: source, relativeTo: baseURL),
+    private func optimizedTag(
+        _ tag: HTMLTagOccurrence,
+        in html: String,
+        baseURL: URL,
+        maxPixelWidth: Int
+    ) -> String? {
+        guard let sourceAttribute = tag.attribute(named: "src"),
+              let valueRange = sourceAttribute.valueRange,
+              !sourceAttribute.value.isEmpty,
+              let imageURL = LocalAssetReferenceExtractor.localFileURL(for: sourceAttribute.value, relativeTo: baseURL),
               let optimizedURL = optimizedImageURL(for: imageURL, maxPixelWidth: maxPixelWidth),
               optimizedURL.standardizedFileURL.path != imageURL.standardizedFileURL.path else {
             return nil
         }
 
         let optimizedSource = HTMLUtilities.escapeAttribute(optimizedURL.absoluteString)
-        let originalSource = HTMLUtilities.escapeAttribute(source)
-        let pattern = #"(\bsrc\s*=\s*)(["'])(.*?)\2"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-              let match = regex.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)),
-              let fullRange = Range(match.range(at: 0), in: tag),
-              let prefixRange = Range(match.range(at: 1), in: tag),
-              let quoteRange = Range(match.range(at: 2), in: tag) else {
-            return nil
-        }
-
-        var updatedTag = tag
-        let quote = String(tag[quoteRange])
-        let replacement = "\(tag[prefixRange])\(quote)\(optimizedSource)\(quote)"
-        updatedTag.replaceSubrange(fullRange, with: replacement)
-        if !ImageAttributePostProcessor.hasAttribute("data-openmarked-original-src", in: updatedTag) {
-            updatedTag = String(updatedTag.dropLast()) + #" data-openmarked-original-src="\#(originalSource)">"#
+        let originalSource = HTMLUtilities.escapeAttribute(sourceAttribute.value)
+        var updatedTag = String(html[tag.range.lowerBound..<valueRange.lowerBound])
+            + optimizedSource
+            + String(html[valueRange.upperBound..<tag.range.upperBound])
+        if !tag.hasAttribute(named: "data-openmarked-original-src") {
+            updatedTag = HTMLTagRewriter.appending(
+                attributes: [#"data-openmarked-original-src="\#(originalSource)""#],
+                to: updatedTag
+            )
         }
         return updatedTag
     }

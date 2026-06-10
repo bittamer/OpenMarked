@@ -241,28 +241,19 @@ public enum HTMLExportDocumentBuilder {
     }
 
     private static func embedLocalImages(in html: String, document: MarkdownDocument) -> String {
-        let pattern = #"(?i)(<img\b[^>]*\bsrc\s*=\s*)(["'])([^"']+)(["'])"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return html
-        }
-
         var exportedHTML = html
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
-
-        for match in matches.reversed() {
+        let imageTags = HTMLTagScanner.tags(in: html, named: "img")
+        for tag in imageTags.reversed() {
             guard
-                let fullRange = Range(match.range(at: 0), in: html),
-                let prefixRange = Range(match.range(at: 1), in: html),
-                let quoteRange = Range(match.range(at: 2), in: html),
-                let sourceRange = Range(match.range(at: 3), in: html)
+                let sourceAttribute = tag.attribute(named: "src"),
+                let valueRange = sourceAttribute.valueRange
             else {
                 continue
             }
 
-            let source = HTMLUtilities.decodeEntities(in: String(html[sourceRange]))
             guard
                 let imageURL = LocalAssetReferenceExtractor.localFileURL(
-                    for: source,
+                    for: sourceAttribute.value,
                     relativeTo: document.sourceURL.deletingLastPathComponent()
                 ),
                 FileManager.default.fileExists(atPath: imageURL.path),
@@ -272,8 +263,7 @@ public enum HTMLExportDocumentBuilder {
             }
 
             let dataURL = "data:\(mimeType(for: imageURL));base64,\(data.base64EncodedString())"
-            let replacement = "\(html[prefixRange])\(html[quoteRange])\(HTMLUtilities.escapeAttribute(dataURL))\(html[quoteRange])"
-            exportedHTML.replaceSubrange(fullRange, with: replacement)
+            exportedHTML.replaceSubrange(valueRange, with: HTMLUtilities.escapeAttribute(dataURL))
         }
 
         return exportedHTML

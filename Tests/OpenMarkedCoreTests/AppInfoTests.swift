@@ -890,6 +890,28 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(references.map(\.text), ["Guide", "Heading"])
     }
 
+    func testRenderedHTMLIndexCollectsLinksImagesAndCounts() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let html = ##"""
+        <p><a href='guide.md'>Guide <strong>Now</strong></a></p>
+        <p><img src="../Assets/sample-mark.svg" alt="Sample mark"></p>
+        <p><img src="about:blank" data-openmarked-blocked-src="https://example.com/blocked.png" alt="Blocked"></p>
+        <table><tr><td>Cell</td></tr></table>
+        """##
+
+        let index = RenderedHTMLIndex.build(from: html, document: document)
+
+        XCTAssertEqual(index.links.map(\.source), ["guide.md"])
+        XCTAssertEqual(index.links.map(\.text), ["Guide Now"])
+        XCTAssertEqual(index.images.map(\.source), ["../Assets/sample-mark.svg", "https://example.com/blocked.png"])
+        XCTAssertEqual(index.images.map(\.altText), ["Sample mark", "Blocked"])
+        XCTAssertTrue(index.images[1].isBlocked)
+        XCTAssertTrue(index.localImageURLs.contains { $0.lastPathComponent == "sample-mark.svg" })
+        XCTAssertEqual(index.paragraphCount, 3)
+        XCTAssertEqual(index.tableCount, 1)
+    }
+
     func testValidLinkFixtureProducesNoLinkDiagnostics() throws {
         let url = URL(fileURLWithPath: "Fixtures/Markdown/links.md").standardizedFileURL
         let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
@@ -2036,6 +2058,29 @@ struct AppInfoTests {
 
         #expect(references.map(\.source) == ["guide.md", "#existing-heading"])
         #expect(references.map(\.text) == ["Guide", "Heading"])
+    }
+
+    @Test("Rendered HTML index collects links, images, and counts")
+    func renderedHTMLIndexCollectsLinksImagesAndCounts() throws {
+        let url = URL(fileURLWithPath: "Fixtures/Markdown/local-images.md").standardizedFileURL
+        let document = try MarkdownDocumentLoader.load(url: url, createBookmark: false)
+        let html = ##"""
+        <p><a href='guide.md'>Guide <strong>Now</strong></a></p>
+        <p><img src="../Assets/sample-mark.svg" alt="Sample mark"></p>
+        <p><img src="about:blank" data-openmarked-blocked-src="https://example.com/blocked.png" alt="Blocked"></p>
+        <table><tr><td>Cell</td></tr></table>
+        """##
+
+        let index = RenderedHTMLIndex.build(from: html, document: document)
+
+        #expect(index.links.map(\.source) == ["guide.md"])
+        #expect(index.links.map(\.text) == ["Guide Now"])
+        #expect(index.images.map(\.source) == ["../Assets/sample-mark.svg", "https://example.com/blocked.png"])
+        #expect(index.images.map(\.altText) == ["Sample mark", "Blocked"])
+        #expect(index.images[1].isBlocked)
+        #expect(index.localImageURLs.contains { $0.lastPathComponent == "sample-mark.svg" })
+        #expect(index.paragraphCount == 3)
+        #expect(index.tableCount == 1)
     }
 
     @Test("Valid link fixture produces no link diagnostics")

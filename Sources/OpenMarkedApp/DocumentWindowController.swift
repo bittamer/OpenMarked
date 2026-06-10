@@ -708,9 +708,10 @@ final class DocumentWindowController: ObservableObject, Identifiable {
         }
 
         let sourcePath = document.sourceURL.standardizedFileURL.path
+        let htmlIndex = renderResult.htmlIndex ?? RenderedHTMLIndex.build(from: renderResult.bodyHTML, document: document)
         let assetURLs = Set(
-            LocalAssetReferenceExtractor
-                .imageURLs(from: renderResult.bodyHTML, document: document)
+            htmlIndex
+                .localImageURLs
                 .map(\.standardizedFileURL)
                 .filter { $0.path != sourcePath }
         )
@@ -971,8 +972,8 @@ final class DocumentWindowController: ObservableObject, Identifiable {
             let performanceProfile = DocumentPerformanceProfile(
                 sourceByteCount: markdownDocument.sourceText.utf8.count,
                 headingCount: result.outline.count,
-                imageCount: max(0, result.bodyHTML.components(separatedBy: "<img").count - 1),
-                linkCount: LinkReferenceExtractor.linkReferences(from: result.bodyHTML).count
+                imageCount: result.htmlIndex?.imageCount ?? 0,
+                linkCount: result.htmlIndex?.linkCount ?? 0
             )
             try Task.checkCancellation()
             let previewResult = result.withPreviewData(

@@ -410,11 +410,19 @@ public enum DocumentInspectionBuilder {
     ) -> DocumentInspectionReport {
         let diagnostics = deduplicatedDiagnostics(document.frontMatterDiagnostics + (renderResult?.diagnostics ?? []))
         let bodyHTML = renderResult?.bodyHTML ?? ""
-        let links = buildLinks(from: bodyHTML, document: document, diagnostics: diagnostics)
-        let assets = buildAssets(from: bodyHTML, document: document, diagnostics: diagnostics)
+        let htmlIndex = renderResult?.htmlIndex ?? (bodyHTML.isEmpty ? .empty : RenderedHTMLIndex.build(from: bodyHTML, document: document))
+        let diagnosticsBySource = Dictionary(grouping: diagnostics.compactMap { diagnostic -> (String, RenderDiagnostic)? in
+            guard let source = diagnostic.source else {
+                return nil
+            }
+            return (source, diagnostic)
+        }, by: \.0).mapValues { pairs in pairs.map(\.1) }
+        let links = buildLinks(from: htmlIndex, document: document, diagnosticsBySource: diagnosticsBySource)
+        let assets = buildAssets(from: htmlIndex, document: document, diagnosticsBySource: diagnosticsBySource)
         let statistics = buildStatistics(
             document: document,
             renderResult: renderResult,
+            htmlIndex: htmlIndex,
             links: links,
             assets: assets,
             diagnostics: diagnostics,
@@ -512,13 +520,12 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func buildLinks(
-        from html: String,
+        from htmlIndex: RenderedHTMLIndex,
         document: MarkdownDocument,
-        diagnostics: [RenderDiagnostic]
+        diagnosticsBySource: [String: [RenderDiagnostic]]
     ) -> [DocumentLinkReference] {
-        let references = LinkReferenceExtractor.linkReferences(from: html)
-        return references.map { reference in
-            let matchingDiagnostics = diagnostics.filter { $0.source == reference.source }
+        htmlIndex.links.map { reference in
+            let matchingDiagnostics = diagnosticsBySource[reference.source] ?? []
             let kind = linkKind(for: reference.source, diagnostics: matchingDiagnostics)
             let status = linkStatus(for: reference.source, kind: kind, diagnostics: matchingDiagnostics)
 
@@ -536,14 +543,14 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func buildAssets(
-        from html: String,
+        from htmlIndex: RenderedHTMLIndex,
         document: MarkdownDocument,
-        diagnostics: [RenderDiagnostic]
+        diagnosticsBySource: [String: [RenderDiagnostic]]
     ) -> [DocumentAssetReference] {
-        imageReferences(from: html).map { reference in
-            let matchingDiagnostics = diagnostics.filter { $0.source == reference.source }
+        htmlIndex.images.map { reference in
+            let matchingDiagnostics = diagnosticsBySource[reference.source] ?? []
             let kind = assetKind(for: reference.source)
-            let resolvedURL = resolvedLocalAssetURL(for: reference.source, kind: kind, document: document)
+            let resolvedURL = reference.resolvedLocalURL ?? resolvedLocalAssetURL(for: reference.source, kind: kind, document: document)
             let status = assetStatus(for: reference, kind: kind, resolvedURL: resolvedURL, diagnostics: matchingDiagnostics)
 
             return DocumentAssetReference(
@@ -562,6 +569,7 @@ public enum DocumentInspectionBuilder {
     private static func buildStatistics(
         document: MarkdownDocument,
         renderResult: RenderResult?,
+        htmlIndex: RenderedHTMLIndex,
         links: [DocumentLinkReference],
         assets: [DocumentAssetReference],
         diagnostics: [RenderDiagnostic],
@@ -594,7 +602,7 @@ public enum DocumentInspectionBuilder {
             estimatedPageCount: estimatedPDFPageCount(
                 words: baseStatistics.wordCount,
                 imageCount: assets.count,
-                tableCount: countOccurrences(of: #"<table\b"#, in: html),
+                tableCount: htmlIndex.tableCount,
                 codeBlockCount: countFencedCodeBlocks(in: document.bodyText)
             ),
             wordsPerMinute: normalizedOptions.wordsPerMinute,
@@ -602,12 +610,12 @@ public enum DocumentInspectionBuilder {
             headingCount: outline.count,
             headingLevels: headingLevels,
             sectionStatistics: sectionStatistics,
-            paragraphCount: countOccurrences(of: #"<p(?:\s|>)"#, in: html),
+            paragraphCount: htmlIndex.paragraphCount,
             linkCount: links.count,
             imageCount: assets.count,
             missingReferenceCount: diagnostics.filter { missingReferenceKinds.contains($0.kind) }.count,
             codeBlockCount: countFencedCodeBlocks(in: document.bodyText),
-            tableCount: countOccurrences(of: #"<table\b"#, in: html),
+            tableCount: htmlIndex.tableCount,
             footnoteCount: countOccurrences(of: #"data-footnote-ref|class="footnote-ref""#, in: html),
             calloutCount: countOccurrences(of: #"class=["'][^"']*\bom-callout(?:\s|["'])"#, in: html),
             mermaidDiagramCount: countOccurrences(of: #"id="om-mermaid-[0-9]+""#, in: html),
@@ -785,7 +793,7 @@ public enum DocumentInspectionBuilder {
     }
 
     private static func assetStatus(
-        for reference: ImageReference,
+        for reference: RenderedImageReference,
         kind: DocumentAssetKind,
         resolvedURL: URL?,
         diagnostics: [RenderDiagnostic]
@@ -860,58 +868,6 @@ public enum DocumentInspectionBuilder {
             pixelWidth: metadata.pixelWidth,
             pixelHeight: metadata.pixelHeight
         )
-    }
-
-    private struct ImageReference: Equatable {
-        let source: String
-        let altText: String
-        let occurrenceIndex: Int
-        let isBlocked: Bool
-    }
-
-    private static func imageReferences(from html: String) -> [ImageReference] {
-        let pattern = #"<img\b[^>]*>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return []
-        }
-
-        let nsHTML = html as NSString
-        return regex.matches(in: html, range: NSRange(location: 0, length: nsHTML.length)).enumerated().compactMap { index, match in
-            guard let tagRange = Range(match.range(at: 0), in: html) else {
-                return nil
-            }
-
-            let tag = String(html[tagRange])
-            let blockedSource = attributeValue(named: "data-openmarked-blocked-src", in: tag)
-            let source = blockedSource ?? attributeValue(named: "src", in: tag)
-            guard let source, !source.isEmpty else {
-                return nil
-            }
-
-            return ImageReference(
-                source: source,
-                altText: attributeValue(named: "alt", in: tag) ?? "",
-                occurrenceIndex: index,
-                isBlocked: blockedSource != nil
-            )
-        }
-    }
-
-    private static func attributeValue(named name: String, in tag: String) -> String? {
-        let pattern = #"\b\#(name)\s*=\s*(["'])(.*?)\1"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return nil
-        }
-        let nsTag = tag as NSString
-        guard
-            let match = regex.firstMatch(in: tag, range: NSRange(location: 0, length: nsTag.length)),
-            let valueRange = Range(match.range(at: 2), in: tag)
-        else {
-            return nil
-        }
-
-        return HTMLUtilities.decodeEntities(in: String(tag[valueRange]))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func displayLabel(for key: String) -> String {

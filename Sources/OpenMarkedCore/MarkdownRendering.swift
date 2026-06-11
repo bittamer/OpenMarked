@@ -208,11 +208,10 @@ public enum OutlineDisplayBuilder {
     ) -> [OutlineDisplayItem] {
         let normalizedOptions = options.normalized()
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let numberByID = outlineNumbering(for: outline)
-        let filteredOutline = OutlineFilter.filter(outline, query: query)
         let visibleOutline = trimmedQuery.isEmpty
-            ? filteredOutline.filter { $0.level <= normalizedOptions.maximumVisibleLevel }
-            : filteredOutline
+            ? outline.filter { $0.level <= normalizedOptions.maximumVisibleLevel }
+            : OutlineFilter.filter(outline, query: trimmedQuery)
+        let numberByID = normalizedOptions.showsAutoNumbers ? outlineNumbering(for: outline) : [:]
 
         return visibleOutline.map { item in
             let displayTitle: String

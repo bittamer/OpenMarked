@@ -478,7 +478,7 @@ private struct OutlineSidebar: View {
                     )
                 } else {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 1) {
+                        LazyVStack(alignment: .leading, spacing: 1) {
                             ForEach(displayItems) { displayItem in
                                 OutlineRow(
                                     item: displayItem.item,
@@ -1214,9 +1214,12 @@ private struct DiagnosticsPopover: View {
 
                                 ForEach(group.diagnostics) { diagnostic in
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Label(diagnostic.severity.rawValue.capitalized, systemImage: icon(for: diagnostic))
+                                        Label(
+                                            DiagnosticDisplayMetadata.severityTitle(for: diagnostic.severity),
+                                            systemImage: DiagnosticDisplayMetadata.iconName(for: diagnostic, context: .popover)
+                                        )
                                             .font(.caption.weight(.semibold))
-                                            .foregroundStyle(color(for: diagnostic))
+                                            .foregroundStyle(DiagnosticDisplayMetadata.tint(for: diagnostic.severity, chrome: chrome))
                                         Text(diagnostic.message)
                                             .fixedSize(horizontal: false, vertical: true)
                                         if let source = diagnostic.source {
@@ -1251,7 +1254,7 @@ private struct DiagnosticsPopover: View {
         var groups: [DiagnosticGroup] = []
 
         for diagnostic in diagnostics {
-            let title = kindTitle(for: diagnostic.kind)
+            let title = DiagnosticDisplayMetadata.kindTitle(for: diagnostic.kind, context: .popover)
             if let index = groups.firstIndex(where: { $0.title == title }) {
                 var groupDiagnostics = groups[index].diagnostics
                 groupDiagnostics.append(diagnostic)
@@ -1262,72 +1265,6 @@ private struct DiagnosticsPopover: View {
         }
 
         return groups
-    }
-
-    private func icon(for diagnostic: RenderDiagnostic) -> String {
-        switch diagnostic.kind {
-        case .missingLocalImage:
-            return "photo"
-        case .missingLocalLink, .malformedLink, .unsupportedLinkScheme, .linkValidationSkipped:
-            return "link"
-        case .malformedFrontMatter:
-            return "tag"
-        case .missingHeadingFragment:
-            return "number"
-        default:
-            break
-        }
-
-        switch diagnostic.severity {
-        case .info:
-            return "info.circle"
-        case .warning:
-            return "exclamationmark.triangle"
-        case .error:
-            return "xmark.octagon"
-        }
-    }
-
-    private func color(for diagnostic: RenderDiagnostic) -> Color {
-        switch diagnostic.severity {
-        case .info:
-            return chrome.secondaryText
-        case .warning:
-            return chrome.warning
-        case .error:
-            return .red
-        }
-    }
-
-    private func kindTitle(for kind: RenderDiagnosticKind) -> String {
-        switch kind {
-        case .missingLocalImage:
-            return "Images"
-        case .missingLocalLink:
-            return "Missing Links"
-        case .missingHeadingFragment:
-            return "Heading Links"
-        case .malformedLink:
-            return "Malformed Links"
-        case .malformedFrontMatter:
-            return "Front Matter"
-        case .unsupportedLinkScheme:
-            return "Unsupported Links"
-        case .linkValidationSkipped:
-            return "Skipped Link Checks"
-        case .mermaidRenderFailure:
-            return "Mermaid"
-        case .mathRenderFailure:
-            return "Math"
-        case .richContentDisabled:
-            return "Disabled Features"
-        case .malformedGitHubCallout:
-            return "Callouts"
-        case .unsupportedExtension:
-            return "Renderer Extensions"
-        case .renderFailure:
-            return "Rendering"
-        }
     }
 }
 

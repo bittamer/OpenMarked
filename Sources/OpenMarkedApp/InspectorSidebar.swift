@@ -222,6 +222,10 @@ private struct LinksInspectorSection: View {
     @State private var showsAllLinks = false
 
     var body: some View {
+        let matchingLinks = filteredLinks
+        let displayedLinks = visibleLinks(from: matchingLinks)
+        let lastVisibleLinkID = displayedLinks.last?.id
+
         InspectorSectionStack(title: "Links") {
             InspectorFilterControls {
                 Picker("Type", selection: $typeFilter) {
@@ -241,11 +245,11 @@ private struct LinksInspectorSection: View {
 
             if report.links.isEmpty {
                 InlineEmptyState(systemImage: "link", message: "No rendered links.")
-            } else if filteredLinks.isEmpty {
+            } else if matchingLinks.isEmpty {
                 InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No links match the filters.")
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(visibleLinks) { link in
+                    ForEach(displayedLinks) { link in
                         InspectorReferenceRow(
                             title: link.text.isEmpty ? link.target : link.text,
                             subtitle: linkSubtitle(link),
@@ -256,14 +260,14 @@ private struct LinksInspectorSection: View {
                             subtitleLineLimit: 3,
                             actions: inspectorActions(for: link, controller: controller)
                         )
-                        if link.id != visibleLinks.last?.id {
+                        if link.id != lastVisibleLinkID {
                             InspectorDivider()
                         }
                     }
                 }
                 largeListButton(
-                    visibleCount: visibleLinks.count,
-                    totalCount: filteredLinks.count,
+                    visibleCount: displayedLinks.count,
+                    totalCount: matchingLinks.count,
                     noun: "links",
                     isShowingAll: $showsAllLinks
                 )
@@ -277,7 +281,7 @@ private struct LinksInspectorSection: View {
         }
     }
 
-    private var visibleLinks: [DocumentLinkReference] {
+    private func visibleLinks(from filteredLinks: [DocumentLinkReference]) -> [DocumentLinkReference] {
         showsAllLinks ? filteredLinks : Array(filteredLinks.prefix(inspectorInitialDisplayLimit))
     }
 
@@ -300,6 +304,10 @@ private struct AssetsInspectorSection: View {
     @State private var showsAllAssets = false
 
     var body: some View {
+        let matchingAssets = filteredAssets
+        let displayedAssets = visibleAssets(from: matchingAssets)
+        let lastVisibleAssetID = displayedAssets.last?.id
+
         InspectorSectionStack(title: "Assets") {
             InspectorFilterControls {
                 Picker("Type", selection: $typeFilter) {
@@ -319,11 +327,11 @@ private struct AssetsInspectorSection: View {
 
             if report.assets.isEmpty {
                 InlineEmptyState(systemImage: "photo", message: "No rendered images.")
-            } else if filteredAssets.isEmpty {
+            } else if matchingAssets.isEmpty {
                 InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No assets match the filters.")
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(visibleAssets) { asset in
+                    ForEach(displayedAssets) { asset in
                         InspectorReferenceRow(
                             title: asset.altText.isEmpty ? asset.kind.title : asset.altText,
                             subtitle: assetSubtitle(asset),
@@ -334,14 +342,14 @@ private struct AssetsInspectorSection: View {
                             subtitleLineLimit: 4,
                             actions: inspectorActions(for: asset)
                         )
-                        if asset.id != visibleAssets.last?.id {
+                        if asset.id != lastVisibleAssetID {
                             InspectorDivider()
                         }
                     }
                 }
                 largeListButton(
-                    visibleCount: visibleAssets.count,
-                    totalCount: filteredAssets.count,
+                    visibleCount: displayedAssets.count,
+                    totalCount: matchingAssets.count,
                     noun: "assets",
                     isShowingAll: $showsAllAssets
                 )
@@ -355,7 +363,7 @@ private struct AssetsInspectorSection: View {
         }
     }
 
-    private var visibleAssets: [DocumentAssetReference] {
+    private func visibleAssets(from filteredAssets: [DocumentAssetReference]) -> [DocumentAssetReference] {
         showsAllAssets ? filteredAssets : Array(filteredAssets.prefix(inspectorInitialDisplayLimit))
     }
 
@@ -383,6 +391,10 @@ private struct DiagnosticsInspectorSection: View {
     @State private var showsAllDiagnostics = false
 
     var body: some View {
+        let matchingDiagnostics = filteredDiagnostics
+        let displayedDiagnostics = visibleDiagnostics(from: matchingDiagnostics)
+        let diagnosticGroups = groupedDiagnostics(from: displayedDiagnostics)
+
         InspectorSectionStack(title: "Diagnostics") {
             InspectorFilterControls {
                 TextField("Search diagnostics", text: $searchQuery)
@@ -398,11 +410,11 @@ private struct DiagnosticsInspectorSection: View {
 
             if report.diagnostics.isEmpty {
                 InlineEmptyState(systemImage: "checkmark.circle", message: "No diagnostics.")
-            } else if groupedDiagnostics.isEmpty {
+            } else if diagnosticGroups.isEmpty {
                 InlineEmptyState(systemImage: "line.3.horizontal.decrease.circle", message: "No diagnostics match the filters.")
             } else {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(groupedDiagnostics) { group in
+                    ForEach(diagnosticGroups) { group in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(group.title)
                                 .font(.caption.weight(.semibold))
@@ -410,6 +422,7 @@ private struct DiagnosticsInspectorSection: View {
                                 .textCase(.uppercase)
 
                             LazyVStack(spacing: 0) {
+                                let lastDiagnosticID = group.diagnostics.last?.id
                                 ForEach(group.diagnostics) { diagnostic in
                                     InspectorDiagnosticRow(
                                         diagnostic: diagnostic,
@@ -419,7 +432,7 @@ private struct DiagnosticsInspectorSection: View {
                                             controller: controller
                                         )
                                     )
-                                    if diagnostic.id != group.diagnostics.last?.id {
+                                    if diagnostic.id != lastDiagnosticID {
                                         InspectorDivider()
                                     }
                                 }
@@ -428,8 +441,8 @@ private struct DiagnosticsInspectorSection: View {
                     }
                 }
                 largeListButton(
-                    visibleCount: visibleDiagnostics.count,
-                    totalCount: filteredDiagnostics.count,
+                    visibleCount: displayedDiagnostics.count,
+                    totalCount: matchingDiagnostics.count,
                     noun: "diagnostics",
                     isShowingAll: $showsAllDiagnostics
                 )
@@ -447,11 +460,11 @@ private struct DiagnosticsInspectorSection: View {
         }
     }
 
-    private var visibleDiagnostics: [RenderDiagnostic] {
+    private func visibleDiagnostics(from filteredDiagnostics: [RenderDiagnostic]) -> [RenderDiagnostic] {
         showsAllDiagnostics ? filteredDiagnostics : Array(filteredDiagnostics.prefix(inspectorInitialDisplayLimit))
     }
 
-    private var groupedDiagnostics: [InspectorDiagnosticGroup] {
+    private func groupedDiagnostics(from visibleDiagnostics: [RenderDiagnostic]) -> [InspectorDiagnosticGroup] {
         let groups = Dictionary(grouping: visibleDiagnostics) { diagnostic in
             InspectorDiagnosticGroupKey(kind: diagnostic.kind, severity: diagnostic.severity)
         }
@@ -547,6 +560,9 @@ private struct ExportInspectorSection: View {
     let report: DocumentInspectionReport
 
     var body: some View {
+        let orderedIssues = sortedIssues
+        let lastIssueID = orderedIssues.last?.id
+
         InspectorSectionStack(title: "Export") {
             InspectorMetricGrid(
                 metrics: [
@@ -569,9 +585,9 @@ private struct ExportInspectorSection: View {
                 InlineEmptyState(systemImage: "square.and.arrow.up", message: "No export readiness issues.")
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(sortedIssues) { issue in
+                    ForEach(orderedIssues) { issue in
                         InspectorIssueRow(issue: issue)
-                        if issue.id != sortedIssues.last?.id {
+                        if issue.id != lastIssueID {
                             InspectorDivider()
                         }
                     }
@@ -775,10 +791,10 @@ private struct InspectorDiagnosticGroupKey: Hashable, Comparable {
 
     init(kind: RenderDiagnosticKind, severity: RenderDiagnosticSeverity) {
         self.kindRawValue = kind.rawValue
-        self.kindTitle = kind.title
+        self.kindTitle = DiagnosticDisplayMetadata.kindTitle(for: kind)
         self.severityRawValue = severity.rawValue
-        self.severityTitle = severity.title
-        self.severityPriority = severity.sortPriority
+        self.severityTitle = DiagnosticDisplayMetadata.severityTitle(for: severity)
+        self.severityPriority = DiagnosticDisplayMetadata.sortPriority(for: severity)
     }
 
     static func < (left: InspectorDiagnosticGroupKey, right: InspectorDiagnosticGroupKey) -> Bool {
@@ -802,7 +818,11 @@ private struct InspectorDiagnosticGroup: Identifiable {
     }
 
     func tint(chrome: ResolvedAppChromeTheme) -> Color {
-        key.severityRawValue == RenderDiagnosticSeverity.warning.rawValue ? chrome.warning : chrome.secondaryText
+        DiagnosticDisplayMetadata.tint(
+            for: RenderDiagnosticSeverity(rawValue: key.severityRawValue) ?? .info,
+            chrome: chrome,
+            context: .group
+        )
     }
 }
 
@@ -981,6 +1001,9 @@ private struct InspectorSectionStatisticsGroup: View {
     @State private var showsAllSections = false
 
     var body: some View {
+        let displayedSections = visibleSections
+        let lastVisibleSectionID = displayedSections.last?.id
+
         VStack(alignment: .leading, spacing: 6) {
             Text("Sections")
                 .font(.caption.weight(.semibold))
@@ -991,15 +1014,15 @@ private struct InspectorSectionStatisticsGroup: View {
                 InlineEmptyState(systemImage: "list.bullet.indent", message: "No headings found.")
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(visibleSections) { section in
+                    ForEach(displayedSections) { section in
                         InspectorSectionStatisticRow(section: section)
-                        if section.id != visibleSections.last?.id {
+                        if section.id != lastVisibleSectionID {
                             InspectorDivider()
                         }
                     }
                 }
                 largeListButton(
-                    visibleCount: visibleSections.count,
+                    visibleCount: displayedSections.count,
                     totalCount: sections.count,
                     noun: "sections",
                     isShowingAll: $showsAllSections
@@ -1215,12 +1238,12 @@ private struct InspectorDiagnosticRow: View {
 
     var body: some View {
         InspectorReferenceRow(
-            title: diagnostic.kind.title,
+            title: DiagnosticDisplayMetadata.kindTitle(for: diagnostic.kind),
             subtitle: diagnostic.source.map { "\(diagnostic.message) (\($0))" } ?? diagnostic.message,
-            systemImage: diagnostic.severity == .warning ? "exclamationmark.triangle" : "info.circle",
+            systemImage: DiagnosticDisplayMetadata.iconName(for: diagnostic),
             status: diagnostic.severity == .warning ? .warning : .skipped,
             diagnosticsCount: 0,
-            kindTitle: diagnostic.severity.title,
+            kindTitle: DiagnosticDisplayMetadata.severityTitle(for: diagnostic.severity),
             subtitleLineLimit: 4,
             actions: actions
         )
@@ -1535,78 +1558,6 @@ private extension DocumentAssetKind {
             return "globe"
         case .unknown:
             return "questionmark.diamond"
-        }
-    }
-}
-
-private extension RenderDiagnostic {
-    func matches(query: String) -> Bool {
-        let haystack = [
-            kind.title,
-            kind.rawValue,
-            severity.title,
-            message,
-            source ?? ""
-        ]
-        .joined(separator: " ")
-
-        return haystack.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
-    }
-}
-
-private extension RenderDiagnosticKind {
-    var title: String {
-        switch self {
-        case .missingLocalImage:
-            return "Missing Images"
-        case .missingLocalLink:
-            return "Missing Links"
-        case .missingHeadingFragment:
-            return "Heading Links"
-        case .malformedLink:
-            return "Malformed Links"
-        case .malformedFrontMatter:
-            return "Front Matter"
-        case .unsupportedLinkScheme:
-            return "Unsupported Links"
-        case .mermaidRenderFailure:
-            return "Mermaid"
-        case .mathRenderFailure:
-            return "Math"
-        case .richContentDisabled:
-            return "Disabled Features"
-        case .malformedGitHubCallout:
-            return "Callouts"
-        case .linkValidationSkipped:
-            return "Skipped Link Checks"
-        case .unsupportedExtension:
-            return "Unsupported Files"
-        case .renderFailure:
-            return "Rendering"
-        }
-    }
-}
-
-private extension RenderDiagnosticSeverity {
-    var title: String {
-        switch self {
-        case .info:
-            return "Info"
-        case .warning:
-            return "Warning"
-        case .error:
-            return "Error"
-        }
-    }
-
-    var sortPriority: Int {
-        switch self {
-        case .error:
-            return 0
-        case .warning:
-            return 1
-        case .info:
-            return 2
         }
     }
 }

@@ -1339,6 +1339,7 @@ final class AppInfoTests: XCTestCase {
 
         let hierarchical = OutlineDisplayBuilder.items(outline: outline)
         XCTAssertEqual(hierarchical.map(\.id), ["intro", "goals", "details", "api"])
+        XCTAssertEqual(hierarchical.map(\.displayTitle), ["Introduction", "Goals", "Implementation Details", "API"])
         XCTAssertEqual(hierarchical.map(\.indentationLevel), [0, 1, 2, 1])
 
         let collapsed = OutlineDisplayBuilder.items(
@@ -1353,6 +1354,12 @@ final class AppInfoTests: XCTestCase {
         )
         XCTAssertEqual(flatNumbered.map(\.displayTitle), ["1 Introduction", "1.1 Goals", "1.1.1 Implementation Details", "1.2 API"])
         XCTAssertEqual(flatNumbered.map(\.indentationLevel), [0, 0, 0, 0])
+
+        let flatUnnumbered = OutlineDisplayBuilder.items(
+            outline: outline,
+            options: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 6, showsAutoNumbers: false)
+        )
+        XCTAssertEqual(flatUnnumbered.map(\.displayTitle), ["Introduction", "Goals", "Implementation Details", "API"])
 
         let filtered = OutlineDisplayBuilder.items(
             outline: outline,
@@ -2646,6 +2653,7 @@ struct AppInfoTests {
 
         let hierarchical = OutlineDisplayBuilder.items(outline: outline)
         #expect(hierarchical.map(\.id) == ["intro", "goals", "details", "api"])
+        #expect(hierarchical.map(\.displayTitle) == ["Introduction", "Goals", "Implementation Details", "API"])
         #expect(hierarchical.map(\.indentationLevel) == [0, 1, 2, 1])
 
         let collapsed = OutlineDisplayBuilder.items(
@@ -2660,6 +2668,12 @@ struct AppInfoTests {
         )
         #expect(flatNumbered.map(\.displayTitle) == ["1 Introduction", "1.1 Goals", "1.1.1 Implementation Details", "1.2 API"])
         #expect(flatNumbered.map(\.indentationLevel) == [0, 0, 0, 0])
+
+        let flatUnnumbered = OutlineDisplayBuilder.items(
+            outline: outline,
+            options: OutlineDisplayOptions(mode: .flat, maximumVisibleLevel: 6, showsAutoNumbers: false)
+        )
+        #expect(flatUnnumbered.map(\.displayTitle) == ["Introduction", "Goals", "Implementation Details", "API"])
 
         let filtered = OutlineDisplayBuilder.items(
             outline: outline,

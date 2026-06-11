@@ -3,22 +3,6 @@
 import AppKit
 import SwiftUI
 
-#if canImport(XCTest)
-import XCTest
-
-final class AppChromeThemeViewSupportTests: XCTestCase {
-    func testResolvedAppChromeThemeUsesCachedThemeAndResolvedColors() {
-        let resolved = ResolvedAppChromeTheme(themeID: "missing", colorScheme: .dark)
-
-        XCTAssertEqual(resolved.theme.id, AppChromeThemeStore.defaultThemeID)
-        XCTAssertEqual(resolved.palette, AppChromeThemeStore.defaultTheme.darkPalette)
-        XCTAssertRGB(resolved.windowBackgroundNSColor, hex: resolved.palette.windowBackgroundHex)
-        XCTAssertRGB(NSColor(resolved.accent), hex: resolved.palette.accentHex)
-        XCTAssertRGB(NSColor(resolved.text), hex: resolved.palette.textHex)
-    }
-}
-#endif
-
 #if canImport(Testing)
 import Testing
 
@@ -31,22 +15,6 @@ func resolvedAppChromeThemeUsesCachedThemeAndResolvedColors() {
     expectRGB(resolved.windowBackgroundNSColor, hex: resolved.palette.windowBackgroundHex)
     expectRGB(NSColor(resolved.accent), hex: resolved.palette.accentHex)
     expectRGB(NSColor(resolved.text), hex: resolved.palette.textHex)
-}
-#endif
-
-#if canImport(XCTest)
-private func XCTAssertRGB(
-    _ color: NSColor,
-    hex: String,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) {
-    let components = rgbComponents(for: color)
-    let expected = rgbComponents(for: hex)
-    XCTAssertEqual(components.red, expected.red, accuracy: 0.001, file: file, line: line)
-    XCTAssertEqual(components.green, expected.green, accuracy: 0.001, file: file, line: line)
-    XCTAssertEqual(components.blue, expected.blue, accuracy: 0.001, file: file, line: line)
-    XCTAssertEqual(components.alpha, expected.alpha, accuracy: 0.001, file: file, line: line)
 }
 #endif
 

@@ -5,21 +5,6 @@ import Foundation
 #if canImport(PDFKit) && canImport(WebKit)
 import PDFKit
 
-#if canImport(XCTest)
-import XCTest
-
-@MainActor
-final class WebKitPrintExporterTests: XCTestCase {
-    func testPDFExportWritesReadablePDFFile() async throws {
-        let smokeResult = try await makePDFExportSmokeResult()
-        let data = smokeResult.data
-        XCTAssertTrue(data.starts(with: Data("%PDF-".utf8)))
-        XCTAssertTrue(smokeResult.hasTrailingEOFMarker)
-        XCTAssertGreaterThan(smokeResult.pageCount, 0)
-    }
-}
-#endif
-
 #if canImport(Testing)
 import Testing
 

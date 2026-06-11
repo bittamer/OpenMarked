@@ -1,34 +1,6 @@
 @testable import OpenMarkedApp
 import AppKit
 
-#if canImport(XCTest)
-import XCTest
-
-@MainActor
-final class DocumentWindowTabbingTests: XCTestCase {
-    func testConfigureDocumentWindowSetsNativeTabProperties() {
-        let window = makeWindow()
-        defer { window.close() }
-
-        DocumentWindowTabbing.configureDocumentWindow(window)
-
-        XCTAssertEqual(window.tabbingIdentifier, DocumentWindowTabbing.identifier)
-        XCTAssertEqual(window.tabbingMode, .preferred)
-    }
-
-    func testConfigureDocumentWindowIsIdempotent() {
-        let window = makeWindow()
-        defer { window.close() }
-
-        DocumentWindowTabbing.configureDocumentWindow(window)
-        DocumentWindowTabbing.configureDocumentWindow(window)
-
-        XCTAssertEqual(window.tabbingIdentifier, DocumentWindowTabbing.identifier)
-        XCTAssertEqual(window.tabbingMode, .preferred)
-    }
-}
-#endif
-
 #if canImport(Testing)
 import Testing
 

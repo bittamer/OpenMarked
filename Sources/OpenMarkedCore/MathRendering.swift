@@ -171,16 +171,6 @@ public enum MathPostProcessor {
         }
     }
 
-    private enum SegmentKind {
-        case tag
-        case text
-    }
-
-    private struct Segment {
-        let kind: SegmentKind
-        let text: String
-    }
-
     private struct ProcessedText {
         let html: String
         let diagnostics: [RenderDiagnostic]
@@ -196,23 +186,39 @@ public enum MathPostProcessor {
         var diagnostics: [RenderDiagnostic] = []
         var expressionCount = 0
         var skipStack: [Bool] = []
+        var cursor = html.startIndex
 
-        for segment in segments(in: html) {
-            switch segment.kind {
-            case .tag:
-                rendered += segment.text
-                updateSkipStack(with: segment.text, skipStack: &skipStack)
-            case .text:
-                guard !skipStack.contains(true) else {
-                    rendered += segment.text
-                    continue
-                }
-
-                let processed = processTextSegment(segment.text, startingExpressionCount: expressionCount)
-                rendered += processed.html
-                diagnostics.append(contentsOf: processed.diagnostics)
-                expressionCount = processed.expressionCount
+        func appendText(_ text: Substring) {
+            guard !skipStack.contains(true) else {
+                rendered += text
+                return
             }
+
+            let processed = processTextSegment(String(text), startingExpressionCount: expressionCount)
+            rendered += processed.html
+            diagnostics.append(contentsOf: processed.diagnostics)
+            expressionCount = processed.expressionCount
+        }
+
+        while cursor < html.endIndex {
+            guard let tagStart = html[cursor...].firstIndex(of: "<") else {
+                appendText(html[cursor...])
+                break
+            }
+
+            if tagStart > cursor {
+                appendText(html[cursor..<tagStart])
+            }
+
+            guard let tagEnd = html[tagStart...].firstIndex(of: ">") else {
+                appendText(html[tagStart...])
+                break
+            }
+
+            let tagText = html[tagStart...tagEnd]
+            rendered += tagText
+            updateSkipStack(with: tagText, skipStack: &skipStack)
+            cursor = html.index(after: tagEnd)
         }
 
         return Result(html: rendered, diagnostics: diagnostics, expressionCount: expressionCount)
@@ -329,74 +335,38 @@ public enum MathPostProcessor {
         return depth == 0
     }
 
-    private static func segments(in html: String) -> [Segment] {
-        var segments: [Segment] = []
-        var cursor = html.startIndex
-
-        while cursor < html.endIndex {
-            guard let tagStart = html[cursor...].firstIndex(of: "<") else {
-                segments.append(Segment(kind: .text, text: String(html[cursor...])))
-                break
-            }
-
-            if tagStart > cursor {
-                segments.append(Segment(kind: .text, text: String(html[cursor..<tagStart])))
-            }
-
-            guard let tagEnd = html[tagStart...].firstIndex(of: ">") else {
-                segments.append(Segment(kind: .text, text: String(html[tagStart...])))
-                break
-            }
-
-            segments.append(Segment(kind: .tag, text: String(html[tagStart...tagEnd])))
-            cursor = html.index(after: tagEnd)
-        }
-
-        return segments
-    }
-
-    private static func updateSkipStack(with tag: String, skipStack: inout [Bool]) {
-        guard let tagName = tagName(in: tag), !tagName.isEmpty else {
-            return
-        }
-
-        if tag.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("</") {
+    private static func updateSkipStack(with tagText: Substring, skipStack: inout [Bool]) {
+        let trimmedTag = tagText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTag.hasPrefix("</") {
             if !skipStack.isEmpty {
                 skipStack.removeLast()
             }
             return
         }
 
-        let isSelfClosing = tag.hasSuffix("/>") || isVoidElement(tagName)
-        let shouldSkip = shouldSkipChildren(of: tagName, tag: tag)
+        guard let tag = HTMLTagScanner.tags(in: String(tagText)).first else {
+            return
+        }
+
+        let isSelfClosing = trimmedTag.hasSuffix("/>") || isVoidElement(tag.name)
+        let shouldSkip = shouldSkipChildren(of: tag)
         if !isSelfClosing {
             skipStack.append(shouldSkip)
         }
     }
 
-    private static func tagName(in tag: String) -> String? {
-        let pattern = #"^<\s*/?\s*([A-Za-z0-9:-]+)"#
-        guard
-            let regex = try? NSRegularExpression(pattern: pattern),
-            let match = regex.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)),
-            let range = Range(match.range(at: 1), in: tag)
-        else {
-            return nil
-        }
-
-        return String(tag[range]).lowercased()
-    }
-
-    private static func shouldSkipChildren(of tagName: String, tag: String) -> Bool {
-        if ["a", "code", "kbd", "pre", "samp", "script", "style", "textarea"].contains(tagName) {
+    private static func shouldSkipChildren(of tag: HTMLTagOccurrence) -> Bool {
+        if ["a", "code", "kbd", "pre", "samp", "script", "style", "textarea"].contains(tag.name) {
             return true
         }
 
-        if tag.range(of: #"data-openmarked-rich\s*="#, options: [.regularExpression, .caseInsensitive]) != nil {
+        if tag.hasAttribute(named: "data-openmarked-rich") {
             return true
         }
 
-        if tag.range(of: #"class\s*=\s*["'][^"']*\bom-(?:mermaid|math)[^"']*["']"#, options: [.regularExpression, .caseInsensitive]) != nil {
+        let classValue = tag.attributeValue(named: "class") ?? ""
+        if classValue.range(of: "om-mermaid", options: .caseInsensitive) != nil
+            || classValue.range(of: "om-math", options: .caseInsensitive) != nil {
             return true
         }
 

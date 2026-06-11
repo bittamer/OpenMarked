@@ -1251,20 +1251,17 @@ private struct DiagnosticsPopover: View {
     }
 
     private var groupedDiagnostics: [DiagnosticGroup] {
-        var groups: [DiagnosticGroup] = []
-
-        for diagnostic in diagnostics {
-            let title = DiagnosticDisplayMetadata.kindTitle(for: diagnostic.kind, context: .popover)
-            if let index = groups.firstIndex(where: { $0.title == title }) {
-                var groupDiagnostics = groups[index].diagnostics
-                groupDiagnostics.append(diagnostic)
-                groups[index] = DiagnosticGroup(id: groups[index].id, title: title, diagnostics: groupDiagnostics)
-            } else {
-                groups.append(DiagnosticGroup(id: diagnostic.kind.rawValue, title: title, diagnostics: [diagnostic]))
-            }
+        let grouped = Dictionary(grouping: diagnostics) {
+            DiagnosticDisplayMetadata.kindTitle(for: $0.kind, context: .popover)
         }
-
-        return groups
+        var seenTitles = Set<String>()
+        return diagnostics.compactMap { diagnostic in
+            let title = DiagnosticDisplayMetadata.kindTitle(for: diagnostic.kind, context: .popover)
+            guard seenTitles.insert(title).inserted else {
+                return nil
+            }
+            return DiagnosticGroup(id: diagnostic.kind.rawValue, title: title, diagnostics: grouped[title] ?? [])
+        }
     }
 }
 

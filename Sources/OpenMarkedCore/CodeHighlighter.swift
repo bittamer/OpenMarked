@@ -14,39 +14,25 @@ public enum CodeHighlighter {
     ]
 
     public static func highlight(_ html: String) -> String {
-        let pattern = #"(?s)<pre([^>]*)><code([^>]*)>(.*?)</code></pre>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+        let blocks = HTMLCodeBlockScanner.blocks(in: html)
+        guard !blocks.isEmpty else {
             return html
         }
-
         var rendered = html
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
 
-        for match in matches.reversed() {
-            guard
-                let fullRange = Range(match.range(at: 0), in: html),
-                let preAttributesRange = Range(match.range(at: 1), in: html),
-                let codeAttributesRange = Range(match.range(at: 2), in: html),
-                let codeRange = Range(match.range(at: 3), in: html)
-            else {
-                continue
-            }
-
-            let preAttributes = String(html[preAttributesRange])
-            let codeAttributes = String(html[codeAttributesRange])
-            let language = languageIdentifier(preAttributes: preAttributes, codeAttributes: codeAttributes)
-            let normalizedLanguage = normalize(language)
-            let decodedCode = HTMLUtilities.decodeEntities(in: String(html[codeRange]))
+        for block in blocks.reversed() {
+            let normalizedLanguage = normalize(block.language)
+            let decodedCode = HTMLUtilities.decodeEntities(in: block.codeHTML)
 
             guard let normalizedLanguage, supportedLanguages.contains(normalizedLanguage) else {
-                let replacement = #"<pre\#(preAttributes) class="om-code-block"><code\#(codeAttributes)>\#(String(html[codeRange]))</code></pre>"#
-                rendered.replaceSubrange(fullRange, with: replacement)
+                let replacement = #"<pre\#(block.preAttributes) class="om-code-block"><code\#(block.codeAttributes)>\#(block.codeHTML)</code></pre>"#
+                rendered.replaceSubrange(block.range, with: replacement)
                 continue
             }
 
             let highlighted = highlight(decodedCode, language: normalizedLanguage)
-            let replacement = #"<pre\#(preAttributes) class="om-code-block om-code-\#(normalizedLanguage)"><code\#(codeAttributes)>\#(highlighted)</code></pre>"#
-            rendered.replaceSubrange(fullRange, with: replacement)
+            let replacement = #"<pre\#(block.preAttributes) class="om-code-block om-code-\#(normalizedLanguage)"><code\#(block.codeAttributes)>\#(highlighted)</code></pre>"#
+            rendered.replaceSubrange(block.range, with: replacement)
         }
 
         return rendered
@@ -61,18 +47,6 @@ public enum CodeHighlighter {
         default:
             return highlightCodeLikeLanguage(code, language: language)
         }
-    }
-
-    private static func languageIdentifier(preAttributes: String, codeAttributes: String) -> String? {
-        if let language = firstCapture(pattern: #"lang\s*=\s*["']([^"']+)["']"#, in: preAttributes) {
-            return language
-        }
-
-        if let language = firstCapture(pattern: #"class\s*=\s*["'][^"']*language-([A-Za-z0-9_+-]+)[^"']*["']"#, in: codeAttributes) {
-            return language
-        }
-
-        return nil
     }
 
     private static func normalize(_ language: String?) -> String? {
@@ -162,18 +136,6 @@ public enum CodeHighlighter {
         default:
             return []
         }
-    }
-
-    private static func firstCapture(pattern: String, in text: String) -> String? {
-        guard
-            let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-            let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
-            let range = Range(match.range(at: 1), in: text)
-        else {
-            return nil
-        }
-
-        return String(text[range])
     }
 
     private static func replacing(pattern: String, in text: String, transform: ([String]) -> String) -> String {

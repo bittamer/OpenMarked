@@ -18,13 +18,8 @@ public enum MermaidPostProcessor {
             return Result(html: html)
         }
 
-        let pattern = #"(?is)<pre([^>]*)>\s*<code([^>]*)>(.*?)</code>\s*</pre>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return Result(html: html)
-        }
-
-        let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
-        guard !matches.isEmpty else {
+        let blocks = HTMLCodeBlockScanner.blocks(in: html)
+        guard !blocks.isEmpty else {
             return Result(html: html)
         }
 
@@ -32,28 +27,17 @@ public enum MermaidPostProcessor {
         var diagnostics: [RenderDiagnostic] = []
         var diagramCount = 0
 
-        for match in matches {
-            guard
-                let fullRange = Range(match.range(at: 0), in: html),
-                let preAttributesRange = Range(match.range(at: 1), in: html),
-                let codeAttributesRange = Range(match.range(at: 2), in: html),
-                let codeRange = Range(match.range(at: 3), in: html)
-            else {
-                continue
-            }
-
-            let preAttributes = String(html[preAttributesRange])
-            let codeAttributes = String(html[codeAttributesRange])
-            guard isMermaidLanguage(languageIdentifier(preAttributes: preAttributes, codeAttributes: codeAttributes)) else {
+        for block in blocks {
+            guard isMermaidLanguage(block.language) else {
                 continue
             }
 
             diagramCount += 1
             let diagramID = "om-mermaid-\(diagramCount)"
-            let source = HTMLUtilities.decodeEntities(in: String(html[codeRange]))
+            let source = HTMLUtilities.decodeEntities(in: block.codeHTML)
             let replacement = placeholderHTML(id: diagramID, index: diagramCount, source: source)
             diagnostics.append(contentsOf: preflightDiagnostics(for: source, diagramID: diagramID))
-            replacements.append((fullRange, replacement))
+            replacements.append((block.range, replacement))
         }
 
         var rendered = html
@@ -117,40 +101,11 @@ public enum MermaidPostProcessor {
         ) != nil
     }
 
-    private static func languageIdentifier(preAttributes: String, codeAttributes: String) -> String? {
-        if let language = firstCapture(pattern: #"lang\s*=\s*["']([^"']+)["']"#, in: preAttributes) {
-            return language
-        }
-
-        if let language = firstCapture(pattern: #"class\s*=\s*["'][^"']*language-([A-Za-z0-9_+-]+)[^"']*["']"#, in: codeAttributes) {
-            return language
-        }
-
-        return nil
-    }
-
     private static func isMermaidLanguage(_ language: String?) -> Bool {
         guard let language else {
             return false
         }
-
-        switch language.lowercased() {
-        case "mermaid", "mmd":
-            return true
-        default:
-            return false
-        }
+        return language.lowercased() == "mermaid" || language.lowercased() == "mmd"
     }
 
-    private static func firstCapture(pattern: String, in text: String) -> String? {
-        guard
-            let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
-            let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
-            let range = Range(match.range(at: 1), in: text)
-        else {
-            return nil
-        }
-
-        return String(text[range])
-    }
 }

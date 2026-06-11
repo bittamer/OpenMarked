@@ -12,8 +12,20 @@ public struct RenderedHTMLIndex: Equatable, Sendable {
     public let links: [LinkReference]
     public let images: [RenderedImageReference]
     public let tagCounts: [String: Int]
+    public let footnoteReferenceCount: Int
+    public let calloutCount: Int
+    public let mermaidDiagramCount: Int
+    public let mathExpressionCount: Int
 
-    public static let empty = RenderedHTMLIndex(links: [], images: [], tagCounts: [:])
+    public static let empty = RenderedHTMLIndex(
+        links: [],
+        images: [],
+        tagCounts: [:],
+        footnoteReferenceCount: 0,
+        calloutCount: 0,
+        mermaidDiagramCount: 0,
+        mathExpressionCount: 0
+    )
 
     public var imageCount: Int {
         images.count
@@ -64,11 +76,30 @@ public struct RenderedHTMLIndex: Equatable, Sendable {
         var links: [LinkReference] = []
         var images: [RenderedImageReference] = []
         var tagCounts: [String: Int] = [:]
+        var footnoteReferenceCount = 0
+        var calloutCount = 0
+        var mermaidDiagramCount = 0
+        var mathExpressionCount = 0
         var linkOccurrenceIndex = 0
         var imageOccurrenceIndex = 0
 
         for tag in HTMLTagScanner.tags(in: html) {
             tagCounts[tag.name, default: 0] += 1
+            if tag.hasAttribute(named: "data-footnote-ref") {
+                footnoteReferenceCount += 1
+            }
+            if tag.hasClass("footnote-ref") {
+                footnoteReferenceCount += 1
+            }
+            if tag.hasClass("om-callout") {
+                calloutCount += 1
+            }
+            let richType = tag.attributeValue(named: "data-openmarked-rich")?.lowercased()
+            if richType == "mermaid" {
+                mermaidDiagramCount += 1
+            } else if richType == "math" {
+                mathExpressionCount += 1
+            }
 
             switch tag.name {
             case "a":
@@ -123,7 +154,15 @@ public struct RenderedHTMLIndex: Equatable, Sendable {
             }
         }
 
-        return RenderedHTMLIndex(links: links, images: images, tagCounts: tagCounts)
+        return RenderedHTMLIndex(
+            links: links,
+            images: images,
+            tagCounts: tagCounts,
+            footnoteReferenceCount: footnoteReferenceCount,
+            calloutCount: calloutCount,
+            mermaidDiagramCount: mermaidDiagramCount,
+            mathExpressionCount: mathExpressionCount
+        )
     }
 
     private static func linkText(in html: String, after tag: HTMLTagOccurrence) -> String {
@@ -160,6 +199,11 @@ struct HTMLTagOccurrence: Equatable {
     func attribute(named name: String) -> HTMLTagAttributeOccurrence? {
         let normalized = name.lowercased()
         return attributes.first { $0.lowercasedName == normalized }
+    }
+
+    func hasClass(_ className: String) -> Bool {
+        let normalized = className.lowercased()
+        return attributeValue(named: "class")?.split(whereSeparator: \.isWhitespace).contains { $0.lowercased() == normalized } == true
     }
 }
 
@@ -382,6 +426,73 @@ enum HTMLTagScanner {
         character.isWhitespace || character == "=" || character == "/" || character == ">"
     }
 
+}
+
+enum HTMLCodeBlockScanner {
+    typealias Block = (range: Range<String.Index>, preAttributes: String, codeAttributes: String, codeHTML: String, language: String?)
+
+    static func blocks(in html: String) -> [Block] {
+        let tags = HTMLTagScanner.tags(in: html)
+        guard !tags.isEmpty else {
+            return []
+        }
+
+        var blocks: [Block] = []
+        for preTag in tags where preTag.name == "pre" {
+            guard
+                let preClose = HTMLTagScanner.closingTagStart(named: "pre", in: html, from: preTag.range.upperBound),
+                let codeTag = tags.first(where: {
+                    $0.name == "code"
+                        && $0.range.lowerBound >= preTag.range.upperBound
+                        && $0.range.upperBound <= preClose
+                }),
+                let codeClose = HTMLTagScanner.closingTagStart(named: "code", in: html, from: codeTag.range.upperBound),
+                codeClose <= preClose
+            else {
+                continue
+            }
+
+            let preEnd = html.range(of: ">", range: preClose..<html.endIndex)?.upperBound ?? preClose
+            blocks.append(
+                (
+                    range: preTag.range.lowerBound..<preEnd,
+                    preAttributes: attributesText(for: preTag, named: "pre", in: html),
+                    codeAttributes: attributesText(for: codeTag, named: "code", in: html),
+                    codeHTML: String(html[codeTag.range.upperBound..<codeClose]),
+                    language: languageIdentifier(preTag: preTag, codeTag: codeTag)
+                )
+            )
+        }
+
+        return blocks
+    }
+
+    private static func attributesText(for tag: HTMLTagOccurrence, named name: String, in html: String) -> String {
+        let tagText = html[tag.range]
+        let start = tagText.index(tagText.startIndex, offsetBy: name.count + 1, limitedBy: tagText.endIndex) ?? tagText.endIndex
+        let end = tagText.index(before: tagText.endIndex)
+        return start < end ? String(tagText[start..<end]) : ""
+    }
+
+    private static func languageIdentifier(preTag: HTMLTagOccurrence, codeTag: HTMLTagOccurrence) -> String? {
+        if let language = preTag.attributeValue(named: "lang"), !language.isEmpty {
+            return language
+        }
+
+        guard let classValue = codeTag.attributeValue(named: "class") else {
+            return nil
+        }
+
+        guard let markerRange = classValue.range(of: "language-", options: .caseInsensitive) else {
+            return nil
+        }
+
+        let languageStart = markerRange.upperBound
+        let language = classValue[languageStart...].prefix { character in
+            character.isLetter || character.isNumber || character == "_" || character == "+" || character == "-"
+        }
+        return language.isEmpty ? nil : String(language)
+    }
 }
 
 enum HTMLTagRewriter {

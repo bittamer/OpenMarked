@@ -394,6 +394,8 @@ private struct DiagnosticsInspectorSection: View {
         let matchingDiagnostics = filteredDiagnostics
         let displayedDiagnostics = visibleDiagnostics(from: matchingDiagnostics)
         let diagnosticGroups = groupedDiagnostics(from: displayedDiagnostics)
+        let linksByTarget = Dictionary(report.links.map { ($0.target, $0) }, uniquingKeysWith: { first, _ in first })
+        let assetsBySource = Dictionary(report.assets.map { ($0.source, $0) }, uniquingKeysWith: { first, _ in first })
 
         InspectorSectionStack(title: "Diagnostics") {
             InspectorFilterControls {
@@ -428,7 +430,8 @@ private struct DiagnosticsInspectorSection: View {
                                         diagnostic: diagnostic,
                                         actions: inspectorActions(
                                             for: diagnostic,
-                                            report: report,
+                                            linksByTarget: linksByTarget,
+                                            assetsBySource: assetsBySource,
                                             controller: controller
                                         )
                                     )
@@ -1404,7 +1407,8 @@ private func inspectorActions(for asset: DocumentAssetReference) -> [InspectorRo
 @MainActor
 private func inspectorActions(
     for diagnostic: RenderDiagnostic,
-    report: DocumentInspectionReport,
+    linksByTarget: [String: DocumentLinkReference],
+    assetsBySource: [String: DocumentAssetReference],
     controller: DocumentWindowController
 ) -> [InspectorRowAction] {
     guard let source = diagnostic.source else {
@@ -1412,10 +1416,10 @@ private func inspectorActions(
     }
 
     var actions: [InspectorRowAction] = []
-    if let link = report.links.first(where: { $0.target == source }) {
+    if let link = linksByTarget[source] {
         actions.append(contentsOf: inspectorActions(for: link, controller: controller).filter { !$0.id.hasPrefix("copy:") })
     }
-    if let asset = report.assets.first(where: { $0.source == source }) {
+    if let asset = assetsBySource[source] {
         actions.append(contentsOf: inspectorActions(for: asset).filter { !$0.id.hasPrefix("copy:") })
     }
     actions.append(.copy(title: "Copy diagnostic source", value: source))

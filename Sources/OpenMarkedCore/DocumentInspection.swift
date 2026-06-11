@@ -576,8 +576,10 @@ public enum DocumentInspectionBuilder {
         statisticsOptions: DocumentStatisticsOptions
     ) -> RichDocumentStatistics {
         let normalizedOptions = statisticsOptions.normalized()
-        let baseStatistics = DocumentStatisticsCalculator.calculate(document: document, options: normalizedOptions)
-        let html = renderResult?.bodyHTML ?? ""
+        let baseStatistics = normalizedOptions == .default
+            ? document.statistics
+            : DocumentStatisticsCalculator.calculate(document: document, options: normalizedOptions)
+        let codeBlockCount = countFencedCodeBlocks(in: document.bodyText)
         let outline = renderResult?.outline ?? []
         let headingLevels = outline.reduce(into: [Int: Int]()) { counts, item in
             counts[item.level, default: 0] += 1
@@ -603,7 +605,7 @@ public enum DocumentInspectionBuilder {
                 words: baseStatistics.wordCount,
                 imageCount: assets.count,
                 tableCount: htmlIndex.tableCount,
-                codeBlockCount: countFencedCodeBlocks(in: document.bodyText)
+                codeBlockCount: codeBlockCount
             ),
             wordsPerMinute: normalizedOptions.wordsPerMinute,
             includesFrontMatter: normalizedOptions.includesFrontMatter,
@@ -614,12 +616,12 @@ public enum DocumentInspectionBuilder {
             linkCount: links.count,
             imageCount: assets.count,
             missingReferenceCount: diagnostics.filter { missingReferenceKinds.contains($0.kind) }.count,
-            codeBlockCount: countFencedCodeBlocks(in: document.bodyText),
+            codeBlockCount: codeBlockCount,
             tableCount: htmlIndex.tableCount,
-            footnoteCount: countOccurrences(of: #"data-footnote-ref|class="footnote-ref""#, in: html),
-            calloutCount: countOccurrences(of: #"class=["'][^"']*\bom-callout(?:\s|["'])"#, in: html),
-            mermaidDiagramCount: countOccurrences(of: #"id="om-mermaid-[0-9]+""#, in: html),
-            mathExpressionCount: countOccurrences(of: #"id="om-math-[0-9]+""#, in: html),
+            footnoteCount: htmlIndex.footnoteReferenceCount,
+            calloutCount: htmlIndex.calloutCount,
+            mermaidDiagramCount: htmlIndex.mermaidDiagramCount,
+            mathExpressionCount: htmlIndex.mathExpressionCount,
             wideTableCandidateCount: countWideTableCandidates(in: document.bodyText),
             diagnosticCount: diagnostics.count
         )
@@ -899,30 +901,18 @@ public enum DocumentInspectionBuilder {
         return formatter.string(from: date)
     }
 
-    private static func countOccurrences(of pattern: String, in text: String) -> Int {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            return 0
-        }
-        return regex.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
-    }
-
     private static func countFencedCodeBlocks(in markdown: String) -> Int {
-        let fenceLineCount = countOccurrences(of: #"(?m)^\s*(?:```|~~~)"#, in: markdown)
-        return fenceLineCount / 2
+        markdown.split(whereSeparator: \.isNewline).filter { line in
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            return trimmedLine.hasPrefix("```") || trimmedLine.hasPrefix("~~~")
+        }.count / 2
     }
 
     private static func countWideTableCandidates(in markdown: String) -> Int {
-        markdown
-            .split(whereSeparator: \.isNewline)
-            .filter { line in
-                let pipeCount = line.reduce(into: 0) { count, character in
-                    if character == Character("|") {
-                        count += 1
-                    }
-                }
-                return pipeCount >= 8 || (pipeCount >= 4 && line.count > 120)
-            }
-            .count
+        markdown.split(whereSeparator: \.isNewline).filter { line in
+            let pipeCount = line.reduce(0) { $1 == "|" ? $0 + 1 : $0 }
+            return pipeCount >= 8 || (pipeCount >= 4 && line.count > 120)
+        }.count
     }
 
     private static func buildSectionStatistics(
@@ -943,19 +933,19 @@ public enum DocumentInspectionBuilder {
             let nextHeadingLine = index + 1 < occurrences.count ? occurrences[index + 1].lineIndex : lines.count
             let sectionStart = min(occurrence.contentStartLineIndex, lines.count)
             let sectionEnd = min(max(nextHeadingLine, sectionStart), lines.count)
-            let sectionMarkdown = lines[sectionStart..<sectionEnd].joined(separator: "\n")
+            let sectionLines = lines[sectionStart..<sectionEnd]
 
             return DocumentSectionStatistic(
                 id: outlineItem.id,
                 title: outlineTitle.isEmpty ? occurrence.item.title : outlineTitle,
                 level: outlineItem.level,
-                wordCount: DocumentStatisticsCalculator.wordCount(in: sectionMarkdown),
-                paragraphCount: countMarkdownParagraphs(in: sectionMarkdown)
+                wordCount: DocumentStatisticsCalculator.wordCount(in: sectionLines.joined(separator: "\n")),
+                paragraphCount: countMarkdownParagraphs(in: sectionLines)
             )
         }
     }
 
-    private static func countMarkdownParagraphs(in markdown: String) -> Int {
+    private static func countMarkdownParagraphs(in lines: ArraySlice<String>) -> Int {
         var count = 0
         var isInParagraph = false
         var isInFence = false
@@ -967,7 +957,7 @@ public enum DocumentInspectionBuilder {
             }
         }
 
-        for rawLine in markdown.components(separatedBy: "\n") {
+        for rawLine in lines {
             let trimmedLine = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedLine.isEmpty else {
                 flushParagraph()

@@ -21,6 +21,8 @@ struct ResolvedAppChromeTheme {
     var accent: Color { resolvedPalette.accent }
     var warning: Color { resolvedPalette.warning }
     var windowBackgroundNSColor: NSColor { resolvedPalette.windowBackgroundNSColor }
+    var toolbarBackgroundNSColor: NSColor { resolvedPalette.toolbarBackgroundNSColor }
+    var nativeAppearanceName: NSAppearance.Name { colorScheme == .dark ? .darkAqua : .aqua }
 
     init(themeID: String, colorScheme: ColorScheme) {
         let theme = AppChromeThemeStore.theme(id: themeID)
@@ -75,11 +77,13 @@ private struct ResolvedAppChromePalette {
     let accent: Color
     let warning: Color
     let windowBackgroundNSColor: NSColor
+    let toolbarBackgroundNSColor: NSColor
 
     init(palette: AppChromePalette) {
         let windowComponents = OMHexColorComponentsCache.components(for: palette.windowBackgroundHex)
+        let toolbarComponents = OMHexColorComponentsCache.components(for: palette.toolbarBackgroundHex)
         windowBackground = Color(omComponents: windowComponents)
-        toolbarBackground = Color(omHexRGB: palette.toolbarBackgroundHex)
+        toolbarBackground = Color(omComponents: toolbarComponents)
         sidebarBackground = Color(omHexRGB: palette.sidebarBackgroundHex)
         contentBackground = Color(omHexRGB: palette.contentBackgroundHex)
         elevatedBackground = Color(omHexRGB: palette.elevatedBackgroundHex)
@@ -91,6 +95,7 @@ private struct ResolvedAppChromePalette {
         accent = Color(omHexRGB: palette.accentHex)
         warning = Color(omHexRGB: palette.warningHex)
         windowBackgroundNSColor = NSColor.omRGB(components: windowComponents)
+        toolbarBackgroundNSColor = NSColor.omRGB(components: toolbarComponents)
     }
 }
 
@@ -127,12 +132,30 @@ private struct AppChromeThemeModifier: ViewModifier {
             .foregroundStyle(resolvedTheme.text)
             .tint(resolvedTheme.accent)
             .background(resolvedTheme.windowBackground)
-            .background(WindowChromeBackgroundWriter(color: resolvedTheme.windowBackgroundNSColor))
+            .background(WindowChromeThemeWriter(theme: resolvedTheme))
     }
 }
 
-private struct WindowChromeBackgroundWriter: NSViewRepresentable {
-    let color: NSColor
+@MainActor
+enum AppChromeWindowStyler {
+    static func apply(theme: ResolvedAppChromeTheme, to window: NSWindow) {
+        let appearance = NSAppearance(named: theme.nativeAppearanceName)
+        if window.appearance?.name != theme.nativeAppearanceName {
+            window.appearance = appearance
+        }
+        if NSApplication.shared.appearance?.name != theme.nativeAppearanceName {
+            NSApplication.shared.appearance = appearance
+        }
+        if !window.backgroundColor.isEqual(theme.toolbarBackgroundNSColor) {
+            window.backgroundColor = theme.toolbarBackgroundNSColor
+        }
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+    }
+}
+
+private struct WindowChromeThemeWriter: NSViewRepresentable {
+    let theme: ResolvedAppChromeTheme
 
     func makeNSView(context: Context) -> NSView {
         NSView(frame: .zero)
@@ -144,16 +167,12 @@ private struct WindowChromeBackgroundWriter: NSViewRepresentable {
                 guard let window = nsView?.window else {
                     return
                 }
-                if !window.backgroundColor.isEqual(color) {
-                    window.backgroundColor = color
-                }
+                AppChromeWindowStyler.apply(theme: theme, to: window)
             }
             return
         }
 
-        if !window.backgroundColor.isEqual(color) {
-            window.backgroundColor = color
-        }
+        AppChromeWindowStyler.apply(theme: theme, to: window)
     }
 }
 

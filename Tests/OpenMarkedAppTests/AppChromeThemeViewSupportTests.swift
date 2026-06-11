@@ -12,9 +12,35 @@ func resolvedAppChromeThemeUsesCachedThemeAndResolvedColors() {
 
     #expect(resolved.theme.id == AppChromeThemeStore.defaultThemeID)
     #expect(resolved.palette == AppChromeThemeStore.defaultTheme.darkPalette)
+    #expect(resolved.nativeAppearanceName == .darkAqua)
     expectRGB(resolved.windowBackgroundNSColor, hex: resolved.palette.windowBackgroundHex)
+    expectRGB(resolved.toolbarBackgroundNSColor, hex: resolved.palette.toolbarBackgroundHex)
     expectRGB(NSColor(resolved.accent), hex: resolved.palette.accentHex)
     expectRGB(NSColor(resolved.text), hex: resolved.palette.textHex)
+}
+
+@Test("App chrome styler applies native window appearance")
+@MainActor
+func appChromeStylerAppliesNativeWindowAppearance() {
+    let previousAppearance = NSApplication.shared.appearance
+    defer { NSApplication.shared.appearance = previousAppearance }
+
+    let window = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+        styleMask: [.titled, .closable, .miniaturizable, .resizable],
+        backing: .buffered,
+        defer: false
+    )
+    defer { window.close() }
+
+    let theme = ResolvedAppChromeTheme(themeID: "everforest", colorScheme: .dark)
+    AppChromeWindowStyler.apply(theme: theme, to: window)
+
+    #expect(window.appearance?.name == .darkAqua)
+    #expect(NSApplication.shared.appearance?.name == .darkAqua)
+    #expect(window.titlebarAppearsTransparent)
+    #expect(window.titlebarSeparatorStyle == .none)
+    expectRGB(window.backgroundColor, hex: theme.palette.toolbarBackgroundHex)
 }
 #endif
 

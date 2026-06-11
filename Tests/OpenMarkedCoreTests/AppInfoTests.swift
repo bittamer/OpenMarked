@@ -22,8 +22,8 @@ struct AppInfoTests {
 
     @Test("Current release version is exposed")
     func versionIsCurrentReleaseVersion() {
-        #expect(AppInfo.version == "0.5.1")
-        #expect(AppInfo.build == "7")
+        #expect(AppInfo.version == "0.5.2")
+        #expect(AppInfo.build == "8")
     }
 
     @Test("Window state transitions from empty to loaded")

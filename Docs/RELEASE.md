@@ -1,4 +1,4 @@
-# OpenMarked 0.5.1 Release Gate
+# OpenMarked 0.5.2 Release Gate
 
 This document captures the current release process. Do not tag a release until `Scripts/verify_release.sh` passes, the checklist in `Docs/QA.md` has been run by a person, and the project owner has approved the release.
 
@@ -16,32 +16,32 @@ The release verification command builds debug and release products, runs the ver
 The local developer artifact is:
 
 ```text
-dist/OpenMarked-0.5.1-macOS.zip
-dist/OpenMarked-0.5.1-macOS.dmg
+dist/OpenMarked-0.5.2-macOS.zip
+dist/OpenMarked-0.5.2-macOS.dmg
 ```
 
 The app bundle is ad hoc signed by default for local developer distribution. Set `OPENMARKED_SIGN_IDENTITY` to use a Developer ID identity. Set `OPENMARKED_NOTARIZE=1` with Apple notarization credentials to submit and staple the DMG. Without notarization, Gatekeeper may require users to open through Finder's context menu or remove quarantine after they understand the risk.
 
 ## Final Manual Gate
 
-- Automated release gate: passed on 2026-06-09 with `Scripts/verify_release.sh`
-- Performance scroll audit: passed on 2026-06-09 with `Scripts/performance_scroll_audit.sh`
+- Automated release gate: passed on 2026-06-11 with `Scripts/verify_release.sh`
+- Performance scroll audit: passed on 2026-06-11 with `Scripts/performance_scroll_audit.sh`
 - QA runner: Codex on macOS 26.5.1
-- Artifact path: `dist/OpenMarked-0.5.1/OpenMarked.app`, `dist/OpenMarked-0.5.1-macOS.zip`, and `dist/OpenMarked-0.5.1-macOS.dmg`
-- Performance audit report: `.build/perf-audit/performance-scroll-report.md`
-- Final performance audit result: post-settle CPU `0.0%`, post-settle RSS about `171 MB`, and zero hot-stack matches for repeated status statistics or theme CSS loading.
+- Artifact path: `dist/OpenMarked-0.5.2/OpenMarked.app`, `dist/OpenMarked-0.5.2-macOS.zip`, and `dist/OpenMarked-0.5.2-macOS.dmg`
+- Performance audit report: `.build/perf-audit-v0.5.2-release/performance-scroll-report.md`
+- Final performance audit result: scroll-time CPU peak `5.9%`, post-settle CPU `0.0%`, post-settle RSS `522,304 KB`, and zero hot-stack matches for repeated status statistics or theme CSS loading.
 - QA checklist: `Docs/QA.md`
 - Fixture visual QA: screenshot baseline and manifest coverage recorded in `Docs/VISUAL_QA.md`
 - PDF/export artifact QA: automated through `Scripts/verify_export_artifacts.sh`, including preview, palette, inspector, settings, and rich Markdown PDFs
 - Print panel QA: owner-recorded manual pass recommended before public distribution
 - Second Mac or clean-account launch: owner-recorded manual pass recommended before public distribution
-- Owner approval: approved for `v0.5.1` tag creation on 2026-06-09; GitHub publication remains owner-controlled.
-- Release tag: `v0.5.1`
+- Owner approval: approved for `v0.5.2` tag creation on 2026-06-11; GitHub publication remains owner-controlled.
+- Release tag: `v0.5.2`
 
 Use this command only after approval and after all release changes are committed:
 
 ```sh
-git tag -a v0.5.1 -m "OpenMarked 0.5.1"
+git tag -a v0.5.2 -m "OpenMarked 0.5.2"
 ```
 
 ## P1 Deferrals

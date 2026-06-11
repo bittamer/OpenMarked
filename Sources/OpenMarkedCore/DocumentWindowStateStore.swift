@@ -80,16 +80,21 @@ public final class DocumentWindowStateStore: @unchecked Sendable {
 
     private let userDefaults: UserDefaults
     private let storageKey: String
+    private let lock = NSLock()
+    private var cachedStates: [String: PersistedDocumentWindowState]
 
     public init(userDefaults: UserDefaults = .standard, storageKey: String = "OpenMarked.DocumentWindowStateStore") {
         self.userDefaults = userDefaults
         self.storageKey = storageKey
+        self.cachedStates = Self.loadPersistedStates(userDefaults: userDefaults, storageKey: storageKey)
     }
 
     public func save(_ state: PersistedDocumentWindowState) {
-        var states = loadAll()
-        states[state.documentID] = state
-        persist(states)
+        lock.lock()
+        defer { lock.unlock() }
+
+        cachedStates[state.documentID] = state
+        persistCachedStates()
     }
 
     public func save(
@@ -113,7 +118,10 @@ public final class DocumentWindowStateStore: @unchecked Sendable {
     }
 
     public func restore(forDocumentID documentID: String) -> PersistedDocumentWindowState? {
-        loadAll()[documentID]
+        lock.lock()
+        defer { lock.unlock() }
+
+        return cachedStates[documentID]
     }
 
     public func restore(for url: URL) -> PersistedDocumentWindowState? {
@@ -121,16 +129,32 @@ public final class DocumentWindowStateStore: @unchecked Sendable {
     }
 
     public func remove(forDocumentID documentID: String) {
-        var states = loadAll()
-        states.removeValue(forKey: documentID)
-        persist(states)
+        lock.lock()
+        defer { lock.unlock() }
+
+        cachedStates.removeValue(forKey: documentID)
+        persistCachedStates()
     }
 
     public func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        cachedStates.removeAll()
         userDefaults.removeObject(forKey: storageKey)
     }
 
     public func loadAll() -> [String: PersistedDocumentWindowState] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        return cachedStates
+    }
+
+    private static func loadPersistedStates(
+        userDefaults: UserDefaults,
+        storageKey: String
+    ) -> [String: PersistedDocumentWindowState] {
         guard let data = userDefaults.data(forKey: storageKey) else {
             return [:]
         }
@@ -142,9 +166,9 @@ public final class DocumentWindowStateStore: @unchecked Sendable {
         }
     }
 
-    private func persist(_ states: [String: PersistedDocumentWindowState]) {
+    private func persistCachedStates() {
         do {
-            let data = try JSONEncoder().encode(states)
+            let data = try JSONEncoder().encode(cachedStates)
             userDefaults.set(data, forKey: storageKey)
         } catch {
             assertionFailure("Failed to persist document window state: \(error)")

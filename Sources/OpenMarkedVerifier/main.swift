@@ -27,6 +27,15 @@ final class WatchEventBox: @unchecked Sendable {
     }
 }
 
+final class CountingUserDefaults: UserDefaults {
+    private(set) var dataReadCount = 0
+
+    override func data(forKey defaultName: String) -> Data? {
+        dataReadCount += 1
+        return super.data(forKey: defaultName)
+    }
+}
+
 @discardableResult
 func measureSeconds(_ body: () throws -> Void) rethrows -> Double {
     let start = DispatchTime.now().uptimeNanoseconds
@@ -66,6 +75,22 @@ func runPerformanceSmoke(renderer: CMarkGFMRenderer) throws {
     }
 
     try runSyntheticPerformanceSmoke(renderer: renderer)
+}
+
+func persistedVerifierWindowState(
+    documentID: String,
+    themeID: String,
+    width: Double,
+    savedAt: TimeInterval
+) -> PersistedDocumentWindowState {
+    PersistedDocumentWindowState(
+        documentID: documentID,
+        sourceURL: URL(fileURLWithPath: documentID),
+        bookmarkData: nil,
+        layout: WindowLayoutState(selectedThemeID: themeID),
+        frame: DocumentWindowFrame(x: 1, y: 2, width: width, height: 600),
+        savedAt: Date(timeIntervalSince1970: savedAt)
+    )
 }
 
 func runSyntheticPerformanceSmoke(renderer: CMarkGFMRenderer) throws {
@@ -271,6 +296,24 @@ verify(restored?.layout.outlineDisplayOptions.maximumVisibleLevel == 3, "outline
 verify(restored?.layout.outlineDisplayOptions.showsAutoNumbers == true, "outline numbering preference should persist")
 verify(restored?.frame?.width == 900, "window frame should persist")
 verify(restored?.exportDestinations == savedExportDestinations, "previous export destinations should persist per document")
+let countingSuiteName = "OpenMarkedVerifierWindowState-\(UUID().uuidString)"
+guard let countingDefaults = CountingUserDefaults(suiteName: countingSuiteName) else {
+    verify(false, "counting user defaults suite should be available")
+    exit(1)
+}
+defer { countingDefaults.removePersistentDomain(forName: countingSuiteName) }
+let countingStore = DocumentWindowStateStore(userDefaults: countingDefaults, storageKey: "CountingWindowState")
+let firstCachedState = persistedVerifierWindowState(documentID: "/tmp/first.md", themeID: "github", width: 800, savedAt: 1)
+let secondCachedState = persistedVerifierWindowState(documentID: "/tmp/second.md", themeID: "nord", width: 900, savedAt: 2)
+let updatedFirstCachedState = persistedVerifierWindowState(documentID: firstCachedState.documentID, themeID: "dracula", width: 1_000, savedAt: 3)
+verify(countingDefaults.dataReadCount == 1, "window state store should read persisted data once on initialization")
+countingStore.save(firstCachedState)
+countingStore.save(secondCachedState)
+countingStore.save(updatedFirstCachedState)
+verify(countingStore.restore(forDocumentID: firstCachedState.documentID) == updatedFirstCachedState, "window state cache should update one document")
+verify(countingStore.restore(forDocumentID: secondCachedState.documentID) == secondCachedState, "window state cache should preserve other documents")
+verify(countingStore.loadAll().count == 2, "window state cache should expose all cached states")
+verify(countingDefaults.dataReadCount == 1, "window state save and restore should not reload persisted data")
 let oldLayoutPayload = Data(
     """
     {

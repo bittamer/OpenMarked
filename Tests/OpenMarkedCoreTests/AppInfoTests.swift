@@ -274,6 +274,94 @@ final class AppInfoTests: XCTestCase {
         XCTAssertEqual(restored?.exportDestinations, exportDestinations)
     }
 
+    func testWindowStateStorePreservesMultipleDocumentsWhenUpdatingOne() throws {
+        let suiteName = "OpenMarkedWindowStateTests-\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let storageKey = "DocumentWindowState"
+        let store = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: storageKey)
+        let first = persistedWindowState(documentID: "/tmp/first.md", themeID: "github", width: 800, savedAt: 1)
+        let second = persistedWindowState(documentID: "/tmp/second.md", themeID: "nord", width: 900, savedAt: 2)
+        let updatedFirst = persistedWindowState(documentID: first.documentID, themeID: "dracula", width: 1_000, savedAt: 3)
+
+        store.save(first)
+        store.save(second)
+        store.save(updatedFirst)
+
+        XCTAssertEqual(store.restore(forDocumentID: first.documentID), updatedFirst)
+        XCTAssertEqual(store.restore(forDocumentID: second.documentID), second)
+        XCTAssertEqual(store.loadAll().count, 2)
+
+        let reloadedStore = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: storageKey)
+        XCTAssertEqual(reloadedStore.restore(forDocumentID: first.documentID), updatedFirst)
+        XCTAssertEqual(reloadedStore.restore(forDocumentID: second.documentID), second)
+    }
+
+    func testWindowStateStoreFallsBackFromCorruptedPersistedData() throws {
+        let suiteName = "OpenMarkedWindowStateCorruptionTests-\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let storageKey = "DocumentWindowState"
+        userDefaults.set(Data("not-json".utf8), forKey: storageKey)
+
+        let store = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: storageKey)
+        XCTAssertTrue(store.loadAll().isEmpty)
+        XCTAssertNil(store.restore(forDocumentID: "/tmp/missing.md"))
+
+        let replacement = persistedWindowState(documentID: "/tmp/recovered.md", themeID: "default", width: 700, savedAt: 4)
+        store.save(replacement)
+
+        let reloadedStore = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: storageKey)
+        XCTAssertEqual(reloadedStore.loadAll(), [replacement.documentID: replacement])
+    }
+
+    func testWindowStateStoreDoesNotReloadDefaultsAfterInitialization() throws {
+        let suiteName = "OpenMarkedWindowStateReadCountTests-\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(CountingUserDefaults(suiteName: suiteName))
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let storageKey = "DocumentWindowState"
+        let store = DocumentWindowStateStore(userDefaults: userDefaults, storageKey: storageKey)
+        let first = persistedWindowState(documentID: "/tmp/first.md", themeID: "github", width: 800, savedAt: 1)
+        let second = persistedWindowState(documentID: "/tmp/second.md", themeID: "nord", width: 900, savedAt: 2)
+
+        XCTAssertEqual(userDefaults.dataReadCount, 1)
+
+        store.save(first)
+        store.save(second)
+        _ = store.restore(forDocumentID: first.documentID)
+        _ = store.loadAll()
+
+        XCTAssertEqual(userDefaults.dataReadCount, 1)
+    }
+
+    private func persistedWindowState(
+        documentID: String,
+        themeID: String,
+        width: Double,
+        savedAt: TimeInterval
+    ) -> PersistedDocumentWindowState {
+        PersistedDocumentWindowState(
+            documentID: documentID,
+            sourceURL: URL(fileURLWithPath: documentID),
+            bookmarkData: nil,
+            layout: WindowLayoutState(selectedThemeID: themeID),
+            frame: DocumentWindowFrame(x: 10, y: 20, width: width, height: 600),
+            savedAt: Date(timeIntervalSince1970: savedAt)
+        )
+    }
+
+    private final class CountingUserDefaults: UserDefaults {
+        private(set) var dataReadCount = 0
+
+        override func data(forKey defaultName: String) -> Data? {
+            dataReadCount += 1
+            return super.data(forKey: defaultName)
+        }
+    }
+
     func testApplicationSettingsStorePersistsAndNormalizesSettings() throws {
         let suiteName = "OpenMarkedSettingsTests-\(UUID().uuidString)"
         let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

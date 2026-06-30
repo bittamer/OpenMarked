@@ -1,7 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
-  <title id="title">OpenMarked placeholder icon</title>
-  <rect width="1024" height="1024" rx="192" fill="#111827"/>
-  <rect x="172" y="196" width="680" height="632" rx="72" fill="#f9fafb"/>
-  <path d="M284 672V336h92l136 198 136-198h92v336h-96V484L548 632h-96L380 484v188z" fill="#111827"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">OpenMarked App Icon</title>
+  <desc id="desc">A clean Markdown document on a rounded teal and blue app icon tile.</desc>
+  <defs>
+    <linearGradient id="tile" x1="128" y1="96" x2="896" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0.58" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="232" y1="192" x2="792" y2="872" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eaf7f4"/>
+    </linearGradient>
+    <filter id="shadow" x="112" y="96" width="800" height="856" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="28" stdDeviation="32" flood-color="#020617" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="210" fill="url(#tile)"/>
+  <g filter="url(#shadow)">
+    <path d="M288 176h372l140 140v420c0 62-50 112-112 112H288c-62 0-112-50-112-112V288c0-62 50-112 112-112z" fill="url(#paper)"/>
+    <path d="M660 176v110c0 17 13 30 30 30h110L660 176z" fill="#c8f7ee"/>
+    <path d="M660 176v110c0 17 13 30 30 30h110" fill="none" stroke="#82d8ca" stroke-width="18" stroke-linejoin="round"/>
+  </g>
+  <rect x="304" y="318" width="276" height="36" rx="18" fill="#0f766e"/>
+  <rect x="304" y="382" width="220" height="36" rx="18" fill="#5eead4"/>
+  <path d="M304 656V480h66l142 162 142-162h66v176" fill="none" stroke="#0f766e" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-
